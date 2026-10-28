@@ -11,6 +11,7 @@ import {
   VerificationMetricReport,
   IntegrationSuiteResult
 } from '../types';
+import { StorageService } from './storageService';
 
 const API_BASE = '/api';
 
@@ -60,7 +61,7 @@ export class ApiClient {
   // Documents
   static async getDocuments(): Promise<AcademicDocument[]> {
     const data = await this.request<{ documents: any[] }>('/documents');
-    return data.documents;
+    return (data.documents || []).map(d => StorageService.sanitizeDocument(d));
   }
 
   static async getDocumentById(id: string): Promise<any> {

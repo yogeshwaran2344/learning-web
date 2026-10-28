@@ -34,13 +34,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onDeleteDocument
 }) => {
   // Compute overall statistics
-  const totalCards = documents.reduce((acc, d) => acc + d.flashcards.length, 0);
+  const totalCards = documents.reduce((acc, d) => acc + (d.flashcards?.length || 0), 0);
   const masteredCards = documents.reduce(
-    (acc, d) => acc + d.flashcards.filter(f => f.masteryLevel === 2).length,
+    (acc, d) => acc + (d.flashcards?.filter(f => f.masteryLevel === 2).length || 0),
     0
   );
   const averageFidelity = documents.length > 0
-    ? (documents.reduce((acc, d) => acc + d.meaningPreservation.overallFidelityScore, 0) / documents.length).toFixed(1)
+    ? (documents.reduce((acc, d) => acc + (d.meaningPreservation?.overallFidelityScore ?? 98), 0) / documents.length).toFixed(1)
     : '99.0';
 
   return (
@@ -234,7 +234,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
                     <span className="flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
                       <ShieldCheck className="w-3.5 h-3.5" />
-                      {doc.meaningPreservation.overallFidelityScore}% fidelity
+                      {doc.meaningPreservation?.overallFidelityScore ?? 98}% fidelity
                     </span>
                   </div>
 

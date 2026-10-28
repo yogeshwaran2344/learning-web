@@ -27,7 +27,7 @@ const DEFAULT_PREFERENCES: UserPreferences = {
 };
 
 export class StorageService {
-  private static sanitizeDocument(doc: any): AcademicDocument {
+  static sanitizeDocument(doc: any): AcademicDocument {
     if (!doc) return SAMPLE_DOCUMENTS[0];
     return {
       ...doc,
