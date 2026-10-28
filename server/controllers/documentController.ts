@@ -93,8 +93,32 @@ export class DocumentController {
         originalFileName
       );
 
-      // If RealExtractor found specific page-level sections with equations, combine & augment
+      // If RealExtractor parsed exact pages, slides, or scanned notes with formulas & warnings,
+      // preserve real section records directly with page, slide, and section identifiers
       if (realExtractedSections.length > 0) {
+        extraction.sections = realExtractedSections.map((s, idx) => ({
+          id: `sec-${s.sourceType}-${docId}-${idx + 1}`,
+          documentId: docId,
+          pageNumber: s.pageNumber,
+          slideNumber: s.slideNumber,
+          chapterTitle: s.sectionIdentifier || `Section ${idx + 1}`,
+          title: s.title,
+          content: s.content,
+          speakerNotes: s.speakerNotes,
+          equations: (s.equations || []).map((e: any, eqIdx: number) => ({
+            latex: e.latex,
+            label: e.label || `Formula (${eqIdx + 1})`,
+            meaning: e.meaning || `Extracted formula from ${s.title}`
+          })),
+          definitions: [],
+          conditions: s.conditions || [],
+          examples: [],
+          uncertainSymbols: s.uncertainSymbols
+        }));
+
+        extraction.pageCount = Math.max(...extraction.sections.map(sec => sec.pageNumber || sec.slideNumber || 1));
+        extraction.wordCount = extraction.sections.reduce((acc, sec) => acc + sec.content.split(/\s+/).filter(Boolean).length, 0);
+
         extraction.warnings.push(...extractionWarnings);
         extraction.qualityReport.diagnostics.push(
           ...extractionWarnings.map((w, idx) => ({

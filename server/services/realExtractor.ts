@@ -6,11 +6,14 @@ import { createWorker } from 'tesseract.js';
 
 export interface ExtractedPageSection {
   pageNumber: number;
+  slideNumber?: number;
+  sectionIdentifier?: string;
   title: string;
   content: string;
-  equations?: { latex: string; meaning: string }[];
+  equations?: { latex: string; label?: string; meaning: string }[];
   conditions?: string[];
   speakerNotes?: string;
+  uncertainSymbols?: string[];
   sourceType: 'pdf' | 'pptx' | 'scanned_notes' | 'text';
 }
 
@@ -79,6 +82,7 @@ export class RealExtractor {
 
       sections.push({
         pageNumber: p.pageNum,
+        sectionIdentifier: `p${p.pageNum}-sec${idx + 1}`,
         title,
         content: p.text.trim(),
         equations,
@@ -161,6 +165,8 @@ export class RealExtractor {
 
       sections.push({
         pageNumber: slideNum,
+        slideNumber: slideNum,
+        sectionIdentifier: `slide-${slideNum}`,
         title: slideTitle,
         content: slideBody + (speakerNotes ? `\n\n[Speaker Notes]: ${speakerNotes}` : ''),
         equations,
@@ -204,15 +210,24 @@ export class RealExtractor {
 
     // Split text into coherent paragraphs
     const paragraphs = ocrText.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+    const uncertainSymbols: string[] = [];
+    if (confidence < 75) {
+      // Find smeared or uncertain characters/tokens (non-ascii or isolated punctuation artifacts)
+      const uncertainMatches = ocrText.match(/([^\w\s=+\-*/().,;?!]{1,4}|[\?]{2,})/g) || [];
+      uncertainSymbols.push(...Array.from(new Set(uncertainMatches)).slice(0, 5));
+    }
+
     const sections: ExtractedPageSection[] = paragraphs.map((para, idx) => {
       const firstLine = para.split('\n')[0] || `Notes Section ${idx + 1}`;
       const title = firstLine.length < 80 ? firstLine : `Scanned Page 1 - Section ${idx + 1}`;
       return {
         pageNumber: 1,
+        sectionIdentifier: `scan-p1-s${idx + 1}`,
         title,
         content: para,
         equations: this.detectFormulas(para),
         conditions: this.detectConditions(para),
+        uncertainSymbols: uncertainSymbols.length > 0 ? uncertainSymbols : undefined,
         sourceType: 'scanned_notes'
       };
     });
