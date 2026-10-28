@@ -1,0 +1,40 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start Frontend (Vite)",
+      "type": "shell",
+      "command": "npm.cmd run dev",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "group": "servers",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Start Backend (Express API)",
+      "type": "shell",
+      "command": "npm.cmd run server",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "group": "servers",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Run LearnLens AI (Both Servers)",
+      "dependsOn": [
+        "Start Frontend (Vite)",
+        "Start Backend (Express API)"
+      ],
+      "dependsOrder": "parallel",
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }
+  ]
+}
