@@ -3,6 +3,7 @@ import {
   AppLanguage,
   SourceCitationRecord
 } from '../db/schema';
+import { AiModelService } from './aiModelService';
 
 export type DifficultyLevel = 'beginner' | 'intermediate' | 'advanced';
 
@@ -17,6 +18,31 @@ export interface GeneratedFormatResult {
 }
 
 export class AiGeneratorService {
+  static async generateFormatAsync(
+    documentId: string,
+    docTitle: string,
+    sections: ExtractedSectionRecord[],
+    formatType: 'map' | 'simplified' | 'notes' | 'worked' | 'flashcards' | 'audio' | 'quiz',
+    language: AppLanguage = 'English',
+    difficulty: DifficultyLevel = 'intermediate'
+  ): Promise<GeneratedFormatResult> {
+    // 1. Try real external AI model if configured
+    if (AiModelService.hasExternalAiProvider()) {
+      const aiResult = await AiModelService.generateWithAi(
+        documentId,
+        docTitle,
+        sections,
+        formatType,
+        language,
+        difficulty
+      );
+      if (aiResult) return aiResult;
+    }
+
+    // 2. High-fidelity deterministic academic generation logic
+    return this.generateFormat(documentId, docTitle, sections, formatType, language, difficulty);
+  }
+
   /**
    * Generates selected learning format in English, Kannada, or Hindi with optional difficulty level.
    * Preserves mathematical notation, equations, and conditions strictly.

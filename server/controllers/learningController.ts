@@ -7,14 +7,20 @@ import { AiGeneratorTestSuite } from '../services/aiGeneratorTestSuite';
 import { AppLanguage } from '../db/schema';
 
 export class LearningController {
-  static generate(req: AuthenticatedRequest, res: Response) {
+  static async generate(req: AuthenticatedRequest, res: Response) {
     try {
       const { id } = req.params;
       const { formatType, language = 'English', difficulty = 'intermediate', forceRegenerate = false } = req.body;
+      const userId = req.user?.id;
+      const role = req.user?.role;
 
       const doc = Database.getDocumentById(id);
       if (!doc) {
         return res.status(404).json({ error: 'Document not found.' });
+      }
+
+      if (doc.ownerId !== userId && role !== 'lecturer') {
+        return res.status(403).json({ error: 'Access denied: You cannot generate learning materials for another user\'s document.' });
       }
 
       const sections = Database.getSectionsByDocId(id);
@@ -34,8 +40,8 @@ export class LearningController {
         }
       }
 
-      // Step 5.2: Generate format using relevant extracted content
-      const generated = AiGeneratorService.generateFormat(
+      // Step 5.2: Generate format using relevant extracted content (AI model or deterministic fallback)
+      const generated = await AiGeneratorService.generateFormatAsync(
         id,
         doc.title,
         sections,
@@ -71,6 +77,15 @@ export class LearningController {
   }
 
   static getMaterials(req: AuthenticatedRequest, res: Response) {
+    const doc = Database.getDocumentById(req.params.id);
+    if (!doc) {
+      return res.status(404).json({ error: 'Document not found.' });
+    }
+    const userId = req.user?.id;
+    const role = req.user?.role;
+    if (doc.ownerId !== userId && role !== 'lecturer') {
+      return res.status(403).json({ error: 'Access denied: You cannot view materials for another user\'s document.' });
+    }
     const materials = Database.getMaterialsByDocId(req.params.id);
     res.json({ materials });
   }

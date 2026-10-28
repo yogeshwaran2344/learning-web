@@ -37,22 +37,35 @@ export class EquationValidatorService {
         alteredCount++;
       }
 
-      // 3. Check for essential mathematical factors (e.g. sqrt, d_k, softmax, exp, PE)
+      // 3. Symbolic token & normalization factor validation (AST/token-based)
       const keyFactors = this.extractMathematicalTokens(latex);
       keyFactors.forEach(factor => {
-        // If the original has a specific normalization factor like \sqrt{d_k} or 10000,
-        // ensure it was not dropped or altered in the generated derivation steps
-        if (factor.includes('sqrt') || factor.includes('d_k') || factor.includes('10000')) {
+        // Normalization factors like \sqrt{d_k}, \frac{1}{\sqrt{d_k}}, 1/\sqrt{d_k}, 10000, 2\pi
+        if (factor.includes('sqrt') || factor.includes('d_k') || factor.includes('10000') || factor.includes('\\frac')) {
           const simplifiedFactor = factor.replace(/[\\{}]/g, '');
           const matchFound = combinedGeneratedText.toLowerCase().includes(simplifiedFactor.toLowerCase()) ||
             combinedGeneratedText.includes('√') ||
-            combinedGeneratedText.includes('sqrt');
+            combinedGeneratedText.includes('sqrt') ||
+            combinedGeneratedText.includes('d_k') ||
+            combinedGeneratedText.includes('dk');
           if (!matchFound && combinedGeneratedText.length > 50) {
-            droppedFactors.push(`Potential dropped normalization factor: "${factor}" from ${latex}`);
+            droppedFactors.push(`Dropped mathematical normalization factor: "${factor}" from equation ${latex}`);
             alteredCount++;
           }
         }
       });
+
+      // 4. Operator and exponent integrity verification
+      if (latex.includes('^2') && !combinedGeneratedText.includes('^2') && !combinedGeneratedText.includes('squared') && !combinedGeneratedText.includes('²')) {
+        droppedFactors.push(`Missing quadratic exponent (^2) from equation: ${latex}`);
+        alteredCount++;
+      }
+      if (latex.includes('\\sum') || latex.includes('∑')) {
+        if (!combinedGeneratedText.includes('sum') && !combinedGeneratedText.includes('∑') && !combinedGeneratedText.includes('\\sum')) {
+          droppedFactors.push(`Missing summation operator (∑) from equation: ${latex}`);
+          alteredCount++;
+        }
+      }
     });
 
     const totalEqs = Math.max(1, originalEquations.length);

@@ -9,24 +9,20 @@ export interface AuthenticatedRequest extends Request {
 export function authMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.slice(7);
-    const user = AuthService.verifyToken(token);
-    if (user) {
-      req.user = user;
-      return next();
+    const token = authHeader.slice(7).trim();
+    if (token) {
+      const user = AuthService.verifyToken(token);
+      if (user) {
+        req.user = user;
+        return next();
+      }
     }
   }
 
-  // Fallback: Default demo student account if unauthenticated
-  req.user = {
-    id: 'usr-student-1',
-    email: 'alex.rivera@university.edu',
-    name: 'Alex Rivera',
-    role: 'student',
-    createdAt: '2026-10-01T10:00:00Z'
-  };
-
-  next();
+  // Reject unauthenticated requests with 401 Unauthorized
+  return res.status(401).json({
+    error: 'Authentication credentials required. Please provide a valid Bearer token in Authorization header.'
+  });
 }
 
 export function requireLecturerRole(req: AuthenticatedRequest, res: Response, next: NextFunction) {

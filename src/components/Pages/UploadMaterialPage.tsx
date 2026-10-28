@@ -71,12 +71,17 @@ export const UploadMaterialPage: React.FC<UploadMaterialPageProps> = ({
       setFileType('pdf');
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      setRawText(content);
-    };
-    reader.readAsText(file);
+    // Only read as text if it's a plain text or markdown file, never binary PDF/PPTX/images
+    if (file.type.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.md')) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const content = event.target?.result as string;
+        setRawText(content || '');
+      };
+      reader.readAsText(file);
+    } else {
+      setRawText('');
+    }
   };
 
   const handleSelectSample = (type: 'resnet' | 'blurry_scan' | 'quantum') => {

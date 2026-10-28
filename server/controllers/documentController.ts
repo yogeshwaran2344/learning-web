@@ -4,6 +4,7 @@ import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { Database } from '../db/database';
 import { DocumentRecord, DocumentFileType } from '../db/schema';
 import { ExtractionService } from '../services/extractionService';
+import { RealExtractor } from '../services/realExtractor';
 import { MeaningPreservationEngine } from '../services/meaningPreservationEngine';
 import { AiGeneratorService } from '../services/aiGeneratorService';
 import { ExtractionTestSuite } from '../services/extractionTestSuite';
@@ -13,30 +14,73 @@ export class DocumentController {
     try {
       const file = req.file;
       const { title, author, category, rawText } = req.body;
-      const userId = req.user?.id || 'usr-student-1';
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({ error: 'Authentication required. Please log in.' });
+      }
 
       let textContent = rawText || '';
       let originalFileName = 'pasted_text.txt';
       let fileType: DocumentFileType = 'pdf';
       let fileSizeMb = 1.0;
+      let realExtractedSections: any[] = [];
+      let extractionWarnings: string[] = [];
 
       if (file) {
         originalFileName = file.originalname;
         fileSizeMb = Number((file.size / (1024 * 1024)).toFixed(2));
-        if (file.originalname.endsWith('.pptx') || file.originalname.endsWith('.ppt')) {
-          fileType = 'pptx';
-        } else if (file.originalname.includes('scan') || file.mimetype.startsWith('image/')) {
-          fileType = 'scanned_notes';
-        }
+        const ext = file.originalname.toLowerCase();
 
-        // If user didn't provide text, read file contents if text/plain
-        if (!textContent && (file.mimetype.includes('text') || file.originalname.endsWith('.txt') || file.originalname.endsWith('.md'))) {
+        if (ext.endsWith('.pptx') || ext.endsWith('.ppt')) {
+          fileType = 'pptx';
+          try {
+            const pptxRes = RealExtractor.extractPptx(file.path, file.originalname);
+            realExtractedSections = pptxRes.sections;
+            extractionWarnings.push(...pptxRes.warnings);
+            textContent = pptxRes.sections.map(s => `Slide ${s.pageNumber}: ${s.title}\n${s.content}`).join('\n\n');
+          } catch (err: any) {
+            return res.status(400).json({
+              error: `PowerPoint Extraction Failed: ${err.message}`,
+              processingStatus: 'failed'
+            });
+          }
+        } else if (file.mimetype.startsWith('image/') || ext.endsWith('.png') || ext.endsWith('.jpg') || ext.endsWith('.jpeg')) {
+          fileType = 'scanned_notes';
+          try {
+            const ocrRes = await RealExtractor.extractImageOcr(file.path, file.originalname);
+            realExtractedSections = ocrRes.sections;
+            extractionWarnings.push(...ocrRes.warnings);
+            textContent = ocrRes.sections.map(s => s.content).join('\n\n');
+          } catch (err: any) {
+            return res.status(400).json({
+              error: `OCR Extraction Failed: ${err.message}`,
+              processingStatus: 'failed'
+            });
+          }
+        } else if (ext.endsWith('.pdf')) {
+          fileType = 'pdf';
+          try {
+            const pdfRes = await RealExtractor.extractPdf(file.path, file.originalname);
+            realExtractedSections = pdfRes.sections;
+            extractionWarnings.push(...pdfRes.warnings);
+            textContent = pdfRes.sections.map(s => `Page ${s.pageNumber}: ${s.title}\n${s.content}`).join('\n\n');
+          } catch (err: any) {
+            return res.status(400).json({
+              error: `PDF Extraction Failed: ${err.message}`,
+              processingStatus: 'failed'
+            });
+          }
+        } else if (file.mimetype.includes('text') || ext.endsWith('.txt') || ext.endsWith('.md')) {
           textContent = fs.readFileSync(file.path, 'utf-8');
         }
       }
 
-      if (!textContent.trim()) {
-        textContent = `1. Introduction & Theoretical Premises\n${title || 'Academic material'}. In this study, we formalize the fundamental transformations and boundary conditions.\n\n2. Analytical Derivations & Formulas\nLet X be the continuous domain space. Formula: Y = f(X) + C.\nCondition Invariant: Parameter C must be non-negative and finite across all evaluation bounds.`;
+      if (!textContent.trim() && realExtractedSections.length === 0) {
+        return res.status(400).json({
+          error: 'No readable text content found in the uploaded file or input. Please provide a document with extractable text or legible scan.',
+          processingStatus: 'failed'
+        });
       }
 
       const docId = 'doc-' + Date.now();
@@ -48,6 +92,20 @@ export class DocumentController {
         fileType,
         originalFileName
       );
+
+      // If RealExtractor found specific page-level sections with equations, combine & augment
+      if (realExtractedSections.length > 0) {
+        extraction.warnings.push(...extractionWarnings);
+        extraction.qualityReport.diagnostics.push(
+          ...extractionWarnings.map((w, idx) => ({
+            id: `diag-real-${idx}`,
+            severity: 'warning' as const,
+            type: 'ocr_uncertainty' as const,
+            message: w,
+            recommendation: 'Verify extracted slide or scanned content.'
+          }))
+        );
+      }
 
       const hasWarning = extraction.qualityReport.diagnostics.length > 0;
       const docRecord: DocumentRecord = {
@@ -138,6 +196,11 @@ export class DocumentController {
     if (!doc) {
       return res.status(404).json({ error: 'Document not found.' });
     }
+    const userId = req.user?.id;
+    const role = req.user?.role;
+    if (doc.ownerId !== userId && role !== 'lecturer') {
+      return res.status(403).json({ error: 'Access denied: You do not have permission to view this document.' });
+    }
     const sections = Database.getSectionsByDocId(doc.id);
     const verification = Database.getVerification(doc.id);
     res.json({ document: doc, sections, verification });
@@ -147,6 +210,11 @@ export class DocumentController {
     const doc = Database.getDocumentById(req.params.id);
     if (!doc) {
       return res.status(404).json({ error: 'Document not found.' });
+    }
+    const userId = req.user?.id;
+    const role = req.user?.role;
+    if (doc.ownerId !== userId && role !== 'lecturer') {
+      return res.status(403).json({ error: 'Access denied: You do not have permission to check this document.' });
     }
     res.json({
       status: doc.processingStatus,
@@ -161,6 +229,11 @@ export class DocumentController {
     const doc = Database.getDocumentById(req.params.id);
     if (!doc) {
       return res.status(404).json({ error: 'Document not found.' });
+    }
+    const userId = req.user?.id;
+    const role = req.user?.role;
+    if (doc.ownerId !== userId && role !== 'lecturer') {
+      return res.status(403).json({ error: 'Access denied: You do not have permission to inspect this extraction.' });
     }
     const sections = Database.getSectionsByDocId(doc.id);
     res.json({
@@ -180,14 +253,29 @@ export class DocumentController {
     if (!title || !title.trim()) {
       return res.status(400).json({ error: 'Title is required.' });
     }
-    const doc = Database.renameDocument(req.params.id, title.trim());
+    const doc = Database.getDocumentById(req.params.id);
     if (!doc) {
       return res.status(404).json({ error: 'Document not found.' });
     }
-    res.json({ document: doc });
+    const userId = req.user?.id;
+    const role = req.user?.role;
+    if (doc.ownerId !== userId && role !== 'lecturer') {
+      return res.status(403).json({ error: 'Access denied: You cannot rename another user\'s document.' });
+    }
+    const updated = Database.renameDocument(req.params.id, title.trim());
+    res.json({ document: updated });
   }
 
   static delete(req: AuthenticatedRequest, res: Response) {
+    const doc = Database.getDocumentById(req.params.id);
+    if (!doc) {
+      return res.status(404).json({ error: 'Document not found or already deleted.' });
+    }
+    const userId = req.user?.id;
+    const role = req.user?.role;
+    if (doc.ownerId !== userId && role !== 'lecturer') {
+      return res.status(403).json({ error: 'Access denied: You cannot delete another user\'s document.' });
+    }
     const success = Database.deleteDocument(req.params.id);
     if (!success) {
       return res.status(404).json({ error: 'Document not found or already deleted.' });

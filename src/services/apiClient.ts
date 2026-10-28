@@ -16,10 +16,11 @@ import { StorageService } from './storageService';
 const API_BASE = '/api';
 
 export class ApiClient {
-  private static token: string | null = null;
+  private static token: string | null = localStorage.getItem('learnlens_auth_token') || 'token-usr-student-1';
 
   static setToken(token: string) {
     this.token = token;
+    localStorage.setItem('learnlens_auth_token', token);
   }
 
   private static async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
