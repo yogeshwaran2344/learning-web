@@ -194,4 +194,9 @@ export class DocumentController {
     }
     res.json({ success: true, message: 'Document and all associated learning materials deleted.' });
   }
+
+  static clearAll(req: AuthenticatedRequest, res: Response) {
+    Database.clearAll();
+    res.json({ success: true, message: 'All demo and user documents cleared.' });
+  }
 }

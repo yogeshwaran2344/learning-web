@@ -96,6 +96,12 @@ export class ApiClient {
     });
   }
 
+  static async clearAllDocuments(): Promise<any> {
+    return this.request('/documents/clear-all', {
+      method: 'POST'
+    });
+  }
+
   // Learning Generator & Section 5.6 Test Suite
   static async generateMaterial(
     documentId: string,

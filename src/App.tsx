@@ -154,6 +154,21 @@ export function App() {
     }
   };
 
+  const handleClearAllDemoData = async () => {
+    if (window.confirm('Clear all documents, saved materials, and courses to start fresh?')) {
+      try {
+        await ApiClient.clearAllDocuments();
+      } catch (e) {
+        console.warn('API clear all fallback:', e);
+      }
+      StorageService.clearAllData();
+      setDocuments([]);
+      setActiveDocument(null);
+      setSavedItems([]);
+      setCourses([]);
+    }
+  };
+
   const handleRenameDocument = async (id: string, newTitle: string) => {
     try {
       await ApiClient.renameDocument(id, newTitle);
@@ -275,6 +290,7 @@ export function App() {
               onOpenUpload={() => setCurrentPage('upload')}
               onDeleteDocument={handleDeleteDocument}
               onRenameDocument={handleRenameDocument}
+              onClearAll={handleClearAllDemoData}
             />
           )}
 
@@ -315,6 +331,7 @@ export function App() {
               activeDocument={activeDocument}
               onSelectDocument={(doc) => setActiveDocument(doc)}
               onNavigateToCitation={handleNavigateToCitation}
+              onNavigate={(page) => setCurrentPage(page as NavigationPage)}
             />
           )}
 
@@ -341,6 +358,7 @@ export function App() {
               preferences={preferences}
               onUpdatePreferences={handleUpdatePreferences}
               onResetData={handleResetData}
+              onClearAll={handleClearAllDemoData}
             />
           )}
         </main>

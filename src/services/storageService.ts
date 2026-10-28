@@ -75,20 +75,37 @@ export class StorageService {
   static getDocuments(): AcademicDocument[] {
     try {
       const raw = localStorage.getItem(STORAGE_KEYS.DOCUMENTS);
-      if (!raw) {
-        this.saveDocuments(SAMPLE_DOCUMENTS);
-        return SAMPLE_DOCUMENTS;
+      if (raw === null) {
+        return [];
       }
       const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed) || parsed.length === 0) {
-        this.saveDocuments(SAMPLE_DOCUMENTS);
-        return SAMPLE_DOCUMENTS;
+      if (!Array.isArray(parsed)) {
+        return [];
       }
-      return parsed.map(this.sanitizeDocument);
+      // Deduplicate by ID
+      const seen = new Set<string>();
+      const deduped = parsed.filter(d => {
+        if (!d || !d.id || seen.has(d.id)) return false;
+        seen.add(d.id);
+        return true;
+      });
+      return deduped.map(this.sanitizeDocument);
     } catch (e) {
-      console.warn('Failed to load documents from storage, using samples:', e);
-      return SAMPLE_DOCUMENTS;
+      console.warn('Failed to load documents from storage:', e);
+      return [];
     }
+  }
+
+  static loadSampleDocuments(): void {
+    this.saveDocuments(SAMPLE_DOCUMENTS);
+    this.saveSavedItems(INITIAL_SAVED_ITEMS);
+    this.saveCourses(INITIAL_COURSES);
+  }
+
+  static clearAllData(): void {
+    this.saveDocuments([]);
+    this.saveSavedItems([]);
+    this.saveCourses([]);
   }
 
   static saveDocuments(documents: AcademicDocument[]): void {
@@ -162,13 +179,19 @@ export class StorageService {
   static getSavedItems(): SavedItem[] {
     try {
       const raw = localStorage.getItem(STORAGE_KEYS.SAVED_ITEMS);
-      if (!raw) {
-        this.saveSavedItems(INITIAL_SAVED_ITEMS);
-        return INITIAL_SAVED_ITEMS;
+      if (raw === null) {
+        return [];
       }
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      const seen = new Set<string>();
+      return parsed.filter(i => {
+        if (!i || !i.id || seen.has(i.id)) return false;
+        seen.add(i.id);
+        return true;
+      });
     } catch {
-      return INITIAL_SAVED_ITEMS;
+      return [];
     }
   }
 
@@ -196,13 +219,19 @@ export class StorageService {
   static getCourses(): LecturerCourse[] {
     try {
       const raw = localStorage.getItem(STORAGE_KEYS.COURSES);
-      if (!raw) {
-        this.saveCourses(INITIAL_COURSES);
-        return INITIAL_COURSES;
+      if (raw === null) {
+        return [];
       }
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      const seen = new Set<string>();
+      return parsed.filter(c => {
+        if (!c || !c.id || seen.has(c.id)) return false;
+        seen.add(c.id);
+        return true;
+      });
     } catch {
-      return INITIAL_COURSES;
+      return [];
     }
   }
 

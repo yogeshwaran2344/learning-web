@@ -24,10 +24,155 @@ export interface IntegrationSuiteResult {
 }
 
 export class IntegrationTestSuite {
+  static ensureTestFixtures(): void {
+    if (!Database.getDocumentById('doc-transformer-attention')) {
+      Database.createDocument({
+        id: 'doc-transformer-attention',
+        ownerId: 'usr-student-1',
+        title: 'Attention Is All You Need',
+        author: 'Ashish Vaswani et al. (Google Brain)',
+        fileType: 'pdf',
+        category: 'Computer Science',
+        uploadDate: '2026-10-24',
+        processingStatus: 'completed',
+        extractionStatus: 'ready',
+        extractionWarnings: [],
+        pageCount: 15,
+        wordCount: 5420,
+        summary: 'Proposes the Transformer network architecture.'
+      });
+      Database.saveSections('doc-transformer-attention', [
+        {
+          id: 'sec-att-1',
+          documentId: 'doc-transformer-attention',
+          pageNumber: 3,
+          title: '3.2.1 Scaled Dot-Product Attention',
+          content: 'Attention(Q, K, V) = softmax(QK^T / sqrt(d_k))V',
+          conditions: ['d_k factor must divide query-key matrix multiplication.']
+        }
+      ]);
+    }
+
+    if (!Database.getDocumentById('doc-quantum-schrodinger')) {
+      Database.createDocument({
+        id: 'doc-quantum-schrodinger',
+        ownerId: 'usr-student-1',
+        title: 'Wave Mechanics and Schrödinger Formulation',
+        author: 'Erwin Schrödinger',
+        fileType: 'pptx',
+        category: 'Physics & Quantum',
+        uploadDate: '2026-10-22',
+        processingStatus: 'completed',
+        extractionStatus: 'ready',
+        extractionWarnings: [],
+        pageCount: 18,
+        wordCount: 6100,
+        summary: 'Derivation of the non-relativistic time-dependent wave equation.'
+      });
+      Database.saveSections('doc-quantum-schrodinger', [
+        {
+          id: 'sec-q-1',
+          documentId: 'doc-quantum-schrodinger',
+          pageNumber: 1,
+          title: 'Slide 1: Hamiltonian Evolution',
+          content: 'i * hbar * d(Psi)/dt = H * Psi',
+          speakerNotes: 'Explain state probability interpretation.'
+        }
+      ]);
+    }
+
+    if (!Database.getDocumentById('doc-scanned-calculus-notes')) {
+      Database.createDocument({
+        id: 'doc-scanned-calculus-notes',
+        ownerId: 'usr-student-1',
+        title: 'Lecture 04: Vector Fields & Multivariable Calculus (Handwritten)',
+        author: 'Prof. Ramesh K. (IISc Bangalore)',
+        fileType: 'scanned_notes',
+        category: 'Mathematics',
+        uploadDate: '2026-10-27',
+        processingStatus: 'warning',
+        extractionStatus: 'needs_review',
+        extractionWarnings: ['Page 4: Low optical resolution on handwritten boundary formulas. Contrast: 42%.'],
+        pageCount: 12,
+        wordCount: 3800,
+        summary: 'Multivariable calculus notes covering Green Theorem and surface divergence.'
+      });
+      Database.saveSections('doc-scanned-calculus-notes', [
+        {
+          id: 'sec-calc-1',
+          documentId: 'doc-scanned-calculus-notes',
+          pageNumber: 2,
+          title: '2. Vector Fields & Green Theorem',
+          content: 'Let C be a positively oriented, piecewise-smooth, simple closed curve in a plane.'
+        }
+      ]);
+      Database.saveVerification({
+        documentId: 'doc-scanned-calculus-notes',
+        overallFidelityScore: 91.2,
+        factRetentionRate: 91,
+        equationIntegrityRate: 84,
+        conditionAccuracyRate: 88,
+        terminologyConsistencyRate: 94,
+        unsupportedClaimsDetected: 1,
+        alteredEquationsDetected: 1,
+        missingConditionsDetected: 1,
+        lastAuditDate: '2026-10-28 20:00 UTC',
+        verifiedByEngine: false,
+        factChecks: [
+          {
+            id: 'chk-calc-1',
+            documentId: 'doc-scanned-calculus-notes',
+            originalFact: 'Green Theorem relates line integrals around boundary C to double integrals over plane D.',
+            originalQuote: 'Let C be a positively oriented, piecewise-smooth curve.',
+            pageNumber: 2,
+            formatFound: ['Notes', 'Flashcards'],
+            status: 'fully_preserved',
+            confidenceScore: 95,
+            notes: 'Orientation and smoothness verified.'
+          },
+          {
+            id: 'chk-calc-2',
+            documentId: 'doc-scanned-calculus-notes',
+            originalFact: 'Surface integral curl(F) · n dS requires smooth boundary orientation.',
+            originalQuote: 'Surface integral equation curl(F) · n dS flagged.',
+            pageNumber: 4,
+            formatFound: ['Notes'],
+            status: 'needs_review',
+            confidenceScore: 76,
+            notes: 'OCR uncertainty on curl symbol. Lecturer review recommended.',
+            flagReason: 'altered_equation'
+          }
+        ]
+      });
+    }
+
+    if (Database.getSavedItems('usr-student-1').length === 0) {
+      Database.addSavedItem({
+        id: 'saved-item-1',
+        userId: 'usr-student-1',
+        documentId: 'doc-transformer-attention',
+        documentTitle: 'Attention Is All You Need',
+        type: 'flashcard',
+        title: 'Why divide by √d_k in Attention?',
+        content: 'For large key dimension d_k, dot products grow large pushing softmax into vanishing gradients.',
+        savedAt: '2026-10-27 16:10',
+        citation: {
+          id: 'cite-s1',
+          documentId: 'doc-transformer-attention',
+          pageNumber: 3,
+          sectionTitle: '3.2.1 Scaled Dot-Product Attention',
+          exactQuote: 'We suspect that for large values of d_k, the dot products grow large in magnitude...',
+          contextSnippet: 'To counteract this effect, we scale by 1 / sqrt(d_k).'
+        }
+      });
+    }
+  }
+
   /**
    * Section 7.5: Executes all 10 integration verification steps against real backend data and services.
    */
   static runSuite(): IntegrationSuiteResult {
+    this.ensureTestFixtures();
     const checks: IntegrationCheckItem[] = [];
 
     // Test 1: Upload a PDF from interface and see it in My Documents

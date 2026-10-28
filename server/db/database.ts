@@ -580,6 +580,17 @@ export class Database {
     return false;
   }
 
+  static clearAll(): void {
+    this.init();
+    this.store.documents = [];
+    this.store.extractedSections = [];
+    this.store.generatedMaterials = [];
+    this.store.verificationResults = [];
+    this.store.savedItems = [];
+    this.store.quizAttempts = [];
+    this.persist();
+  }
+
   // --- Extracted Sections ---
   static getSectionsByDocId(documentId: string): ExtractedSectionRecord[] {
     this.init();
@@ -651,6 +662,17 @@ export class Database {
       return true;
     }
     return false;
+  }
+
+  static clearAll(): void {
+    this.init();
+    this.store.documents = [];
+    this.store.extractedSections = [];
+    this.store.generatedMaterials = [];
+    this.store.verificationResults = [];
+    this.store.savedItems = [];
+    this.store.quizAttempts = [];
+    this.persist();
   }
 
   // --- Quiz Attempts ---

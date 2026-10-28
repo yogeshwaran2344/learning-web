@@ -47,13 +47,15 @@ interface SourceVerificationPageProps {
   activeDocument: AcademicDocument | null;
   onSelectDocument: (doc: AcademicDocument) => void;
   onNavigateToCitation: (citation: SourceCitation) => void;
+  onNavigate?: (page: 'upload' | 'dashboard' | 'documents') => void;
 }
 
 export const SourceVerificationPage: React.FC<SourceVerificationPageProps> = ({
   documents,
   activeDocument,
   onSelectDocument,
-  onNavigateToCitation
+  onNavigateToCitation,
+  onNavigate
 }) => {
   const currentDoc = activeDocument || documents[0];
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -72,7 +74,27 @@ export const SourceVerificationPage: React.FC<SourceVerificationPageProps> = ({
   const [isBenchmarkModalOpen, setIsBenchmarkModalOpen] = useState<boolean>(false);
 
   if (!currentDoc) {
-    return <div className="p-8 text-center text-slate-400">No documents available for audit.</div>;
+    return (
+      <div className="p-12 max-w-xl mx-auto my-12 text-center bg-white dark:bg-slate-900 rounded-3xl border border-dashed border-slate-300 dark:border-slate-800 space-y-4">
+        <div className="w-12 h-12 rounded-2xl bg-brand-50 dark:bg-brand-950 text-brand-600 dark:text-brand-400 flex items-center justify-center mx-auto">
+          <ShieldCheck className="w-6 h-6" />
+        </div>
+        <div className="space-y-1">
+          <h2 className="text-base font-bold text-slate-800 dark:text-slate-200">No Documents to Verify Yet</h2>
+          <p className="text-xs text-slate-500 max-w-sm mx-auto">
+            Upload an academic paper or notes to inspect meaning preservation scores, formula checks, and claim traces.
+          </p>
+        </div>
+        {onNavigate && (
+          <button
+            onClick={() => onNavigate('upload')}
+            className="py-2.5 px-5 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shadow-md shadow-brand-500/20"
+          >
+            Upload Document
+          </button>
+        )}
+      </div>
+    );
   }
 
   const report = currentDoc.meaningPreservation || DEFAULT_PRESERVATION_REPORT;

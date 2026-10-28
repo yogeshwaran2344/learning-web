@@ -269,40 +269,61 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {documents.map((doc) => (
-            <div
-              key={doc.id}
-              onClick={() => onSelectDocument(doc)}
-              className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-brand-500 hover:shadow-lg transition-all cursor-pointer flex flex-col justify-between space-y-4"
+        {documents.length === 0 ? (
+          <div className="p-10 text-center bg-white dark:bg-slate-900 rounded-3xl border border-dashed border-slate-300 dark:border-slate-800 space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-brand-50 dark:bg-brand-950 text-brand-600 dark:text-brand-400 flex items-center justify-center mx-auto">
+              <UploadCloud className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">No documents in your library yet</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                Upload your research PDFs, lecture slides, or scanned notes to transform and verify them into interactive learning formats.
+              </p>
+            </div>
+            <button
+              onClick={onOpenUpload}
+              className="py-2.5 px-5 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shadow-md shadow-brand-500/20 inline-flex items-center gap-2"
             >
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="px-2 py-0.5 rounded-md font-bold uppercase tracking-wider text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                    {doc.fileType}
-                  </span>
-                  <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    {doc.meaningPreservation?.overallFidelityScore ?? 96}%
-                  </span>
+              <UploadCloud className="w-4 h-4" />
+              <span>Upload Document</span>
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {documents.map((doc) => (
+              <div
+                key={doc.id}
+                onClick={() => onSelectDocument(doc)}
+                className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-brand-500 hover:shadow-lg transition-all cursor-pointer flex flex-col justify-between space-y-4"
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="px-2 py-0.5 rounded-md font-bold uppercase tracking-wider text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                      {doc.fileType}
+                    </span>
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      {doc.meaningPreservation?.overallFidelityScore ?? 96}%
+                    </span>
+                  </div>
+
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-white line-clamp-2">
+                    {doc.title}
+                  </h3>
+
+                  <p className="text-[11px] text-slate-500 line-clamp-2">
+                    {doc.summary}
+                  </p>
                 </div>
 
-                <h3 className="font-bold text-sm text-slate-900 dark:text-white line-clamp-2">
-                  {doc.title}
-                </h3>
-
-                <p className="text-[11px] text-slate-500 line-clamp-2">
-                  {doc.summary}
-                </p>
+                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-400">
+                  <span>{doc.pageCount || 1} Pages • {doc.flashcards?.length ?? 0} Cards</span>
+                  <span className="font-semibold text-brand-600 dark:text-brand-400">Open Studio →</span>
+                </div>
               </div>
-
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-400">
-                <span>{doc.pageCount || 1} Pages • {doc.flashcards?.length ?? 0} Cards</span>
-                <span className="font-semibold text-brand-600 dark:text-brand-400">Open Studio →</span>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

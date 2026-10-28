@@ -24,6 +24,7 @@ interface MyDocumentsPageProps {
   onOpenUpload: () => void;
   onDeleteDocument: (id: string) => void;
   onRenameDocument: (id: string, newTitle: string) => void;
+  onClearAll?: () => void;
 }
 
 export const MyDocumentsPage: React.FC<MyDocumentsPageProps> = ({
@@ -31,7 +32,8 @@ export const MyDocumentsPage: React.FC<MyDocumentsPageProps> = ({
   onSelectDocument,
   onOpenUpload,
   onDeleteDocument,
-  onRenameDocument
+  onRenameDocument,
+  onClearAll
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState<string>('all');
@@ -81,13 +83,26 @@ export const MyDocumentsPage: React.FC<MyDocumentsPageProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={onOpenUpload}
-          className="py-2.5 px-5 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shadow-md shadow-brand-500/20 flex items-center justify-center gap-2 transition-all self-start sm:self-auto"
-        >
-          <UploadCloud className="w-4 h-4" />
-          <span>Upload Document</span>
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          {documents.length > 0 && onClearAll && (
+            <button
+              onClick={onClearAll}
+              className="py-2.5 px-3.5 rounded-2xl border border-rose-200 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 font-semibold text-xs hover:bg-rose-100 flex items-center gap-1.5 transition-all shadow-sm"
+              title="Delete all demo and uploaded documents"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Clear All</span>
+            </button>
+          )}
+
+          <button
+            onClick={onOpenUpload}
+            className="py-2.5 px-5 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shadow-md shadow-brand-500/20 flex items-center justify-center gap-2 transition-all"
+          >
+            <UploadCloud className="w-4 h-4" />
+            <span>Upload Document</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter & Search Bar */}

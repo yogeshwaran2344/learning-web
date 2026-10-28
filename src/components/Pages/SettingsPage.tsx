@@ -18,12 +18,14 @@ interface SettingsPageProps {
   preferences: UserPreferences;
   onUpdatePreferences: (updated: Partial<UserPreferences>) => void;
   onResetData: () => void;
+  onClearAll?: () => void;
 }
 
 export const SettingsPage: React.FC<SettingsPageProps> = ({
   preferences,
   onUpdatePreferences,
-  onResetData
+  onResetData,
+  onClearAll
 }) => {
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -261,15 +263,25 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             </button>
           </div>
 
-          <div className="pt-2 flex items-center justify-between border-t border-slate-100 dark:border-slate-800">
-            <span className="text-slate-400">Reset all custom documents to initial demo library:</span>
-            <button
-              onClick={onResetData}
-              className="px-4 py-2 rounded-xl text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 font-bold transition-colors flex items-center gap-1.5"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Reset Library to Defaults</span>
-            </button>
+          <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-100 dark:border-slate-800">
+            <span className="text-slate-400">Library and workspace data options:</span>
+            <div className="flex items-center gap-2">
+              {onClearAll && (
+                <button
+                  onClick={onClearAll}
+                  className="px-3.5 py-2 rounded-xl text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 font-bold text-xs transition-colors flex items-center gap-1.5"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Clear All Data (Start Fresh)</span>
+                </button>
+              )}
+              <button
+                onClick={onResetData}
+                className="px-3.5 py-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-xs transition-colors flex items-center gap-1.5"
+              >
+                <span>Load Sample Papers</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
