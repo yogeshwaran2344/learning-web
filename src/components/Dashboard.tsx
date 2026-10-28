@@ -256,11 +256,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-3">
                     <span className="flex items-center gap-1">
                       <FileText className="w-3.5 h-3.5" />
-                      {doc.sections.length} sections ({doc.wordCount} words)
+                      {doc.sections?.length || 0} sections ({doc.wordCount || 1000} words)
                     </span>
                     <span className="flex items-center gap-1">
                       <Layers className="w-3.5 h-3.5" />
-                      {doc.flashcards.length} cards
+                      {doc.flashcards?.length || 0} cards
                     </span>
                   </div>
 

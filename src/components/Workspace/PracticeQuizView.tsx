@@ -42,7 +42,7 @@ export const PracticeQuizView: React.FC<PracticeQuizViewProps> = ({
 }) => {
   // Convert flashcards into quiz questions with multiple options
   const questions: QuizQuestion[] = React.useMemo(() => {
-    return document.flashcards.slice(0, 6).map((card, idx) => {
+    return (document.flashcards || []).slice(0, 6).map((card, idx) => {
       if (card.practiceOptions && card.practiceOptions.length >= 2) {
         return {
           id: card.id,

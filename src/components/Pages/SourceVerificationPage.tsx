@@ -377,7 +377,7 @@ export const SourceVerificationPage: React.FC<SourceVerificationPageProps> = ({
 
                   <div className="flex items-center justify-between pt-1">
                     <div className="flex flex-wrap gap-1">
-                      {item.formatFound.map((f: string) => (
+                      {(item.formatFound || []).map((f: string) => (
                         <span
                           key={f}
                           className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[10px] font-semibold uppercase"

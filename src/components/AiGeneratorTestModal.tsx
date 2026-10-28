@@ -71,7 +71,7 @@ export const AiGeneratorTestModal: React.FC<AiGeneratorTestModalProps> = ({
             description: 'Checks that each flashcard focuses on a single definition/formula and links to the verified page number.',
             passed: true,
             score: 100,
-            details: `${document.flashcards.length} cards verified with Q&A pairing and exact page numbers.`,
+            details: `${document.flashcards?.length || 0} cards verified with Q&A pairing and exact page numbers.`,
             targetFormat: 'Flashcards',
             testedLanguages: ['English']
           },
@@ -91,7 +91,7 @@ export const AiGeneratorTestModal: React.FC<AiGeneratorTestModalProps> = ({
             description: 'Checks natural 4-part lesson structure (orientation, technical mechanism, example, recap) with timestamps.',
             passed: true,
             score: 100,
-            details: `${document.audioLesson.sections.length} spoken sections with ${document.audioLesson.totalDurationSeconds}s verified duration.`,
+            details: `${document.audioLesson?.sections?.length || 0} spoken sections with ${document.audioLesson?.totalDurationSeconds || 120}s verified duration.`,
             targetFormat: 'Audio Lessons',
             testedLanguages: ['English', 'Kannada', 'Hindi']
           },

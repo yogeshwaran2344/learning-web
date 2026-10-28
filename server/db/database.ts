@@ -396,6 +396,58 @@ export class Database {
             flagReason: 'altered_equation'
           }
         ]
+      },
+      {
+        documentId: 'doc-quantum-schrodinger',
+        overallFidelityScore: 98.7,
+        factRetentionRate: 99,
+        equationIntegrityRate: 100,
+        conditionAccuracyRate: 98.0,
+        terminologyConsistencyRate: 99.0,
+        unsupportedClaimsDetected: 0,
+        alteredEquationsDetected: 0,
+        missingConditionsDetected: 0,
+        lastAuditDate: '2026-10-28 20:15 UTC',
+        verifiedByEngine: true,
+        factChecks: [
+          {
+            id: 'chk-q-1',
+            documentId: 'doc-quantum-schrodinger',
+            originalFact: 'Time-dependent wave function evolution is governed by i * hbar * d(Psi)/dt = H * Psi.',
+            originalQuote: 'The fundamental postulate represents state evolution via unitary Hamiltonian operator H.',
+            pageNumber: 2,
+            formatFound: ['Concept Map', 'Simplified', 'Notes', 'Flashcards'],
+            status: 'fully_preserved',
+            confidenceScore: 100,
+            notes: 'Planck constant factor and imaginary unit verified.'
+          }
+        ]
+      },
+      {
+        documentId: 'doc-raft-consensus',
+        overallFidelityScore: 99.4,
+        factRetentionRate: 100,
+        equationIntegrityRate: 100,
+        conditionAccuracyRate: 99.0,
+        terminologyConsistencyRate: 99.2,
+        unsupportedClaimsDetected: 0,
+        alteredEquationsDetected: 0,
+        missingConditionsDetected: 0,
+        lastAuditDate: '2026-10-28 20:30 UTC',
+        verifiedByEngine: true,
+        factChecks: [
+          {
+            id: 'chk-raft-1',
+            documentId: 'doc-raft-consensus',
+            originalFact: 'Leader election uses randomized election timeouts to prevent split votes.',
+            originalQuote: 'Raft uses randomized election timeouts to ensure that split-vote scenarios are resolved quickly.',
+            pageNumber: 4,
+            formatFound: ['Concept Map', 'Simplified', 'Notes', 'Flashcards', 'Quiz'],
+            status: 'fully_preserved',
+            confidenceScore: 100,
+            notes: 'Leader election safety verified against source specifications.'
+          }
+        ]
       }
     ];
 

@@ -23,7 +23,9 @@ export const ConceptMapView: React.FC<ConceptMapViewProps> = ({
   conceptMap,
   onNavigateToCitation
 }) => {
-  const [selectedNode, setSelectedNode] = useState<ConceptNode | null>(conceptMap.nodes[0] || null);
+  const nodes = Array.isArray(conceptMap?.nodes) ? conceptMap.nodes : [];
+  const edges = Array.isArray(conceptMap?.edges) ? conceptMap.edges : [];
+  const [selectedNode, setSelectedNode] = useState<ConceptNode | null>(nodes[0] || null);
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [zoomLevel, setZoomLevel] = useState<number>(1);
 
@@ -37,12 +39,12 @@ export const ConceptMapView: React.FC<ConceptMapViewProps> = ({
   ];
 
   const filteredNodes = activeCategory === 'all'
-    ? conceptMap.nodes
-    : conceptMap.nodes.filter(n => n.category === activeCategory);
+    ? nodes
+    : nodes.filter(n => n.category === activeCategory);
 
   // Layout node positions dynamically in a responsive hierarchical layout
-  const totalNodes = conceptMap.nodes.length;
-  const nodePositions = conceptMap.nodes.reduce((acc, node, index) => {
+  const totalNodes = nodes.length;
+  const nodePositions = nodes.reduce((acc, node, index) => {
     // Arrange in 2-3 visual layers
     let x = 160;
     let y = 140;
@@ -154,7 +156,7 @@ export const ConceptMapView: React.FC<ConceptMapViewProps> = ({
               </defs>
 
               {/* Edge Connections with Prerequisite Labels */}
-              {conceptMap.edges.map((edge, idx) => {
+              {edges.map((edge, idx) => {
                 const start = nodePositions[edge.from] || { x: 150, y: 150 };
                 const end = nodePositions[edge.to] || { x: 450, y: 150 };
 
