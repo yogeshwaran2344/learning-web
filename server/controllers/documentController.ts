@@ -187,25 +187,14 @@ export class DocumentController {
     const role = req.user?.role;
     const docs = Database.getDocuments(userId, role);
     const enriched = docs.map(d => {
-      const verification = Database.getVerification(d.id) || {
-        documentId: d.id,
-        overallFidelityScore: 98.4,
-        factRetentionRate: 98,
-        equationIntegrityRate: 100,
-        conditionAccuracyRate: 97,
-        terminologyConsistencyRate: 99,
-        unsupportedClaimsDetected: 0,
-        alteredEquationsDetected: 0,
-        missingConditionsDetected: 0,
-        lastAuditDate: new Date().toISOString().slice(0, 10),
-        verifiedByEngine: true,
-        factChecks: []
-      };
+      // Critical 6: Return genuine verification result if one exists; do not fabricate misleading default scores
+      const verification = Database.getVerification(d.id);
       const sections = Database.getSectionsByDocId(d.id);
       return {
         ...d,
         sections,
-        meaningPreservation: verification,
+        meaningPreservation: verification || undefined,
+        verificationStatus: verification ? (verification.overallFidelityScore >= 90 ? 'verified' : 'needs_review') : 'not_verified',
         flashcards: (d as any).flashcards || [],
         conceptMap: (d as any).conceptMap || { nodes: [], links: [] },
         explanations: (d as any).explanations || [],
@@ -316,7 +305,28 @@ export class DocumentController {
   }
 
   static clearAll(req: AuthenticatedRequest, res: Response) {
-    Database.clearAll();
-    res.json({ success: true, message: 'All demo and user documents cleared.' });
+    const userId = req.user?.id;
+    const role = req.user?.role;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Authentication required.' });
+    }
+
+    if (role === 'lecturer') {
+      // Lecturers can clear course records
+      Database.clearAll();
+      return res.json({ success: true, message: 'All demo and course documents cleared.' });
+    }
+
+    // Scoped clearance for student: only clear own documents
+    const userDocs = Database.getDocuments(userId, 'student');
+    for (const doc of userDocs) {
+      Database.deleteDocument(doc.id);
+      if (doc.storagePath && fs.existsSync(doc.storagePath)) {
+        try { fs.unlinkSync(doc.storagePath); } catch (e) { /* ignore */ }
+      }
+    }
+
+    res.json({ success: true, message: 'All your uploaded documents have been cleared.' });
   }
 }

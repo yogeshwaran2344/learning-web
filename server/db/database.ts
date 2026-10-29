@@ -60,9 +60,20 @@ export class Database {
         id TEXT PRIMARY KEY,
         email TEXT UNIQUE NOT NULL,
         name TEXT NOT NULL,
+        passwordHash TEXT,
         role TEXT NOT NULL,
         createdAt TEXT NOT NULL
       );
+    `);
+
+    // Migration helper: add passwordHash column if users table was created previously without it
+    try {
+      this.db.exec('ALTER TABLE users ADD COLUMN passwordHash TEXT');
+    } catch (e) {
+      // Column already exists, safe to ignore
+    }
+
+    this.db.exec(`
 
       CREATE TABLE IF NOT EXISTS documents (
         id TEXT PRIMARY KEY,
@@ -306,9 +317,9 @@ export class Database {
 
   private static seedDefaultUsers(): void {
     if (!this.db) return;
-    const stmt = this.db.prepare('INSERT OR IGNORE INTO users (id, email, name, role, createdAt) VALUES (?, ?, ?, ?, ?)');
-    stmt.run('usr-student-1', 'alex.rivera@university.edu', 'Alex Rivera', 'student', '2026-10-01T10:00:00Z');
-    stmt.run('usr-lecturer-1', 'prof.ramesh@iisc.ac.in', 'Prof. Ramesh K.', 'lecturer', '2026-09-15T09:00:00Z');
+    const stmt = this.db.prepare('INSERT OR IGNORE INTO users (id, email, name, passwordHash, role, createdAt) VALUES (?, ?, ?, ?, ?, ?)');
+    stmt.run('usr-student-1', 'alex.rivera@university.edu', 'Alex Rivera', 'sha256:student123', 'student', '2026-10-01T10:00:00Z');
+    stmt.run('usr-lecturer-1', 'prof.ramesh@iisc.ac.in', 'Prof. Ramesh K.', 'sha256:lecturer123', 'lecturer', '2026-09-15T09:00:00Z');
   }
 
   // --- Users ---
@@ -327,8 +338,8 @@ export class Database {
   static createUser(user: UserRecord): UserRecord {
     this.init();
     if (this.db) {
-      const stmt = this.db.prepare('INSERT OR REPLACE INTO users (id, email, name, role, createdAt) VALUES (?, ?, ?, ?, ?)');
-      stmt.run(user.id, user.email, user.name, user.role, user.createdAt);
+      const stmt = this.db.prepare('INSERT OR REPLACE INTO users (id, email, name, passwordHash, role, createdAt) VALUES (?, ?, ?, ?, ?, ?)');
+      stmt.run(user.id, user.email, user.name, user.passwordHash || null, user.role, user.createdAt);
     }
     return user;
   }

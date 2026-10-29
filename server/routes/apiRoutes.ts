@@ -22,7 +22,7 @@ apiRouter.get('/documents', authMiddleware, (req, res) => DocumentController.lis
 apiRouter.get('/documents/:id', authMiddleware, (req, res) => DocumentController.getById(req, res));
 apiRouter.get('/documents/:id/status', authMiddleware, (req, res) => DocumentController.getStatus(req, res));
 apiRouter.get('/documents/:id/extraction', authMiddleware, (req, res) => DocumentController.getExtraction(req, res));
-apiRouter.get('/extraction/benchmark', (req, res) => DocumentController.getBenchmark(req, res));
+apiRouter.get('/extraction/benchmark', authMiddleware, (req, res) => DocumentController.getBenchmark(req, res));
 apiRouter.put('/documents/:id/rename', authMiddleware, (req, res) => DocumentController.rename(req, res));
 apiRouter.post('/documents/clear-all', authMiddleware, (req, res) => DocumentController.clearAll(req, res));
 apiRouter.delete('/documents/:id', authMiddleware, (req, res) => DocumentController.delete(req, res));
@@ -30,12 +30,12 @@ apiRouter.delete('/documents/:id', authMiddleware, (req, res) => DocumentControl
 // 3. Learning Generation & Section 5.6 Verification Suite
 apiRouter.post('/documents/:id/generate', authMiddleware, (req, res) => LearningController.generate(req, res));
 apiRouter.get('/documents/:id/materials', authMiddleware, (req, res) => LearningController.getMaterials(req, res));
-apiRouter.get('/documents/:id/test-generator', (req, res) => LearningController.testGenerator(req, res));
-apiRouter.post('/documents/:id/test-generator', (req, res) => LearningController.testGenerator(req, res));
+apiRouter.get('/documents/:id/test-generator', authMiddleware, (req, res) => LearningController.testGenerator(req, res));
+apiRouter.post('/documents/:id/test-generator', authMiddleware, (req, res) => LearningController.testGenerator(req, res));
 
 // 4. Source Verification & Meaning Preservation Engine (Phase 6)
 apiRouter.get('/documents/:id/verification', authMiddleware, (req, res) => VerificationController.getVerification(req, res));
-apiRouter.get('/verification/benchmark', (req, res) => VerificationController.getBenchmark(req, res));
+apiRouter.get('/verification/benchmark', authMiddleware, (req, res) => VerificationController.getBenchmark(req, res));
 apiRouter.post('/verification/:docId/item/:factId/correct', authMiddleware, (req, res) => VerificationController.correctFact(req, res));
 
 // 5. Saved Materials & Bookmarks
