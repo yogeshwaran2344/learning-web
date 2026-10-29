@@ -26,6 +26,7 @@ interface TopBarProps {
   onOpenAccessibility: () => void;
   onOpenBenchmark?: () => void;
   onOpenIntegrationTest?: () => void;
+  onOpenSystemTracker?: () => void;
   activeDocument: AcademicDocument | null;
   documents: AcademicDocument[];
 }
@@ -42,6 +43,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onOpenAccessibility,
   onOpenBenchmark,
   onOpenIntegrationTest,
+  onOpenSystemTracker,
   activeDocument,
   documents
 }) => {
@@ -140,6 +142,17 @@ export const TopBar: React.FC<TopBarProps> = ({
             title="Step 7: 10-Point System Integration Test Suite"
           >
             <Zap className="w-4 h-4 text-indigo-500" />
+          </button>
+        )}
+
+        {/* Step 34: 20-Feature System Verification Suite */}
+        {onOpenSystemTracker && (
+          <button
+            onClick={onOpenSystemTracker}
+            className="p-2 rounded-xl text-slate-500 hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700"
+            title="Step 34: 20-Feature System Test Tracker & Failure Baselines"
+          >
+            <ShieldCheck className="w-4 h-4 text-emerald-500" />
           </button>
         )}
 

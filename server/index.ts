@@ -5,36 +5,69 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 import { apiRouter } from './routes/apiRoutes';
 import { Database } from './db/database';
+import { config, validateProductionConfig } from './config/environment';
+import { standardRateLimiter } from './middleware/rateLimitMiddleware';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const distPath = path.resolve(__dirname, '../dist');
 
-const app = express();
-const PORT = process.env.PORT || 5001;
+// Validate production environment settings
+validateProductionConfig();
 
-// Initialize Database
+const app = express();
+const PORT = config.port;
+
+// Initialize Database & WAL mode
 Database.init();
 
-// Middleware
+// Security Headers Middleware
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  if (config.env === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  next();
+});
+
+// Production-ready CORS configuration
 app.use(cors({
-  origin: '*',
+  origin: config.corsOrigins,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 }));
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: `${config.maxUploadSizeMb}mb` }));
+app.use(express.urlencoded({ extended: true, limit: `${config.maxUploadSizeMb}mb` }));
 
-// Health Check
+// Request Logging & Latency Monitor
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    if (req.path.startsWith('/api') && req.path !== '/api/health') {
+      console.log(`[${req.method}] ${req.path} -> HTTP ${res.statusCode} (${duration}ms)`);
+    }
+  });
+  next();
+});
+
+// Health & Deployment Probe
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'healthy',
     service: 'LearnLens AI Backend API',
     version: '1.0.0',
+    environment: config.env,
     timestamp: new Date().toISOString()
   });
 });
+
+// Rate limiting on /api endpoints to protect against brute-force & expensive request hammering
+app.use('/api', standardRateLimiter);
 
 // API Routes
 app.use('/api', apiRouter);
@@ -67,14 +100,30 @@ app.get('*', (req, res, next) => {
 
 // Global Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('[API Error]:', err);
+  console.error('[API Unhandled Error]:', err);
   res.status(err.status || 500).json({
     error: err.message || 'Internal Server Error',
     timestamp: new Date().toISOString()
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`[LearnLens Backend] Server running at http://localhost:${PORT}`);
+// Process-level uncaught exception handlers
+process.on('uncaughtException', (err) => {
+  console.error('[Fatal Error] Uncaught Exception:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[Fatal Error] Unhandled Promise Rejection:', reason);
+});
+
+const server = app.listen(PORT, () => {
+  console.log(`[LearnLens Backend] Server running at http://localhost:${PORT} in ${config.env} mode`);
   console.log(`[LearnLens Backend] Health probe: http://localhost:${PORT}/api/health`);
+});
+
+// Graceful Shutdown
+process.on('SIGTERM', () => {
+  console.log('[LearnLens Backend] SIGTERM signal received: closing HTTP server...');
+  server.close(() => {
+    console.log('[LearnLens Backend] HTTP server closed gracefully.');
+  });
 });

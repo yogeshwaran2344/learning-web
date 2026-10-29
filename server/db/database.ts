@@ -424,7 +424,7 @@ export class Database {
     this.db.prepare('DELETE FROM extracted_sections WHERE documentId = ?').run(documentId);
 
     const insertStmt = this.db.prepare(`
-      INSERT INTO extracted_sections (
+      INSERT OR REPLACE INTO extracted_sections (
         id, documentId, pageNumber, slideNumber, chapterTitle, title, content,
         speakerNotes, equations, tables, definitions, conditions, examples, uncertainSymbols
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

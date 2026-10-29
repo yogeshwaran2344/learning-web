@@ -31,6 +31,7 @@ import { FeedbackModal } from './components/FeedbackModal';
 import { UsabilityTestModal } from './components/UsabilityTestModal';
 import { ExtractionBenchmarkModal } from './components/ExtractionBenchmarkModal';
 import { IntegrationTestModal } from './components/IntegrationTestModal';
+import { SystemTestTrackerModal } from './components/SystemTestTrackerModal';
 
 export function App() {
   const initialDocs = StorageService.getDocuments();
@@ -51,6 +52,7 @@ export function App() {
   const [isUsabilityOpen, setIsUsabilityOpen] = useState(false);
   const [isBenchmarkOpen, setIsBenchmarkOpen] = useState(false);
   const [isIntegrationOpen, setIsIntegrationOpen] = useState(false);
+  const [isSystemTrackerOpen, setIsSystemTrackerOpen] = useState(false);
 
   // Initialize data on mount
   useEffect(() => {
@@ -267,6 +269,7 @@ export function App() {
           onOpenAccessibility={() => setIsAccessibilityOpen(true)}
           onOpenBenchmark={() => setIsBenchmarkOpen(true)}
           onOpenIntegrationTest={() => setIsIntegrationOpen(true)}
+          onOpenSystemTracker={() => setIsSystemTrackerOpen(true)}
           activeDocument={activeDocument}
           documents={documents}
         />
@@ -401,6 +404,11 @@ export function App() {
       <IntegrationTestModal
         isOpen={isIntegrationOpen}
         onClose={() => setIsIntegrationOpen(false)}
+      />
+
+      <SystemTestTrackerModal
+        isOpen={isSystemTrackerOpen}
+        onClose={() => setIsSystemTrackerOpen(false)}
       />
     </div>
   );

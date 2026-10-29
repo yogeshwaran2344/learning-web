@@ -164,10 +164,15 @@ export class ApiClient {
     return data.deliberateTests;
   }
 
-  // System Integration Test (Section 7.5)
+  // System Integration & 20-Point Test Tracker
   static async runIntegrationTest(): Promise<IntegrationSuiteResult> {
     const data = await this.request<{ integrationSuite: IntegrationSuiteResult }>('/system/integration-test');
     return data.integrationSuite;
+  }
+
+  static async getSystemTestTracker(): Promise<any> {
+    const data = await this.request<{ testTracker: any }>('/system/test-tracker');
+    return data.testTracker;
   }
 
   // Saved Items

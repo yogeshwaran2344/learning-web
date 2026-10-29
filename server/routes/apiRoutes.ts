@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware, requireLecturerRole } from '../middleware/authMiddleware';
 import { uploadMiddleware } from '../middleware/uploadMiddleware';
+import { aiRequestRateLimiter } from '../middleware/rateLimitMiddleware';
 
 import { AuthController } from '../controllers/authController';
 import { DocumentController } from '../controllers/documentController';
@@ -8,6 +9,7 @@ import { LearningController } from '../controllers/learningController';
 import { VerificationController } from '../controllers/verificationController';
 import { SavedController, QuizController, LecturerController } from '../controllers/savedController';
 import { IntegrationTestSuite } from '../services/integrationTestSuite';
+import { SystemTestTracker } from '../services/systemTestTracker';
 
 export const apiRouter = Router();
 
@@ -28,7 +30,7 @@ apiRouter.post('/documents/clear-all', authMiddleware, (req, res) => DocumentCon
 apiRouter.delete('/documents/:id', authMiddleware, (req, res) => DocumentController.delete(req, res));
 
 // 3. Learning Generation & Section 5.6 Verification Suite
-apiRouter.post('/documents/:id/generate', authMiddleware, (req, res) => LearningController.generate(req, res));
+apiRouter.post('/documents/:id/generate', authMiddleware, aiRequestRateLimiter, (req, res) => LearningController.generate(req, res));
 apiRouter.get('/documents/:id/materials', authMiddleware, (req, res) => LearningController.getMaterials(req, res));
 apiRouter.get('/documents/:id/test-generator', authMiddleware, (req, res) => LearningController.testGenerator(req, res));
 apiRouter.post('/documents/:id/test-generator', authMiddleware, (req, res) => LearningController.testGenerator(req, res));
@@ -53,8 +55,13 @@ apiRouter.get('/quizzes/:docId/attempts', authMiddleware, (req, res) => QuizCont
 apiRouter.get('/lecturer/courses', authMiddleware, (req, res) => LecturerController.listCourses(req, res));
 apiRouter.post('/lecturer/courses/:courseId/toggle-publish', authMiddleware, requireLecturerRole, (req, res) => LecturerController.togglePublish(req, res));
 
-// 8. Integration Test Suite (Section 7.5)
+// 8. Integration & 20-Point System Test Suite
 apiRouter.get('/system/integration-test', (req, res) => {
   const result = IntegrationTestSuite.runSuite();
   res.json({ integrationSuite: result });
+});
+
+apiRouter.get('/system/test-tracker', (req, res) => {
+  const result = SystemTestTracker.runFullTracker();
+  res.json({ testTracker: result });
 });
