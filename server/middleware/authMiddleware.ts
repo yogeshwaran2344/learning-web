@@ -7,15 +7,20 @@ export interface AuthenticatedRequest extends Request {
 }
 
 export function authMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  let token: string | undefined;
+
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.slice(7).trim();
-    if (token) {
-      const user = AuthService.verifyToken(token);
-      if (user) {
-        req.user = user;
-        return next();
-      }
+    token = authHeader.slice(7).trim();
+  } else if (req.query && typeof req.query.token === 'string') {
+    token = req.query.token.trim();
+  }
+
+  if (token) {
+    const user = AuthService.verifyToken(token);
+    if (user) {
+      req.user = user;
+      return next();
     }
   }
 

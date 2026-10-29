@@ -23,6 +23,10 @@ export class ApiClient {
     localStorage.setItem('learnlens_auth_token', token);
   }
 
+  static getToken(): string | null {
+    return this.token || localStorage.getItem('learnlens_auth_token');
+  }
+
   private static async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const headers: Record<string, string> = {
       ...(options.headers as Record<string, string> || {})
@@ -196,7 +200,7 @@ export class ApiClient {
     return data.success;
   }
 
-  // Quizzes
+  // Quizzes & Analytics
   static async submitQuizAttempt(docId: string, answers: any[], totalQuestions: number): Promise<any> {
     return this.request(`/quizzes/${docId}/attempt`, {
       method: 'POST',
@@ -204,7 +208,12 @@ export class ApiClient {
     });
   }
 
-  // Lecturer Courses
+  static async getDocQuizAnalytics(docId: string): Promise<any> {
+    const data = await this.request<{ analytics: any }>(`/quizzes/${docId}/analytics`);
+    return data.analytics;
+  }
+
+  // Lecturer Courses & Analytics
   static async getCourses(): Promise<LecturerCourse[]> {
     const data = await this.request<{ courses: LecturerCourse[] }>('/lecturer/courses');
     return data.courses;
@@ -214,5 +223,82 @@ export class ApiClient {
     return this.request(`/lecturer/courses/${courseId}/toggle-publish`, {
       method: 'POST'
     });
+  }
+
+  static async getCourseQuizAnalytics(courseId: string): Promise<any> {
+    const data = await this.request<{ analytics: any }>(`/lecturer/courses/${courseId}/analytics`);
+    return data.analytics;
+  }
+
+  static async assignDocToCourse(courseId: string, documentId: string): Promise<any> {
+    return this.request(`/lecturer/courses/${courseId}/documents`, {
+      method: 'POST',
+      body: JSON.stringify({ documentId })
+    });
+  }
+
+  static async removeDocFromCourse(courseId: string, documentId: string): Promise<any> {
+    return this.request(`/lecturer/courses/${courseId}/documents/${documentId}`, {
+      method: 'DELETE'
+    });
+  }
+
+  // Faculty Grounding Actions
+  static async approveVerificationItem(docId: string, factId: string, facultyNotes?: string): Promise<any> {
+    return this.request(`/verification/${docId}/item/${factId}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ facultyNotes })
+    });
+  }
+
+  static async rejectVerificationItem(docId: string, factId: string, facultyNotes?: string): Promise<any> {
+    return this.request(`/verification/${docId}/item/${factId}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ facultyNotes })
+    });
+  }
+
+  // Feedback System (Step 39)
+  static async submitFeedback(report: {
+    documentId: string;
+    formatType: string;
+    itemIdentifier?: string;
+    reason: string;
+    userComment: string;
+    sourcePassage?: string;
+  }): Promise<any> {
+    return this.request('/feedback', {
+      method: 'POST',
+      body: JSON.stringify(report)
+    });
+  }
+
+  static async getFeedbackReports(documentId?: string, status?: string): Promise<any[]> {
+    let url = '/feedback';
+    const params = new URLSearchParams();
+    if (documentId) params.append('documentId', documentId);
+    if (status) params.append('status', status);
+    if (params.toString()) url += `?${params.toString()}`;
+    const data = await this.request<{ reports: any[] }>(url);
+    return data.reports || [];
+  }
+
+  static async updateFeedbackStatus(id: string, status: string, notes?: string): Promise<any> {
+    return this.request(`/feedback/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, resolutionNotes: notes })
+    });
+  }
+
+  // Student Progress (Step 37)
+  static async getStudentProgress(): Promise<any> {
+    const data = await this.request<{ progress: any }>('/student/progress');
+    return data.progress;
+  }
+
+  // Document Export (Step 38)
+  static getExportUrl(docId: string, format: string = 'pdf', type: string = 'notes', language: string = 'English'): string {
+    const token = this.getToken();
+    return `${API_BASE}/documents/${docId}/export?format=${format}&type=${type}&language=${encodeURIComponent(language)}${token ? `&token=${encodeURIComponent(token)}` : ''}`;
   }
 }

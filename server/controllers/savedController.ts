@@ -98,6 +98,12 @@ export class QuizController {
     const attempts = Database.getQuizAttempts(userId, req.params.docId);
     res.json({ attempts });
   }
+
+  static getAnalytics(req: AuthenticatedRequest, res: Response) {
+    const { docId } = req.params;
+    const analytics = Database.getDocumentQuizAnalytics(docId);
+    res.json({ analytics });
+  }
 }
 
 export class LecturerController {
@@ -114,5 +120,36 @@ export class LecturerController {
       return res.status(404).json({ error: 'Course not found.' });
     }
     res.json({ course });
+  }
+
+  static getCourseAnalytics(req: AuthenticatedRequest, res: Response) {
+    const { courseId } = req.params;
+    const analytics = Database.getCourseQuizAnalytics(courseId);
+    if (!analytics) {
+      return res.status(404).json({ error: 'Course not found.' });
+    }
+    res.json({ analytics });
+  }
+
+  static assignDocument(req: AuthenticatedRequest, res: Response) {
+    const { courseId } = req.params;
+    const { documentId } = req.body;
+    if (!documentId) {
+      return res.status(400).json({ error: 'Document ID is required.' });
+    }
+    const success = Database.assignDocumentToCourse(courseId, documentId);
+    if (!success) {
+      return res.status(404).json({ error: 'Course not found.' });
+    }
+    res.json({ success: true, message: 'Document added to course learning pack.' });
+  }
+
+  static removeDocument(req: AuthenticatedRequest, res: Response) {
+    const { courseId, documentId } = req.params;
+    const success = Database.removeDocumentFromCourse(courseId, documentId);
+    if (!success) {
+      return res.status(404).json({ error: 'Course not found.' });
+    }
+    res.json({ success: true, message: 'Document removed from course learning pack.' });
   }
 }

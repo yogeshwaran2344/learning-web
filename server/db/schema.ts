@@ -155,3 +155,29 @@ export interface CourseSharingRecord {
   isPublished: boolean;
   averageQuizScore: number;
 }
+
+export type FeedbackReason = 
+  | 'incorrect_explanation'
+  | 'missing_concept'
+  | 'wrong_answer'
+  | 'translation_issue'
+  | 'source_mismatch'
+  | 'altered_equation'
+  | 'missing_condition'
+  | 'other';
+
+export interface FeedbackReportRecord {
+  id: string;
+  documentId: string;
+  userId: string;
+  userName?: string;
+  formatType: string;
+  itemIdentifier: string;
+  reason: FeedbackReason;
+  userComment: string;
+  sourcePassage?: string;
+  status: 'pending' | 'reviewed' | 'resolved';
+  resolutionNotes?: string;
+  reportedAt: string;
+}
+

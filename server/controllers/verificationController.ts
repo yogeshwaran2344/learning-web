@@ -126,4 +126,62 @@ export class VerificationController {
       auditReport: result.newAuditReport
     });
   }
+
+  static approveFact(req: AuthenticatedRequest, res: Response) {
+    const { docId, factId } = req.params;
+    const { facultyNotes } = req.body;
+    const userId = req.user?.id;
+    const role = req.user?.role;
+
+    const doc = Database.getDocumentById(docId);
+    if (!doc) {
+      return res.status(404).json({ error: 'Document not found.' });
+    }
+
+    if (doc.ownerId !== userId && role !== 'lecturer') {
+      return res.status(403).json({ error: 'Access denied: Lecturer privileges required to approve groundings.' });
+    }
+
+    const note = facultyNotes || 'Verified & Grounded by Faculty Review.';
+    const result = Database.updateFactCheckStatus(docId, factId, 'fully_preserved', note);
+    if (!result) {
+      return res.status(404).json({ error: 'Fact item or verification report not found.' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Fact item approved and verified.',
+      updatedFact: result.fact,
+      auditReport: result.report
+    });
+  }
+
+  static rejectFact(req: AuthenticatedRequest, res: Response) {
+    const { docId, factId } = req.params;
+    const { facultyNotes } = req.body;
+    const userId = req.user?.id;
+    const role = req.user?.role;
+
+    const doc = Database.getDocumentById(docId);
+    if (!doc) {
+      return res.status(404).json({ error: 'Document not found.' });
+    }
+
+    if (doc.ownerId !== userId && role !== 'lecturer') {
+      return res.status(403).json({ error: 'Access denied: Lecturer privileges required to reject groundings.' });
+    }
+
+    const note = facultyNotes || 'Rejected by Faculty: Not sufficiently grounded in source passage.';
+    const result = Database.updateFactCheckStatus(docId, factId, 'needs_review', note);
+    if (!result) {
+      return res.status(404).json({ error: 'Fact item or verification report not found.' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Fact item marked as rejected/unsupported.',
+      updatedFact: result.fact,
+      auditReport: result.report
+    });
+  }
 }

@@ -14,7 +14,8 @@ import {
   Bookmark,
   ChevronRight,
   Sparkles,
-  Info
+  Info,
+  Download
 } from 'lucide-react';
 import {
   AcademicDocument,
@@ -32,6 +33,7 @@ import { AudioLessonView } from '../Workspace/AudioLessonView';
 import { PracticeQuizView } from '../Workspace/PracticeQuizView';
 import { GeneratorControlBar } from '../Workspace/GeneratorControlBar';
 import { AiGeneratorTestModal } from '../AiGeneratorTestModal';
+import { ExportModal } from '../ExportModal';
 import { ApiClient } from '../../services/apiClient';
 
 interface LearningStudioPageProps {
@@ -61,6 +63,7 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [verificationResult, setVerificationResult] = useState<FormatVerificationResult | null>(null);
   const [isTestModalOpen, setIsTestModalOpen] = useState<boolean>(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
 
   // Dynamic overrides per format when student regenerates or switches language
   const [dynamicOverrides, setDynamicOverrides] = useState<Record<string, any>>({});
@@ -208,6 +211,16 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Step 38: Export Package Button */}
+            <button
+              onClick={() => setIsExportModalOpen(true)}
+              className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1.5 transition-all self-start md:self-auto shadow-sm"
+              title="Export formatted notes, presentations, or quizzes"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export Package</span>
+            </button>
+
             {/* Split Screen View Toggle */}
             <button
               onClick={() => setIsSplitView(v => !v)}
@@ -502,6 +515,15 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
         isOpen={isTestModalOpen}
         onClose={() => setIsTestModalOpen(false)}
         document={document}
+      />
+
+      {/* Step 38: Multi-Format Academic Packaging & Export Modal */}
+      <ExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        document={document}
+        currentTab={activeTab}
+        currentLanguage={currentLanguage}
       />
     </div>
   );

@@ -9,7 +9,8 @@ import {
   VerificationResultRecord,
   SavedItemRecord,
   QuizAttemptRecord,
-  CourseSharingRecord
+  CourseSharingRecord,
+  FeedbackReportRecord
 } from './schema';
 
 const DB_DIR = path.resolve(process.cwd(), 'server', 'data');
@@ -190,7 +191,96 @@ export class Database {
         updatedAt TEXT NOT NULL,
         FOREIGN KEY (documentId) REFERENCES documents (id) ON DELETE CASCADE
       );
+
+      CREATE TABLE IF NOT EXISTS feedback_reports (
+        id TEXT PRIMARY KEY,
+        documentId TEXT NOT NULL,
+        userId TEXT NOT NULL,
+        userName TEXT,
+        formatType TEXT NOT NULL,
+        itemIdentifier TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        userComment TEXT NOT NULL,
+        sourcePassage TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        resolutionNotes TEXT,
+        reportedAt TEXT NOT NULL,
+        FOREIGN KEY (documentId) REFERENCES documents (id) ON DELETE CASCADE,
+        FOREIGN KEY (userId) REFERENCES users (id) ON DELETE CASCADE
+      );
     `);
+
+    // Safe migration for courses table if created prior to Step 36
+    try {
+      const courseColumns = (this.db.prepare('PRAGMA table_info(courses)').all() as any[]).map(c => c.name);
+      if (courseColumns.includes('courseCode')) {
+        this.db.exec(`
+          DROP TABLE courses;
+          CREATE TABLE courses (
+            id TEXT PRIMARY KEY,
+            lecturerId TEXT NOT NULL,
+            code TEXT NOT NULL,
+            title TEXT NOT NULL,
+            studentCount INTEGER NOT NULL,
+            documentIds TEXT,
+            isPublished INTEGER NOT NULL,
+            averageQuizScore REAL NOT NULL,
+            FOREIGN KEY (lecturerId) REFERENCES users (id) ON DELETE CASCADE
+          );
+        `);
+      } else {
+        if (!courseColumns.includes('code')) {
+          this.db.prepare('ALTER TABLE courses ADD COLUMN code TEXT DEFAULT "GEN-101"').run();
+        }
+        if (!courseColumns.includes('title')) {
+          this.db.prepare('ALTER TABLE courses ADD COLUMN title TEXT DEFAULT "Course Title"').run();
+        }
+        if (!courseColumns.includes('studentCount')) {
+          this.db.prepare('ALTER TABLE courses ADD COLUMN studentCount INTEGER DEFAULT 0').run();
+        }
+        if (!courseColumns.includes('documentIds')) {
+          this.db.prepare('ALTER TABLE courses ADD COLUMN documentIds TEXT DEFAULT "[]"').run();
+        }
+        if (!courseColumns.includes('isPublished')) {
+          this.db.prepare('ALTER TABLE courses ADD COLUMN isPublished INTEGER DEFAULT 0').run();
+        }
+        if (!courseColumns.includes('averageQuizScore')) {
+          this.db.prepare('ALTER TABLE courses ADD COLUMN averageQuizScore REAL DEFAULT 0').run();
+        }
+      }
+    } catch (_) {}
+
+    // Safe migration for quiz_attempts table (support both attemptedAt and dateAttempted)
+    try {
+      const quizColumns = (this.db.prepare('PRAGMA table_info(quiz_attempts)').all() as any[]).map(c => c.name);
+      if (!quizColumns.includes('attemptedAt')) {
+        this.db.prepare('ALTER TABLE quiz_attempts ADD COLUMN attemptedAt TEXT').run();
+        this.db.prepare('UPDATE quiz_attempts SET attemptedAt = dateAttempted WHERE attemptedAt IS NULL').run();
+      }
+    } catch (_) {}
+
+    // Safe migration for saved_items table
+    try {
+      const savedColumns = (this.db.prepare('PRAGMA table_info(saved_items)').all() as any[]).map(c => c.name);
+      if (!savedColumns.includes('savedAt')) {
+        this.db.prepare('ALTER TABLE saved_items ADD COLUMN savedAt TEXT').run();
+        this.db.prepare('UPDATE saved_items SET savedAt = dateSaved WHERE savedAt IS NULL').run();
+      }
+      if (!savedColumns.includes('type')) {
+        this.db.prepare('ALTER TABLE saved_items ADD COLUMN type TEXT DEFAULT "notes"').run();
+        this.db.prepare('UPDATE saved_items SET type = formatType WHERE type IS NULL').run();
+      }
+      if (!savedColumns.includes('content')) {
+        this.db.prepare('ALTER TABLE saved_items ADD COLUMN content TEXT DEFAULT ""').run();
+        this.db.prepare('UPDATE saved_items SET content = contentPreview WHERE content IS NULL').run();
+      }
+      if (!savedColumns.includes('documentTitle')) {
+        this.db.prepare('ALTER TABLE saved_items ADD COLUMN documentTitle TEXT DEFAULT "Academic Material"').run();
+      }
+      if (!savedColumns.includes('citation')) {
+        this.db.prepare('ALTER TABLE saved_items ADD COLUMN citation TEXT').run();
+      }
+    } catch (_) {}
   }
 
   /**
@@ -320,6 +410,18 @@ export class Database {
     const stmt = this.db.prepare('INSERT OR IGNORE INTO users (id, email, name, passwordHash, role, createdAt) VALUES (?, ?, ?, ?, ?, ?)');
     stmt.run('usr-student-1', 'alex.rivera@university.edu', 'Alex Rivera', 'sha256:student123', 'student', '2026-10-01T10:00:00Z');
     stmt.run('usr-lecturer-1', 'prof.ramesh@iisc.ac.in', 'Prof. Ramesh K.', 'sha256:lecturer123', 'lecturer', '2026-09-15T09:00:00Z');
+
+    // Seed default courses if empty
+    const courseCount = (this.db.prepare('SELECT count(*) as count FROM courses').get() as any)?.count || 0;
+    if (courseCount === 0) {
+      const stmtCourse = this.db.prepare(`
+        INSERT INTO courses (id, lecturerId, code, title, studentCount, documentIds, isPublished, averageQuizScore)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      stmtCourse.run('course-1', 'usr-lecturer-1', 'CS-401', 'Distributed Systems & Byzantine Fault Tolerance', 42, JSON.stringify(['doc-pbft-demo', 'doc-1']), 1, 84.5);
+      stmtCourse.run('course-2', 'usr-lecturer-1', 'PH-202', 'Quantum Mechanics & Wave Equations', 38, JSON.stringify(['doc-quantum-demo', 'doc-2']), 1, 79.0);
+      stmtCourse.run('course-3', 'usr-lecturer-1', 'DS-301', 'Cloud Computing & Microservices Architecture', 29, JSON.stringify([]), 0, 0);
+    }
   }
 
   // --- Users ---
@@ -539,14 +641,26 @@ export class Database {
   static addSavedItem(item: SavedItemRecord): void {
     this.init();
     if (!this.db) return;
-    const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO saved_items (id, userId, documentId, documentTitle, type, title, content, savedAt, citation)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    stmt.run(
-      item.id, item.userId, item.documentId, item.documentTitle, item.type,
-      item.title, item.content, item.savedAt, item.citation ? JSON.stringify(item.citation) : null
-    );
+    try {
+      const stmt = this.db.prepare(`
+        INSERT OR REPLACE INTO saved_items (id, userId, documentId, documentTitle, type, title, content, savedAt, citation, dateSaved, formatType, contentPreview)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      stmt.run(
+        item.id, item.userId, item.documentId, item.documentTitle, item.type,
+        item.title, item.content, item.savedAt, item.citation ? JSON.stringify(item.citation) : null,
+        item.savedAt, item.type, item.content.slice(0, 200)
+      );
+    } catch (_) {
+      const stmt = this.db.prepare(`
+        INSERT OR REPLACE INTO saved_items (id, userId, documentId, documentTitle, type, title, content, savedAt, citation)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      stmt.run(
+        item.id, item.userId, item.documentId, item.documentTitle, item.type,
+        item.title, item.content, item.savedAt, item.citation ? JSON.stringify(item.citation) : null
+      );
+    }
   }
 
   static removeSavedItem(id: string, userId: string): boolean {
@@ -560,11 +674,19 @@ export class Database {
   static recordQuizAttempt(attempt: QuizAttemptRecord): void {
     this.init();
     if (!this.db) return;
-    const stmt = this.db.prepare(`
-      INSERT INTO quiz_attempts (id, userId, documentId, score, totalQuestions, answers, attemptedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-    stmt.run(attempt.id, attempt.userId, attempt.documentId, attempt.score, attempt.totalQuestions, JSON.stringify(attempt.answers || []), attempt.attemptedAt);
+    try {
+      const stmt = this.db.prepare(`
+        INSERT INTO quiz_attempts (id, userId, documentId, score, totalQuestions, answers, attemptedAt, dateAttempted)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      stmt.run(attempt.id, attempt.userId, attempt.documentId, attempt.score, attempt.totalQuestions, JSON.stringify(attempt.answers || []), attempt.attemptedAt, attempt.attemptedAt);
+    } catch (_) {
+      const stmt = this.db.prepare(`
+        INSERT INTO quiz_attempts (id, userId, documentId, score, totalQuestions, answers, attemptedAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+      stmt.run(attempt.id, attempt.userId, attempt.documentId, attempt.score, attempt.totalQuestions, JSON.stringify(attempt.answers || []), attempt.attemptedAt);
+    }
   }
 
   static getQuizAttempts(userId: string, documentId?: string): QuizAttemptRecord[] {
@@ -613,6 +735,299 @@ export class Database {
       };
     }
     return undefined;
+  }
+
+  static assignDocumentToCourse(courseId: string, documentId: string): boolean {
+    this.init();
+    if (!this.db) return false;
+    const course = this.db.prepare('SELECT * FROM courses WHERE id = ?').get(courseId) as any;
+    if (!course) return false;
+    const docIds: string[] = JSON.parse(course.documentIds || '[]');
+    if (!docIds.includes(documentId)) {
+      docIds.push(documentId);
+      this.db.prepare('UPDATE courses SET documentIds = ? WHERE id = ?').run(JSON.stringify(docIds), courseId);
+    }
+    return true;
+  }
+
+  static removeDocumentFromCourse(courseId: string, documentId: string): boolean {
+    this.init();
+    if (!this.db) return false;
+    const course = this.db.prepare('SELECT * FROM courses WHERE id = ?').get(courseId) as any;
+    if (!course) return false;
+    let docIds: string[] = JSON.parse(course.documentIds || '[]');
+    docIds = docIds.filter(id => id !== documentId);
+    this.db.prepare('UPDATE courses SET documentIds = ? WHERE id = ?').run(JSON.stringify(docIds), courseId);
+    return true;
+  }
+
+  // --- Real Quiz Analytics (Step 36 & 37) ---
+  static getQuizAttemptsByDocId(documentId: string): QuizAttemptRecord[] {
+    this.init();
+    if (!this.db) return [];
+    const rows = this.db.prepare('SELECT * FROM quiz_attempts WHERE documentId = ? ORDER BY attemptedAt DESC').all(documentId) as any[];
+    return rows.map(r => ({
+      ...r,
+      answers: JSON.parse(r.answers || '[]')
+    }));
+  }
+
+  static getDocumentQuizAnalytics(documentId: string) {
+    const attempts = this.getQuizAttemptsByDocId(documentId);
+    const totalAttempts = attempts.length;
+
+    // Distinguish zero activity from missing data
+    if (totalAttempts === 0) {
+      return {
+        documentId,
+        hasActivity: false,
+        totalAttempts: 0,
+        averageScore: null,
+        highestScore: null,
+        lowestScore: null,
+        scoreDistribution: { under50: 0, range50to69: 0, range70to84: 0, range85to100: 0 },
+        frequentlyMissedQuestions: [],
+        message: 'No student attempts recorded yet for this document.'
+      };
+    }
+
+    const scores = attempts.map(a => a.score);
+    const sumScore = scores.reduce((acc, curr) => acc + curr, 0);
+    const averageScore = Math.round(sumScore / totalAttempts);
+    const highestScore = Math.max(...scores);
+    const lowestScore = Math.min(...scores);
+
+    const distribution = {
+      under50: scores.filter(s => s < 50).length,
+      range50to69: scores.filter(s => s >= 50 && s < 70).length,
+      range70to84: scores.filter(s => s >= 70 && s < 85).length,
+      range85to100: scores.filter(s => s >= 85).length
+    };
+
+    // Calculate missed questions
+    const questionStats: Record<string, { total: number; incorrect: number }> = {};
+    for (const att of attempts) {
+      for (const ans of att.answers) {
+        if (!ans.questionId) continue;
+        if (!questionStats[ans.questionId]) {
+          questionStats[ans.questionId] = { total: 0, incorrect: 0 };
+        }
+        questionStats[ans.questionId].total++;
+        if (!ans.isCorrect) {
+          questionStats[ans.questionId].incorrect++;
+        }
+      }
+    }
+
+    const frequentlyMissedQuestions = Object.entries(questionStats)
+      .map(([qId, stat]) => ({
+        questionId: qId,
+        totalResponses: stat.total,
+        incorrectResponses: stat.incorrect,
+        errorRatePercent: Math.round((stat.incorrect / stat.total) * 100)
+      }))
+      .filter(q => q.errorRatePercent > 0)
+      .sort((a, b) => b.errorRatePercent - a.errorRatePercent);
+
+    return {
+      documentId,
+      hasActivity: true,
+      totalAttempts,
+      averageScore,
+      highestScore,
+      lowestScore,
+      scoreDistribution: distribution,
+      frequentlyMissedQuestions,
+      recentAttempts: attempts.slice(0, 5)
+    };
+  }
+
+  static getCourseQuizAnalytics(courseId: string) {
+    this.init();
+    if (!this.db) return null;
+    const course = this.db.prepare('SELECT * FROM courses WHERE id = ?').get(courseId) as any;
+    if (!course) return null;
+
+    const docIds: string[] = JSON.parse(course.documentIds || '[]');
+    let allAttempts: QuizAttemptRecord[] = [];
+    const docBreakdown: Record<string, any> = {};
+
+    for (const docId of docIds) {
+      const docAnalytics = this.getDocumentQuizAnalytics(docId);
+      docBreakdown[docId] = docAnalytics;
+      if (docAnalytics.hasActivity) {
+        const attempts = this.getQuizAttemptsByDocId(docId);
+        allAttempts = allAttempts.concat(attempts);
+      }
+    }
+
+    const totalAttempts = allAttempts.length;
+    if (totalAttempts === 0) {
+      return {
+        courseId: course.id,
+        courseCode: course.code,
+        courseTitle: course.title,
+        studentCount: course.studentCount,
+        isPublished: Boolean(course.isPublished),
+        hasActivity: false,
+        totalAttempts: 0,
+        averageQuizScore: null,
+        frequentlyMissedQuestions: [],
+        documentBreakdown,
+        message: 'No student attempts recorded yet across course documents.'
+      };
+    }
+
+    const avg = Math.round(allAttempts.reduce((acc, a) => acc + a.score, 0) / totalAttempts);
+    
+    // Aggregated frequently missed questions
+    const questionStats: Record<string, { total: number; incorrect: number }> = {};
+    for (const att of allAttempts) {
+      for (const ans of att.answers) {
+        if (!ans.questionId) continue;
+        if (!questionStats[ans.questionId]) {
+          questionStats[ans.questionId] = { total: 0, incorrect: 0 };
+        }
+        questionStats[ans.questionId].total++;
+        if (!ans.isCorrect) {
+          questionStats[ans.questionId].incorrect++;
+        }
+      }
+    }
+
+    const frequentlyMissedQuestions = Object.entries(questionStats)
+      .map(([qId, stat]) => ({
+        questionId: qId,
+        totalResponses: stat.total,
+        incorrectResponses: stat.incorrect,
+        errorRatePercent: Math.round((stat.incorrect / stat.total) * 100)
+      }))
+      .filter(q => q.errorRatePercent > 0)
+      .sort((a, b) => b.errorRatePercent - a.errorRatePercent);
+
+    return {
+      courseId: course.id,
+      courseCode: course.code,
+      courseTitle: course.title,
+      studentCount: course.studentCount,
+      isPublished: Boolean(course.isPublished),
+      hasActivity: true,
+      totalAttempts,
+      averageQuizScore: avg,
+      frequentlyMissedQuestions,
+      documentBreakdown
+    };
+  }
+
+  // --- Feedback Reports (Step 39) ---
+  static createFeedbackReport(report: FeedbackReportRecord): FeedbackReportRecord {
+    this.init();
+    if (this.db) {
+      const stmt = this.db.prepare(`
+        INSERT INTO feedback_reports (
+          id, documentId, userId, userName, formatType, itemIdentifier,
+          reason, userComment, sourcePassage, status, resolutionNotes, reportedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      stmt.run(
+        report.id, report.documentId, report.userId, report.userName || null,
+        report.formatType, report.itemIdentifier, report.reason, report.userComment,
+        report.sourcePassage || null, report.status || 'pending', report.resolutionNotes || null,
+        report.reportedAt
+      );
+    }
+    return report;
+  }
+
+  static getFeedbackReports(documentId?: string, status?: string): FeedbackReportRecord[] {
+    this.init();
+    if (!this.db) return [];
+    let query = 'SELECT * FROM feedback_reports';
+    const params: any[] = [];
+    const conditions: string[] = [];
+
+    if (documentId) {
+      conditions.push('documentId = ?');
+      params.push(documentId);
+    }
+    if (status) {
+      conditions.push('status = ?');
+      params.push(status);
+    }
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
+    }
+    query += ' ORDER BY reportedAt DESC';
+
+    return this.db.prepare(query).all(...params) as FeedbackReportRecord[];
+  }
+
+  static updateFeedbackReportStatus(id: string, status: 'pending' | 'reviewed' | 'resolved', notes?: string): boolean {
+    this.init();
+    if (!this.db) return false;
+    const info = this.db.prepare(`
+      UPDATE feedback_reports
+      SET status = ?, resolutionNotes = ?
+      WHERE id = ?
+    `).run(status, notes || null, id);
+    return info.changes > 0;
+  }
+
+  static updateFactCheckStatus(documentId: string, factId: string, status: 'fully_preserved' | 'needs_review' | 'unable_to_verify', notes?: string) {
+    const report = this.getVerification(documentId);
+    if (!report) return null;
+    const fact = report.factChecks.find(f => f.id === factId);
+    if (!fact) return null;
+
+    fact.status = status;
+    if (notes) {
+      fact.notes = notes;
+    }
+
+    const preservedCount = report.factChecks.filter(f => f.status === 'fully_preserved').length;
+    report.factRetentionRate = Math.round((preservedCount / report.factChecks.length) * 100);
+    report.unsupportedClaimsDetected = report.factChecks.filter(f => f.status !== 'fully_preserved').length;
+    report.overallFidelityScore = Math.min(100, Math.round((preservedCount / report.factChecks.length) * 100));
+    report.lastAuditDate = new Date().toISOString().slice(0, 10);
+
+    this.saveVerification(report);
+    return { fact, report };
+  }
+
+  static getStudentProgress(userId: string) {
+    this.init();
+    if (!this.db) return null;
+    const attempts = this.getQuizAttempts(userId);
+    const savedItems = this.getSavedItems(userId);
+    const docs = this.getDocuments(userId);
+
+    const totalQuizzesTaken = attempts.length;
+    const avgScore = totalQuizzesTaken > 0
+      ? Math.round(attempts.reduce((acc, a) => acc + a.score, 0) / totalQuizzesTaken)
+      : null;
+
+    const savedByType: Record<string, number> = {
+      notes: 0,
+      flashcard: 0,
+      concept_map: 0,
+      quiz: 0,
+      source_passage: 0
+    };
+    for (const it of savedItems) {
+      if (savedByType[it.type] !== undefined) {
+        savedByType[it.type]++;
+      }
+    }
+
+    return {
+      userId,
+      totalDocuments: docs.length,
+      totalQuizzesTaken,
+      averageQuizScore: avgScore,
+      recentAttempts: attempts.slice(0, 5),
+      savedMaterialsCount: savedItems.length,
+      savedByType
+    };
   }
 
   // --- Processing Jobs (Section 19.1) ---

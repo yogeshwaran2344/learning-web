@@ -283,6 +283,8 @@ export function App() {
               onNavigate={(page) => setCurrentPage(page)}
               onOpenUpload={() => setCurrentPage('upload')}
               userName={preferences.role === 'student' ? 'Alex' : 'Prof. Ramesh'}
+              language={preferences.preferredLanguage}
+              onLanguageChange={(lang) => handleUpdatePreferences({ preferredLanguage: lang })}
             />
           )}
 
