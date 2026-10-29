@@ -147,6 +147,23 @@ export class ApiClient {
     });
   }
 
+  static async flagVerificationItem(
+    docId: string,
+    factId: string,
+    reason: string,
+    userComment?: string
+  ): Promise<any> {
+    return this.request(`/verification/${docId}/item/${factId}/flag`, {
+      method: 'POST',
+      body: JSON.stringify({ reason, userComment })
+    });
+  }
+
+  static async getDeliberateTests(): Promise<any> {
+    const data = await this.request<{ deliberateTests: any }>('/verification/deliberate-tests');
+    return data.deliberateTests;
+  }
+
   // System Integration Test (Section 7.5)
   static async runIntegrationTest(): Promise<IntegrationSuiteResult> {
     const data = await this.request<{ integrationSuite: IntegrationSuiteResult }>('/system/integration-test');

@@ -46,7 +46,7 @@ export class AuthService {
 
     const passwordHash = this.hashPassword(password);
     const newUser: UserRecord = {
-      id: 'usr-' + Date.now(),
+      id: 'usr-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
       email: normalizedEmail,
       name: name.trim(),
       passwordHash,

@@ -36,7 +36,9 @@ apiRouter.post('/documents/:id/test-generator', authMiddleware, (req, res) => Le
 // 4. Source Verification & Meaning Preservation Engine (Phase 6)
 apiRouter.get('/documents/:id/verification', authMiddleware, (req, res) => VerificationController.getVerification(req, res));
 apiRouter.get('/verification/benchmark', authMiddleware, (req, res) => VerificationController.getBenchmark(req, res));
+apiRouter.get('/verification/deliberate-tests', authMiddleware, (req, res) => VerificationController.getDeliberateTests(req, res));
 apiRouter.post('/verification/:docId/item/:factId/correct', authMiddleware, (req, res) => VerificationController.correctFact(req, res));
+apiRouter.post('/verification/:docId/item/:factId/flag', authMiddleware, (req, res) => VerificationController.flagFact(req, res));
 
 // 5. Saved Materials & Bookmarks
 apiRouter.get('/saved', authMiddleware, (req, res) => SavedController.list(req, res));

@@ -31,6 +31,7 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
   const [docTitle, setDocTitle] = useState('');
   const [author, setAuthor] = useState('');
   const [category, setCategory] = useState<AcademicDocument['category']>('Computer Science');
+  const [sourceLanguage, setSourceLanguage] = useState<'English' | 'Kannada' | 'Hindi' | 'Auto-Detect'>('Auto-Detect');
   const [rawText, setRawText] = useState('');
   const [fileName, setFileName] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -137,6 +138,7 @@ The protocol consists of three phases: Pre-Prepare, Prepare, and Commit. A repli
       formData.append('title', docTitle.trim() || fileName || 'Uploaded Document');
       formData.append('author', author.trim() || 'Academic Researcher');
       formData.append('category', category);
+      formData.append('sourceLanguage', sourceLanguage);
       formData.append('rawText', rawText);
 
       if (selectedFile) {
@@ -293,7 +295,7 @@ The protocol consists of three phases: Pre-Prepare, Prepare, and Commit. A repli
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 Academic Discipline
@@ -309,6 +311,22 @@ The protocol consists of three phases: Pre-Prepare, Prepare, and Commit. A repli
                 <option value="Mathematics">Mathematics & Statistics</option>
                 <option value="Bioinformatics">Bioinformatics & Medicine</option>
                 <option value="General">General Academic Course</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Source Document Language
+              </label>
+              <select
+                value={sourceLanguage}
+                onChange={(e) => setSourceLanguage(e.target.value as any)}
+                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 font-medium"
+              >
+                <option value="Auto-Detect">Auto-Detect (Recommended)</option>
+                <option value="English">English</option>
+                <option value="Kannada">Kannada (ಕನ್ನಡ)</option>
+                <option value="Hindi">Hindi (हिन्दी)</option>
               </select>
             </div>
 
