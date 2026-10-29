@@ -211,7 +211,7 @@ export class ExtractionService {
   ): ExtractedSectionRecord {
     // 1. Equations Extraction
     const equations: ExtractedSectionRecord['equations'] = [];
-    const eqMatches = content.match(/(\$\$?[^$]+\$\$?|[A-Za-z]\s*=\s*[^.\n]{4,65})/g);
+    const eqMatches = content.match(/(\$\$?[^$]+\$\$?|[A-Za-z0-9_]+\([^)]*\)\s*=\s*[^.\n]{4,85}|[A-Za-z]\s*=\s*[^.\n]{4,85})/g);
     if (eqMatches) {
       eqMatches.slice(0, 3).forEach((eq, idx) => {
         const clean = eq.replace(/\$/g, '').trim();

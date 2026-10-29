@@ -299,7 +299,7 @@ export class MeaningPreservationEngine {
           });
         });
       }
-    } else {
+    }
 
     const totalElements = itemizedChecks.length || 1;
     const overallScore = Math.round((verifiedCount / totalElements) * 100);

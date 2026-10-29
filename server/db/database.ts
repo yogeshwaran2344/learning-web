@@ -1,5 +1,6 @@
-import fs from 'fs';
+import DatabaseConstructor, { Database as DatabaseType } from 'better-sqlite3';
 import path from 'path';
+import fs from 'fs';
 import {
   UserRecord,
   DocumentRecord,
@@ -12,700 +13,641 @@ import {
 } from './schema';
 
 const DB_DIR = path.resolve(process.cwd(), 'server', 'data');
-const DB_FILE = path.join(DB_DIR, 'database.json');
+const DB_FILE = path.join(DB_DIR, 'learnlens.db');
+const JSON_BACKUP_FILE = path.join(DB_DIR, 'database.json');
 
-interface DatabaseStore {
-  users: UserRecord[];
-  documents: DocumentRecord[];
-  extractedSections: ExtractedSectionRecord[];
-  generatedMaterials: GeneratedMaterialRecord[];
-  verificationResults: VerificationResultRecord[];
-  savedItems: SavedItemRecord[];
-  quizAttempts: QuizAttemptRecord[];
-  courses: CourseSharingRecord[];
+export interface ProcessingJobRecord {
+  id: string;
+  documentId: string;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  attempts: number;
+  lastError?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export class Database {
-  private static store: DatabaseStore = {
-    users: [],
-    documents: [],
-    extractedSections: [],
-    generatedMaterials: [],
-    verificationResults: [],
-    savedItems: [],
-    quizAttempts: [],
-    courses: []
-  };
-
+  private static db: DatabaseType | null = null;
   private static initialized = false;
 
   static init(): void {
-    if (this.initialized) return;
+    if (this.initialized && this.db) return;
 
     if (!fs.existsSync(DB_DIR)) {
       fs.mkdirSync(DB_DIR, { recursive: true });
     }
 
-    if (fs.existsSync(DB_FILE)) {
-      try {
-        const raw = fs.readFileSync(DB_FILE, 'utf-8');
-        this.store = JSON.parse(raw);
-      } catch (e) {
-        console.warn('Failed reading database file, initializing seeds:', e);
-        this.seedInitialData();
-        this.persist();
-      }
-    } else {
-      this.seedInitialData();
-      this.persist();
-    }
-
-    this.initialized = true;
-  }
-
-  private static persist(): void {
     try {
-      if (!fs.existsSync(DB_DIR)) {
-        fs.mkdirSync(DB_DIR, { recursive: true });
-      }
-      fs.writeFileSync(DB_FILE, JSON.stringify(this.store, null, 2), 'utf-8');
-    } catch (e) {
-      console.error('Database persist error:', e);
+      this.db = new DatabaseConstructor(DB_FILE);
+      this.db.pragma('journal_mode = WAL');
+      this.db.pragma('foreign_keys = ON');
+
+      this.createTables();
+      this.migrateFromJsonIfEmpty();
+      this.seedDefaultUsers();
+      this.initialized = true;
+    } catch (err) {
+      console.error('[Database] Failed initializing SQLite database:', err);
+      throw err;
     }
   }
 
-  private static seedInitialData(): void {
-    // 1. Seed Users
-    this.store.users = [
-      {
-        id: 'usr-student-1',
-        email: 'alex.rivera@university.edu',
-        name: 'Alex Rivera',
-        role: 'student',
-        createdAt: '2026-10-01T10:00:00Z'
-      },
-      {
-        id: 'usr-lecturer-1',
-        email: 'prof.ramesh@iisc.ac.in',
-        name: 'Prof. Ramesh K.',
-        role: 'lecturer',
-        createdAt: '2026-09-15T09:00:00Z'
-      }
-    ];
+  private static createTables(): void {
+    if (!this.db) return;
 
-    // 2. Seed Documents
-    this.store.documents = [
-      {
-        id: 'doc-transformer-attention',
-        ownerId: 'usr-student-1',
-        title: 'Attention Is All You Need',
-        author: 'Ashish Vaswani et al. (Google Brain & Research)',
-        institution: 'Google Research / NeurIPS 2017',
-        year: '2017',
-        fileType: 'pdf',
-        fileSizeMb: 2.4,
-        originalFileName: 'transformer_attention.pdf',
-        category: 'Computer Science',
-        uploadDate: '2026-10-24',
-        processingStatus: 'completed',
-        extractionStatus: 'ready',
-        extractionWarnings: [],
-        extractionQuality: {
-          userStatus: 'ready',
-          textCompletenessScore: 100,
-          ocrConfidenceScore: 100,
-          equationIntegrityScore: 100,
-          structurePreservationScore: 100,
-          sourceTraceabilityScore: 100,
-          diagnostics: [],
-          hasScannedPages: false,
-          scannedPageNumbers: [],
-          testedAgainstBenchmark: true
-        },
-        pageCount: 15,
-        wordCount: 5420,
-        summary: 'Proposes the Transformer network architecture based solely on attention mechanisms, dispensing with recurrence and convolutions entirely.'
-      },
-      {
-        id: 'doc-quantum-schrodinger',
-        ownerId: 'usr-student-1',
-        title: 'Wave Mechanics and Schrödinger Formulation',
-        author: 'Erwin Schrödinger',
-        institution: 'University of Zurich / Physical Foundations',
-        year: '1926',
-        fileType: 'pptx',
-        fileSizeMb: 5.1,
-        originalFileName: 'quantum_wave_mechanics.pptx',
-        category: 'Physics & Quantum',
-        uploadDate: '2026-10-22',
-        processingStatus: 'completed',
-        extractionStatus: 'ready',
-        extractionWarnings: [],
-        extractionQuality: {
-          userStatus: 'ready',
-          textCompletenessScore: 100,
-          ocrConfidenceScore: 100,
-          equationIntegrityScore: 100,
-          structurePreservationScore: 98,
-          sourceTraceabilityScore: 100,
-          diagnostics: [],
-          hasScannedPages: false,
-          scannedPageNumbers: [],
-          testedAgainstBenchmark: true
-        },
-        pageCount: 18,
-        wordCount: 6100,
-        summary: 'Derivation of the non-relativistic time-dependent wave equation, establishing state vectors and the Born probability interpretation.'
-      },
-      {
-        id: 'doc-raft-consensus',
-        ownerId: 'usr-student-1',
-        title: 'In Search of an Understandable Consensus Algorithm (Raft)',
-        author: 'Diego Ongaro & John Ousterhout',
-        institution: 'Stanford University / USENIX ATC',
-        year: '2014',
-        fileType: 'pdf',
-        fileSizeMb: 1.8,
-        originalFileName: 'raft_consensus.pdf',
-        category: 'Distributed Systems',
-        uploadDate: '2026-10-18',
-        processingStatus: 'completed',
-        extractionWarnings: [],
-        pageCount: 18,
-        wordCount: 7800,
-        summary: 'Consensus algorithm dividing replicated log agreement into Leader Election, Log Replication, and Safety.'
-      },
-      {
-        id: 'doc-scanned-calculus-notes',
-        ownerId: 'usr-student-1',
-        title: 'Lecture 04: Vector Fields & Multivariable Calculus (Handwritten)',
-        author: 'Prof. Ramesh K. (IISc Bangalore)',
-        institution: 'Department of Mathematics',
-        year: '2026',
-        fileType: 'scanned_notes',
-        fileSizeMb: 8.9,
-        originalFileName: 'calculus_lecture_notes.pdf',
-        category: 'Mathematics',
-        uploadDate: '2026-10-27',
-        processingStatus: 'warning',
-        extractionStatus: 'needs_review',
-        extractionWarnings: [
-          'Page 4: Low optical resolution on handwritten boundary formulas. Contrast: 42%.',
-          'Page 5: Surface equation curl(F) · n dS smudged; flagged for lecturer review.'
-        ],
-        extractionQuality: {
-          userStatus: 'needs_review',
-          textCompletenessScore: 92,
-          ocrConfidenceScore: 76,
-          equationIntegrityScore: 84,
-          structurePreservationScore: 90,
-          sourceTraceabilityScore: 95,
-          diagnostics: [
-            {
-              id: 'diag-ocr-calc-1',
-              pageNumber: 4,
-              type: 'low_contrast',
-              severity: 'warning',
-              message: 'Low optical resolution on handwritten boundary formulas. Contrast: 42%.',
-              flaggedSnippet: 'Handwritten line integral boundary orientation ∮_C',
-              recommendation: 'Verify equation in Source Verification tab before student review.'
-            },
-            {
-              id: 'diag-ocr-calc-2',
-              pageNumber: 5,
-              type: 'broken_equation',
-              severity: 'warning',
-              message: 'Surface integral curl(F) · n dS contains partial smudge.',
-              flaggedSnippet: '∬_S (∇ × F) · dS',
-              recommendation: 'Check equation against standard textbook definition.'
-            }
-          ],
-          hasScannedPages: true,
-          scannedPageNumbers: [1, 2, 3, 4, 5, 6],
-          testedAgainstBenchmark: true
-        },
-        pageCount: 6,
-        wordCount: 1840,
-        summary: 'Handwritten course notes covering Green theorem, curl, and flux divergence in R^3.'
-      }
-    ];
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        email TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        role TEXT NOT NULL,
+        createdAt TEXT NOT NULL
+      );
 
-    // 3. Seed Extracted Sections
-    this.store.extractedSections = [
-      {
-        id: 'sec-1',
-        documentId: 'doc-transformer-attention',
-        pageNumber: 3,
-        title: '3.2.1 Scaled Dot-Product Attention',
-        content: 'Attention(Q, K, V) = softmax(QK^T / sqrt(d_k)) V. Scaling by 1/sqrt(d_k) prevents vanishing gradients in softmax.',
-        equations: [
-          {
-            latex: '\\text{Attention}(Q, K, V) = \\text{softmax}\\left(\\frac{QK^T}{\\sqrt{d_k}}\\right)V',
-            label: 'Equation (1)',
-            meaning: 'Scaled dot-product attention calculation.'
-          }
-        ],
-        definitions: [
-          {
-            term: 'Scaled Dot-Product Attention',
-            definition: 'Attention mechanism computing normalized scalar compatibility weights between queries and keys.'
-          }
-        ],
-        conditions: [
-          'Keys and queries must have identical dimension d_k.',
-          'Scaling factor 1 / sqrt(d_k) is mandatory when d_k is large to prevent vanishing softmax gradients.'
-        ],
-        examples: [
-          'If d_k = 64, divisor is 8.0, scaling dot product down before exponentiation.'
-        ]
-      },
-      {
-        id: 'sec-quantum-1',
-        documentId: 'doc-quantum-schrodinger',
-        slideNumber: 1,
-        pageNumber: 1,
-        title: 'Slide 1: Postulates of Quantum Mechanics',
-        content: 'The state of a physical system is completely specified by a state vector |psi> in a complex Hilbert space H. Measurable physical quantities correspond to Hermitian operators.',
-        speakerNotes: 'Remind students that normalization <psi|psi> = 1 is strictly required.',
-        equations: [
-          {
-            latex: 'i\\hbar \\frac{\\partial}{\\partial t} |\\psi(t)\\rangle = \\hat{H} |\\psi(t)\\rangle',
-            label: 'Schrodinger Equation',
-            meaning: 'Time evolution of quantum state vector.'
-          }
-        ],
-        conditions: [
-          'State vector must remain normalized to 1 across unitary time evolution.',
-          'Hamiltonian operator H must be Hermitian to ensure real energy eigenvalues.'
-        ],
-        definitions: [
-          {
-            term: 'Hermitian Operator',
-            definition: 'A linear operator that is equal to its own conjugate transpose.'
-          }
-        ]
-      },
-      {
-        id: 'sec-calc-1',
-        documentId: 'doc-scanned-calculus-notes',
-        pageNumber: 2,
-        title: '2. Vector Fields & Green Theorem',
-        content: 'Let C be a positively oriented, piecewise-smooth, simple closed curve in a plane, and let D be the region bounded by C. Then line integral ∮_C (P dx + Q dy) = ∬_D (dQ/dx - dP/dy) dA.',
-        conditions: [
-          'Curve C must be simple, closed, and oriented counter-clockwise.',
-          'P and Q must have continuous first-order partial derivatives on open region containing D.'
-        ]
-      }
-    ];
+      CREATE TABLE IF NOT EXISTS documents (
+        id TEXT PRIMARY KEY,
+        ownerId TEXT NOT NULL,
+        title TEXT NOT NULL,
+        author TEXT NOT NULL,
+        institution TEXT,
+        year TEXT,
+        fileType TEXT NOT NULL,
+        fileSizeMb REAL NOT NULL,
+        originalFileName TEXT NOT NULL,
+        storagePath TEXT,
+        category TEXT NOT NULL,
+        uploadDate TEXT NOT NULL,
+        processingStatus TEXT NOT NULL,
+        extractionStatus TEXT NOT NULL,
+        extractionWarnings TEXT,
+        extractionQuality TEXT,
+        pageCount INTEGER NOT NULL,
+        wordCount INTEGER NOT NULL,
+        summary TEXT,
+        FOREIGN KEY (ownerId) REFERENCES users (id) ON DELETE CASCADE
+      );
 
-    // 4. Seed Verification Results
-    this.store.verificationResults = [
-      {
-        documentId: 'doc-transformer-attention',
-        overallFidelityScore: 99.1,
-        factRetentionRate: 100,
-        equationIntegrityRate: 100,
-        conditionAccuracyRate: 98.2,
-        terminologyConsistencyRate: 99.5,
-        unsupportedClaimsDetected: 0,
-        alteredEquationsDetected: 0,
-        missingConditionsDetected: 0,
-        lastAuditDate: '2026-10-28 19:30 UTC',
-        verifiedByEngine: true,
-        factChecks: [
-          {
-            id: 'chk-1',
-            documentId: 'doc-transformer-attention',
-            originalFact: 'Scaled Dot-Product formula requires division by sqrt(d_k) to prevent vanishing softmax gradients.',
-            originalQuote: 'We suspect that for large values of d_k, the dot products grow large in magnitude, pushing the softmax into regions with extremely small gradients. To counteract this effect, we scale the dot products by 1 / sqrt(d_k).',
-            pageNumber: 3,
-            formatFound: ['Concept Map', 'Simplified', 'Notes', 'Flashcards', 'Audio'],
-            status: 'fully_preserved',
-            confidenceScore: 100,
-            notes: 'Equation formula and causal condition preserved without alteration.'
-          },
-          {
-            id: 'chk-2',
-            documentId: 'doc-transformer-attention',
-            originalFact: 'Multi-head attention allows the model to jointly attend to information from different representation subspaces at different positions.',
-            originalQuote: 'Multi-head attention allows the model to jointly attend to information from different representation subspaces at different positions. With a single attention head, averaging inhibits this.',
-            pageNumber: 4,
-            formatFound: ['Concept Map', 'Notes', 'Flashcards', 'Quiz'],
-            status: 'fully_preserved',
-            confidenceScore: 98,
-            notes: 'Multi-perspective projection mechanism grounded verbatim in Section 3.2.2.'
-          },
-          {
-            id: 'chk-3',
-            documentId: 'doc-transformer-attention',
-            originalFact: 'Positional encodings must share the exact dimension d_model with token embeddings so they can be summed directly.',
-            originalQuote: 'The positional encodings have the same dimension d_model as the embeddings, so that the two can be summed.',
-            pageNumber: 6,
-            formatFound: ['Notes', 'Flashcards', 'Worked Examples'],
-            status: 'fully_preserved',
-            confidenceScore: 100,
-            notes: 'Dimensionality invariant verified across Equation (3) and (4).'
-          },
-          {
-            id: 'chk-4',
-            documentId: 'doc-transformer-attention',
-            originalFact: 'The Transformer architecture eschews recurrence and convolutions entirely, enabling sequence parallelization on GPU.',
-            originalQuote: 'We propose the Transformer, a model architecture eschewing recurrence and instead relying entirely on an attention mechanism to draw global dependencies.',
-            pageNumber: 2,
-            formatFound: ['Concept Map', 'Simplified', 'Notes', 'Audio'],
-            status: 'fully_preserved',
-            confidenceScore: 99,
-            notes: 'Non-recurrent architectural thesis verified.'
-          }
-        ]
-      },
-      {
-        documentId: 'doc-scanned-calculus-notes',
-        overallFidelityScore: 91.2,
-        factRetentionRate: 91,
-        equationIntegrityRate: 84,
-        conditionAccuracyRate: 88.0,
-        terminologyConsistencyRate: 94.0,
-        unsupportedClaimsDetected: 1,
-        alteredEquationsDetected: 1,
-        missingConditionsDetected: 1,
-        lastAuditDate: '2026-10-28 20:00 UTC',
-        verifiedByEngine: false,
-        factChecks: [
-          {
-            id: 'chk-calc-1',
-            documentId: 'doc-scanned-calculus-notes',
-            originalFact: 'Green Theorem relates line integrals around closed boundary curve C to double integrals over plane region D.',
-            originalQuote: 'Let C be a positively oriented, piecewise-smooth, simple closed curve in a plane, and let D be the region bounded by C.',
-            pageNumber: 2,
-            formatFound: ['Notes', 'Flashcards'],
-            status: 'fully_preserved',
-            confidenceScore: 95,
-            notes: 'Orientation and smoothness conditions verified in handwritten notes.'
-          },
-          {
-            id: 'chk-calc-2',
-            documentId: 'doc-scanned-calculus-notes',
-            originalFact: 'Surface integral curl(F) · n dS requires smooth boundary orientation along vector normal n.',
-            originalQuote: 'Surface integral equation curl(F) · n dS flagged: optical contrast on handwritten script was 42%.',
-            pageNumber: 4,
-            formatFound: ['Notes', 'Worked Examples'],
-            status: 'needs_review',
-            confidenceScore: 76,
-            notes: 'Flagged: Optical character recognition uncertainty on handwritten vector curl symbol. Lecturer review recommended.',
-            flagReason: 'altered_equation'
-          }
-        ]
-      },
-      {
-        documentId: 'doc-quantum-schrodinger',
-        overallFidelityScore: 98.7,
-        factRetentionRate: 99,
-        equationIntegrityRate: 100,
-        conditionAccuracyRate: 98.0,
-        terminologyConsistencyRate: 99.0,
-        unsupportedClaimsDetected: 0,
-        alteredEquationsDetected: 0,
-        missingConditionsDetected: 0,
-        lastAuditDate: '2026-10-28 20:15 UTC',
-        verifiedByEngine: true,
-        factChecks: [
-          {
-            id: 'chk-q-1',
-            documentId: 'doc-quantum-schrodinger',
-            originalFact: 'Time-dependent wave function evolution is governed by i * hbar * d(Psi)/dt = H * Psi.',
-            originalQuote: 'The fundamental postulate represents state evolution via unitary Hamiltonian operator H.',
-            pageNumber: 2,
-            formatFound: ['Concept Map', 'Simplified', 'Notes', 'Flashcards'],
-            status: 'fully_preserved',
-            confidenceScore: 100,
-            notes: 'Planck constant factor and imaginary unit verified.'
-          }
-        ]
-      },
-      {
-        documentId: 'doc-raft-consensus',
-        overallFidelityScore: 99.4,
-        factRetentionRate: 100,
-        equationIntegrityRate: 100,
-        conditionAccuracyRate: 99.0,
-        terminologyConsistencyRate: 99.2,
-        unsupportedClaimsDetected: 0,
-        alteredEquationsDetected: 0,
-        missingConditionsDetected: 0,
-        lastAuditDate: '2026-10-28 20:30 UTC',
-        verifiedByEngine: true,
-        factChecks: [
-          {
-            id: 'chk-raft-1',
-            documentId: 'doc-raft-consensus',
-            originalFact: 'Leader election uses randomized election timeouts to prevent split votes.',
-            originalQuote: 'Raft uses randomized election timeouts to ensure that split-vote scenarios are resolved quickly.',
-            pageNumber: 4,
-            formatFound: ['Concept Map', 'Simplified', 'Notes', 'Flashcards', 'Quiz'],
-            status: 'fully_preserved',
-            confidenceScore: 100,
-            notes: 'Leader election safety verified against source specifications.'
-          }
-        ]
-      }
-    ];
+      CREATE TABLE IF NOT EXISTS extracted_sections (
+        id TEXT PRIMARY KEY,
+        documentId TEXT NOT NULL,
+        pageNumber INTEGER NOT NULL,
+        slideNumber INTEGER,
+        chapterTitle TEXT,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        speakerNotes TEXT,
+        equations TEXT,
+        tables TEXT,
+        definitions TEXT,
+        conditions TEXT,
+        examples TEXT,
+        uncertainSymbols TEXT,
+        FOREIGN KEY (documentId) REFERENCES documents (id) ON DELETE CASCADE
+      );
 
-    // 5. Seed Saved Items
-    this.store.savedItems = [
-      {
-        id: 'saved-item-1',
-        userId: 'usr-student-1',
-        documentId: 'doc-transformer-attention',
-        documentTitle: 'Attention Is All You Need',
-        type: 'flashcard',
-        title: 'Why divide by √d_k in Attention?',
-        content: 'For large key dimension d_k, dot products grow large pushing softmax into regions with vanishing gradients.',
-        savedAt: '2026-10-27 16:10',
-        citation: {
-          id: 'cite-s1',
-          documentId: 'doc-transformer-attention',
-          pageNumber: 3,
-          sectionTitle: '3.2.1 Scaled Dot-Product Attention',
-          exactQuote: 'We suspect that for large values of d_k, the dot products grow large in magnitude...',
-          contextSnippet: 'To counteract this effect, we scale by 1 / sqrt(d_k).'
+      CREATE TABLE IF NOT EXISTS generated_materials (
+        id TEXT PRIMARY KEY,
+        documentId TEXT NOT NULL,
+        formatType TEXT NOT NULL,
+        language TEXT NOT NULL,
+        content TEXT NOT NULL,
+        generatedAt TEXT NOT NULL,
+        FOREIGN KEY (documentId) REFERENCES documents (id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS verifications (
+        documentId TEXT PRIMARY KEY,
+        overallFidelityScore REAL NOT NULL,
+        factRetentionRate REAL NOT NULL,
+        equationIntegrityRate REAL NOT NULL,
+        conditionAccuracyRate REAL NOT NULL,
+        terminologyConsistencyRate REAL NOT NULL,
+        unsupportedClaimsDetected INTEGER NOT NULL,
+        alteredEquationsDetected INTEGER NOT NULL,
+        missingConditionsDetected INTEGER NOT NULL,
+        lastAuditDate TEXT NOT NULL,
+        verifiedByEngine INTEGER NOT NULL,
+        factChecks TEXT,
+        FOREIGN KEY (documentId) REFERENCES documents (id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS saved_items (
+        id TEXT PRIMARY KEY,
+        userId TEXT NOT NULL,
+        documentId TEXT NOT NULL,
+        documentTitle TEXT NOT NULL,
+        type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        savedAt TEXT NOT NULL,
+        citation TEXT,
+        FOREIGN KEY (userId) REFERENCES users (id) ON DELETE CASCADE,
+        FOREIGN KEY (documentId) REFERENCES documents (id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS quiz_attempts (
+        id TEXT PRIMARY KEY,
+        userId TEXT NOT NULL,
+        documentId TEXT NOT NULL,
+        score REAL NOT NULL,
+        totalQuestions INTEGER NOT NULL,
+        answers TEXT NOT NULL,
+        attemptedAt TEXT NOT NULL,
+        FOREIGN KEY (userId) REFERENCES users (id) ON DELETE CASCADE,
+        FOREIGN KEY (documentId) REFERENCES documents (id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS courses (
+        id TEXT PRIMARY KEY,
+        lecturerId TEXT NOT NULL,
+        code TEXT NOT NULL,
+        title TEXT NOT NULL,
+        studentCount INTEGER NOT NULL,
+        documentIds TEXT,
+        isPublished INTEGER NOT NULL,
+        averageQuizScore REAL NOT NULL,
+        FOREIGN KEY (lecturerId) REFERENCES users (id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS processing_jobs (
+        id TEXT PRIMARY KEY,
+        documentId TEXT NOT NULL,
+        status TEXT NOT NULL,
+        attempts INTEGER NOT NULL,
+        lastError TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        FOREIGN KEY (documentId) REFERENCES documents (id) ON DELETE CASCADE
+      );
+    `);
+  }
+
+  /**
+   * Section 19.4: Safe migration from existing JSON file to SQLite database.
+   * Preserves existing keys, IDs, and keeps the original JSON file as a backup.
+   */
+  private static migrateFromJsonIfEmpty(): void {
+    if (!this.db) return;
+    const userCount = (this.db.prepare('SELECT count(*) as count FROM users').get() as any)?.count || 0;
+    if (userCount > 0) return; // Already populated
+
+    if (fs.existsSync(JSON_BACKUP_FILE)) {
+      try {
+        console.log('[Database] Migrating existing JSON records into SQLite...');
+        const rawJson = fs.readFileSync(JSON_BACKUP_FILE, 'utf-8');
+        const jsonStore = JSON.parse(rawJson);
+
+        // 1. Users
+        const insertUser = this.db.prepare('INSERT OR IGNORE INTO users (id, email, name, role, createdAt) VALUES (?, ?, ?, ?, ?)');
+        for (const u of jsonStore.users || []) {
+          insertUser.run(u.id, u.email, u.name, u.role, u.createdAt);
         }
-      }
-    ];
 
-    // 6. Seed Courses
-    this.store.courses = [
-      {
-        id: 'course-cs482',
-        lecturerId: 'usr-lecturer-1',
-        code: 'CS 482 / 682',
-        title: 'Deep Learning & Neural Architectures',
-        studentCount: 142,
-        documentIds: ['doc-transformer-attention'],
-        isPublished: true,
-        averageQuizScore: 88.5
-      },
-      {
-        id: 'course-phys301',
-        lecturerId: 'usr-lecturer-1',
-        code: 'PHYS 301',
-        title: 'Quantum Mechanics & Hilbert Spaces',
-        studentCount: 86,
-        documentIds: ['doc-quantum-schrodinger'],
-        isPublished: true,
-        averageQuizScore: 91.2
+        // 2. Documents
+        const insertDoc = this.db.prepare(`
+          INSERT OR IGNORE INTO documents (
+            id, ownerId, title, author, institution, year, fileType, fileSizeMb,
+            originalFileName, storagePath, category, uploadDate, processingStatus,
+            extractionStatus, extractionWarnings, extractionQuality, pageCount, wordCount, summary
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const d of jsonStore.documents || []) {
+          insertDoc.run(
+            d.id, d.ownerId, d.title, d.author, d.institution || null, d.year || null,
+            d.fileType, d.fileSizeMb || 1.0, d.originalFileName || 'document.pdf', d.storagePath || null,
+            d.category || 'Computer Science', d.uploadDate, d.processingStatus, d.extractionStatus || 'ready',
+            JSON.stringify(d.extractionWarnings || []), d.extractionQuality ? JSON.stringify(d.extractionQuality) : null,
+            d.pageCount || 1, d.wordCount || 100, d.summary || ''
+          );
+        }
+
+        // 3. Extracted sections
+        const insertSec = this.db.prepare(`
+          INSERT OR IGNORE INTO extracted_sections (
+            id, documentId, pageNumber, slideNumber, chapterTitle, title, content,
+            speakerNotes, equations, tables, definitions, conditions, examples, uncertainSymbols
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const s of jsonStore.extractedSections || []) {
+          insertSec.run(
+            s.id, s.documentId, s.pageNumber, s.slideNumber || null, s.chapterTitle || null,
+            s.title, s.content, s.speakerNotes || null,
+            JSON.stringify(s.equations || []), JSON.stringify(s.tables || []),
+            JSON.stringify(s.definitions || []), JSON.stringify(s.conditions || []),
+            JSON.stringify(s.examples || []), JSON.stringify(s.uncertainSymbols || [])
+          );
+        }
+
+        // 4. Generated materials
+        const insertMat = this.db.prepare(`
+          INSERT OR IGNORE INTO generated_materials (id, documentId, formatType, language, content, generatedAt)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `);
+        for (const m of jsonStore.generatedMaterials || []) {
+          insertMat.run(m.id, m.documentId, m.formatType, m.language, JSON.stringify(m.content), m.generatedAt);
+        }
+
+        // 5. Verifications
+        const insertVer = this.db.prepare(`
+          INSERT OR IGNORE INTO verifications (
+            documentId, overallFidelityScore, factRetentionRate, equationIntegrityRate,
+            conditionAccuracyRate, terminologyConsistencyRate, unsupportedClaimsDetected,
+            alteredEquationsDetected, missingConditionsDetected, lastAuditDate, verifiedByEngine, factChecks
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const v of jsonStore.verificationResults || []) {
+          insertVer.run(
+            v.documentId, v.overallFidelityScore, v.factRetentionRate, v.equationIntegrityRate,
+            v.conditionAccuracyRate, v.terminologyConsistencyRate, v.unsupportedClaimsDetected,
+            v.alteredEquationsDetected, v.missingConditionsDetected, v.lastAuditDate,
+            v.verifiedByEngine ? 1 : 0, JSON.stringify(v.factChecks || [])
+          );
+        }
+
+        // 6. Saved items
+        const insertSaved = this.db.prepare(`
+          INSERT OR IGNORE INTO saved_items (id, userId, documentId, documentTitle, type, title, content, savedAt, citation)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const it of jsonStore.savedItems || []) {
+          insertSaved.run(
+            it.id, it.userId, it.documentId, it.documentTitle, it.type, it.title,
+            it.content, it.savedAt, it.citation ? JSON.stringify(it.citation) : null
+          );
+        }
+
+        // 7. Quiz attempts
+        const insertQuiz = this.db.prepare(`
+          INSERT OR IGNORE INTO quiz_attempts (id, userId, documentId, score, totalQuestions, answers, attemptedAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const q of jsonStore.quizAttempts || []) {
+          insertQuiz.run(q.id, q.userId, q.documentId, q.score, q.totalQuestions, JSON.stringify(q.answers || []), q.attemptedAt);
+        }
+
+        // 8. Courses
+        const insertCourse = this.db.prepare(`
+          INSERT OR IGNORE INTO courses (id, lecturerId, code, title, studentCount, documentIds, isPublished, averageQuizScore)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const c of jsonStore.courses || []) {
+          insertCourse.run(
+            c.id, c.lecturerId, c.code, c.title, c.studentCount,
+            JSON.stringify(c.documentIds || []), c.isPublished ? 1 : 0, c.averageQuizScore
+          );
+        }
+
+        console.log('[Database] JSON migration to SQLite completed successfully. Original JSON preserved as backup.');
+      } catch (e) {
+        console.warn('[Database] JSON migration error:', e);
       }
-    ];
+    }
   }
 
-  // --- Users Operations ---
-  static findUserById(id: string): UserRecord | undefined {
-    this.init();
-    return this.store.users.find(u => u.id === id);
+  private static seedDefaultUsers(): void {
+    if (!this.db) return;
+    const stmt = this.db.prepare('INSERT OR IGNORE INTO users (id, email, name, role, createdAt) VALUES (?, ?, ?, ?, ?)');
+    stmt.run('usr-student-1', 'alex.rivera@university.edu', 'Alex Rivera', 'student', '2026-10-01T10:00:00Z');
+    stmt.run('usr-lecturer-1', 'prof.ramesh@iisc.ac.in', 'Prof. Ramesh K.', 'lecturer', '2026-09-15T09:00:00Z');
   }
 
-  static findUserByEmail(email: string): UserRecord | undefined {
+  // --- Users ---
+  static findUserById(id: string): UserRecord | null {
     this.init();
-    return this.store.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    if (!this.db) return null;
+    return (this.db.prepare('SELECT * FROM users WHERE id = ?').get(id) as UserRecord) || null;
+  }
+
+  static findUserByEmail(email: string): UserRecord | null {
+    this.init();
+    if (!this.db) return null;
+    return (this.db.prepare('SELECT * FROM users WHERE email = ?').get(email) as UserRecord) || null;
   }
 
   static createUser(user: UserRecord): UserRecord {
     this.init();
-    this.store.users.push(user);
-    this.persist();
+    if (this.db) {
+      const stmt = this.db.prepare('INSERT OR REPLACE INTO users (id, email, name, role, createdAt) VALUES (?, ?, ?, ?, ?)');
+      stmt.run(user.id, user.email, user.name, user.role, user.createdAt);
+    }
     return user;
   }
 
-  // --- Document Operations ---
+  // --- Documents ---
+  static createDocument(doc: DocumentRecord): DocumentRecord {
+    this.init();
+    if (this.db) {
+      const stmt = this.db.prepare(`
+        INSERT OR REPLACE INTO documents (
+          id, ownerId, title, author, institution, year, fileType, fileSizeMb,
+          originalFileName, storagePath, category, uploadDate, processingStatus,
+          extractionStatus, extractionWarnings, extractionQuality, pageCount, wordCount, summary
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      stmt.run(
+        doc.id, doc.ownerId, doc.title, doc.author, doc.institution || null, doc.year || null,
+        doc.fileType, doc.fileSizeMb, doc.originalFileName, doc.storagePath || null,
+        doc.category, doc.uploadDate, doc.processingStatus, doc.extractionStatus,
+        JSON.stringify(doc.extractionWarnings || []), doc.extractionQuality ? JSON.stringify(doc.extractionQuality) : null,
+        doc.pageCount, doc.wordCount, doc.summary || ''
+      );
+    }
+    return doc;
+  }
+
   static getDocuments(ownerId?: string, role?: string): DocumentRecord[] {
     this.init();
+    if (!this.db) return [];
+    let rows: any[];
     if (role === 'lecturer') {
-      return this.store.documents; // Lecturers have course-wide review access
+      rows = this.db.prepare('SELECT * FROM documents ORDER BY uploadDate DESC').all();
+    } else if (ownerId) {
+      rows = this.db.prepare('SELECT * FROM documents WHERE ownerId = ? ORDER BY uploadDate DESC').all(ownerId);
+    } else {
+      rows = this.db.prepare('SELECT * FROM documents ORDER BY uploadDate DESC').all();
     }
-    if (ownerId) {
-      return this.store.documents.filter(d => d.ownerId === ownerId);
-    }
-    return this.store.documents;
+
+    return rows.map(r => ({
+      ...r,
+      extractionWarnings: JSON.parse(r.extractionWarnings || '[]'),
+      extractionQuality: r.extractionQuality ? JSON.parse(r.extractionQuality) : undefined
+    }));
   }
 
   static getDocumentById(id: string): DocumentRecord | undefined {
     this.init();
-    return this.store.documents.find(d => d.id === id);
-  }
-
-  static createDocument(doc: DocumentRecord): DocumentRecord {
-    this.init();
-    this.store.documents.unshift(doc);
-    this.persist();
-    return doc;
-  }
-
-  static updateDocumentStatus(id: string, status: DocumentRecord['processingStatus'], warnings: string[] = []): void {
-    this.init();
-    const doc = this.store.documents.find(d => d.id === id);
-    if (doc) {
-      doc.processingStatus = status;
-      if (warnings.length > 0) {
-        doc.extractionWarnings = warnings;
-      }
-      this.persist();
-    }
+    if (!this.db) return undefined;
+    const row = this.db.prepare('SELECT * FROM documents WHERE id = ?').get(id) as any;
+    if (!row) return undefined;
+    return {
+      ...row,
+      extractionWarnings: JSON.parse(row.extractionWarnings || '[]'),
+      extractionQuality: row.extractionQuality ? JSON.parse(row.extractionQuality) : undefined
+    };
   }
 
   static renameDocument(id: string, newTitle: string): DocumentRecord | undefined {
     this.init();
-    const doc = this.store.documents.find(d => d.id === id);
-    if (doc) {
-      doc.title = newTitle;
-      this.persist();
-      return doc;
-    }
-    return undefined;
+    if (!this.db) return undefined;
+    this.db.prepare('UPDATE documents SET title = ? WHERE id = ?').run(newTitle, id);
+    return this.getDocumentById(id);
   }
 
   static deleteDocument(id: string): boolean {
     this.init();
-    const initialLen = this.store.documents.length;
-    this.store.documents = this.store.documents.filter(d => d.id !== id);
-    if (this.store.documents.length < initialLen) {
-      // Cascade delete associated records
-      this.store.extractedSections = this.store.extractedSections.filter(s => s.documentId !== id);
-      this.store.generatedMaterials = this.store.generatedMaterials.filter(m => m.documentId !== id);
-      this.store.verificationResults = this.store.verificationResults.filter(v => v.documentId !== id);
-      this.store.savedItems = this.store.savedItems.filter(s => s.documentId !== id);
-      this.store.quizAttempts = this.store.quizAttempts.filter(q => q.documentId !== id);
-      this.persist();
-      return true;
-    }
-    return false;
+    if (!this.db) return false;
+    const info = this.db.prepare('DELETE FROM documents WHERE id = ?').run(id);
+    return info.changes > 0;
   }
 
   static clearAll(): void {
     this.init();
-    this.store.documents = [];
-    this.store.extractedSections = [];
-    this.store.generatedMaterials = [];
-    this.store.verificationResults = [];
-    this.store.savedItems = [];
-    this.store.quizAttempts = [];
-    this.persist();
+    if (!this.db) return;
+    this.db.prepare('DELETE FROM documents').run();
   }
 
   // --- Extracted Sections ---
-  static getSectionsByDocId(documentId: string): ExtractedSectionRecord[] {
-    this.init();
-    return this.store.extractedSections.filter(s => s.documentId === documentId);
-  }
-
   static saveSections(documentId: string, sections: ExtractedSectionRecord[]): void {
     this.init();
-    this.store.extractedSections = this.store.extractedSections.filter(s => s.documentId !== documentId);
-    this.store.extractedSections.push(...sections);
-    this.persist();
+    if (!this.db) return;
+    this.db.prepare('DELETE FROM extracted_sections WHERE documentId = ?').run(documentId);
+
+    const insertStmt = this.db.prepare(`
+      INSERT INTO extracted_sections (
+        id, documentId, pageNumber, slideNumber, chapterTitle, title, content,
+        speakerNotes, equations, tables, definitions, conditions, examples, uncertainSymbols
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const insertTransaction = this.db.transaction((recs: ExtractedSectionRecord[]) => {
+      for (const s of recs) {
+        insertStmt.run(
+          s.id, s.documentId, s.pageNumber, s.slideNumber || null, s.chapterTitle || null,
+          s.title, s.content, s.speakerNotes || null,
+          JSON.stringify(s.equations || []), JSON.stringify(s.tables || []),
+          JSON.stringify(s.definitions || []), JSON.stringify(s.conditions || []),
+          JSON.stringify(s.examples || []), JSON.stringify(s.uncertainSymbols || [])
+        );
+      }
+    });
+
+    insertTransaction(sections);
+  }
+
+  static getSectionsByDocId(documentId: string): ExtractedSectionRecord[] {
+    this.init();
+    if (!this.db) return [];
+    const rows = this.db.prepare('SELECT * FROM extracted_sections WHERE documentId = ? ORDER BY pageNumber ASC').all(documentId) as any[];
+    return rows.map(r => ({
+      ...r,
+      equations: JSON.parse(r.equations || '[]'),
+      tables: JSON.parse(r.tables || '[]'),
+      definitions: JSON.parse(r.definitions || '[]'),
+      conditions: JSON.parse(r.conditions || '[]'),
+      examples: JSON.parse(r.examples || '[]'),
+      uncertainSymbols: JSON.parse(r.uncertainSymbols || '[]')
+    }));
   }
 
   // --- Generated Materials ---
-  static getMaterialsByDocId(documentId: string): GeneratedMaterialRecord[] {
+  static saveMaterial(mat: GeneratedMaterialRecord): void {
     this.init();
-    return this.store.generatedMaterials.filter(m => m.documentId === documentId);
+    if (!this.db) return;
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO generated_materials (id, documentId, formatType, language, content, generatedAt)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    stmt.run(mat.id, mat.documentId, mat.formatType, mat.language, JSON.stringify(mat.content), mat.generatedAt);
   }
 
   static getMaterial(documentId: string, formatType: string, language: string): GeneratedMaterialRecord | undefined {
     this.init();
-    return this.store.generatedMaterials.find(
-      m => m.documentId === documentId && m.formatType === formatType && m.language === language
-    );
+    if (!this.db) return undefined;
+    const row = this.db.prepare(`
+      SELECT * FROM generated_materials WHERE documentId = ? AND formatType = ? AND language = ?
+    `).get(documentId, formatType, language) as any;
+    if (!row) return undefined;
+    return {
+      ...row,
+      content: JSON.parse(row.content)
+    };
   }
 
-  static saveMaterial(mat: GeneratedMaterialRecord): void {
+  static getMaterialsByDocId(documentId: string): GeneratedMaterialRecord[] {
     this.init();
-    this.store.generatedMaterials = this.store.generatedMaterials.filter(
-      m => !(m.documentId === mat.documentId && m.formatType === mat.formatType && m.language === mat.language)
-    );
-    this.store.generatedMaterials.push(mat);
-    this.persist();
+    if (!this.db) return [];
+    const rows = this.db.prepare('SELECT * FROM generated_materials WHERE documentId = ?').all(documentId) as any[];
+    return rows.map(r => ({
+      ...r,
+      content: JSON.parse(r.content)
+    }));
   }
 
-  // --- Verification Results ---
+  // --- Verifications ---
+  static saveVerification(v: VerificationResultRecord): void {
+    this.init();
+    if (!this.db) return;
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO verifications (
+        documentId, overallFidelityScore, factRetentionRate, equationIntegrityRate,
+        conditionAccuracyRate, terminologyConsistencyRate, unsupportedClaimsDetected,
+        alteredEquationsDetected, missingConditionsDetected, lastAuditDate, verifiedByEngine, factChecks
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    stmt.run(
+      v.documentId, v.overallFidelityScore, v.factRetentionRate, v.equationIntegrityRate,
+      v.conditionAccuracyRate, v.terminologyConsistencyRate, v.unsupportedClaimsDetected,
+      v.alteredEquationsDetected, v.missingConditionsDetected, v.lastAuditDate,
+      v.verifiedByEngine ? 1 : 0, JSON.stringify(v.factChecks || [])
+    );
+  }
+
   static getVerification(documentId: string): VerificationResultRecord | undefined {
     this.init();
-    return this.store.verificationResults.find(v => v.documentId === documentId);
-  }
-
-  static saveVerification(result: VerificationResultRecord): void {
-    this.init();
-    this.store.verificationResults = this.store.verificationResults.filter(v => v.documentId !== result.documentId);
-    this.store.verificationResults.push(result);
-    this.persist();
+    if (!this.db) return undefined;
+    const row = this.db.prepare('SELECT * FROM verifications WHERE documentId = ?').get(documentId) as any;
+    if (!row) return undefined;
+    return {
+      ...row,
+      verifiedByEngine: Boolean(row.verifiedByEngine),
+      factChecks: JSON.parse(row.factChecks || '[]')
+    };
   }
 
   // --- Saved Items ---
   static getSavedItems(userId: string): SavedItemRecord[] {
     this.init();
-    return this.store.savedItems.filter(s => s.userId === userId);
+    if (!this.db) return [];
+    const rows = this.db.prepare('SELECT * FROM saved_items WHERE userId = ? ORDER BY savedAt DESC').all(userId) as any[];
+    return rows.map(r => ({
+      ...r,
+      citation: r.citation ? JSON.parse(r.citation) : undefined
+    }));
   }
 
   static addSavedItem(item: SavedItemRecord): void {
     this.init();
-    if (!this.store.savedItems.some(i => i.id === item.id)) {
-      this.store.savedItems.unshift(item);
-      this.persist();
-    }
+    if (!this.db) return;
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO saved_items (id, userId, documentId, documentTitle, type, title, content, savedAt, citation)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    stmt.run(
+      item.id, item.userId, item.documentId, item.documentTitle, item.type,
+      item.title, item.content, item.savedAt, item.citation ? JSON.stringify(item.citation) : null
+    );
   }
 
   static removeSavedItem(id: string, userId: string): boolean {
     this.init();
-    const len = this.store.savedItems.length;
-    this.store.savedItems = this.store.savedItems.filter(s => !(s.id === id && s.userId === userId));
-    if (this.store.savedItems.length < len) {
-      this.persist();
-      return true;
-    }
-    return false;
-  }
-
-  static clearAll(): void {
-    this.init();
-    this.store.documents = [];
-    this.store.extractedSections = [];
-    this.store.generatedMaterials = [];
-    this.store.verificationResults = [];
-    this.store.savedItems = [];
-    this.store.quizAttempts = [];
-    this.persist();
+    if (!this.db) return false;
+    const info = this.db.prepare('DELETE FROM saved_items WHERE id = ? AND userId = ?').run(id, userId);
+    return info.changes > 0;
   }
 
   // --- Quiz Attempts ---
   static recordQuizAttempt(attempt: QuizAttemptRecord): void {
     this.init();
-    this.store.quizAttempts.unshift(attempt);
-    this.persist();
+    if (!this.db) return;
+    const stmt = this.db.prepare(`
+      INSERT INTO quiz_attempts (id, userId, documentId, score, totalQuestions, answers, attemptedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    stmt.run(attempt.id, attempt.userId, attempt.documentId, attempt.score, attempt.totalQuestions, JSON.stringify(attempt.answers || []), attempt.attemptedAt);
   }
 
   static getQuizAttempts(userId: string, documentId?: string): QuizAttemptRecord[] {
     this.init();
-    return this.store.quizAttempts.filter(
-      q => q.userId === userId && (!documentId || q.documentId === documentId)
-    );
+    if (!this.db) return [];
+    let rows: any[];
+    if (documentId) {
+      rows = this.db.prepare('SELECT * FROM quiz_attempts WHERE userId = ? AND documentId = ? ORDER BY attemptedAt DESC').all(userId, documentId);
+    } else {
+      rows = this.db.prepare('SELECT * FROM quiz_attempts WHERE userId = ? ORDER BY attemptedAt DESC').all(userId);
+    }
+    return rows.map(r => ({
+      ...r,
+      answers: JSON.parse(r.answers || '[]')
+    }));
   }
 
-  // --- Course Sharing (Lecturer) ---
+  // --- Courses ---
   static getCourses(lecturerId?: string): CourseSharingRecord[] {
     this.init();
+    if (!this.db) return [];
+    let rows: any[];
     if (lecturerId) {
-      return this.store.courses.filter(c => c.lecturerId === lecturerId);
+      rows = this.db.prepare('SELECT * FROM courses WHERE lecturerId = ?').all(lecturerId);
+    } else {
+      rows = this.db.prepare('SELECT * FROM courses').all();
     }
-    return this.store.courses;
+    return rows.map(r => ({
+      ...r,
+      documentIds: JSON.parse(r.documentIds || '[]'),
+      isPublished: Boolean(r.isPublished)
+    }));
   }
 
   static toggleCoursePublish(courseId: string): CourseSharingRecord | undefined {
     this.init();
-    const course = this.store.courses.find(c => c.id === courseId);
+    if (!this.db) return undefined;
+    const course = this.db.prepare('SELECT * FROM courses WHERE id = ?').get(courseId) as any;
     if (course) {
-      course.isPublished = !course.isPublished;
-      this.persist();
-      return course;
+      const newStatus = course.isPublished ? 0 : 1;
+      this.db.prepare('UPDATE courses SET isPublished = ? WHERE id = ?').run(newStatus, courseId);
+      return {
+        ...course,
+        documentIds: JSON.parse(course.documentIds || '[]'),
+        isPublished: Boolean(newStatus)
+      };
     }
     return undefined;
+  }
+
+  // --- Processing Jobs (Section 19.1) ---
+  static createJob(documentId: string): ProcessingJobRecord {
+    this.init();
+    const job: ProcessingJobRecord = {
+      id: 'job-' + Date.now(),
+      documentId,
+      status: 'queued',
+      attempts: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    if (this.db) {
+      this.db.prepare(`
+        INSERT INTO processing_jobs (id, documentId, status, attempts, lastError, createdAt, updatedAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(job.id, job.documentId, job.status, job.attempts, null, job.createdAt, job.updatedAt);
+    }
+    return job;
+  }
+
+  static updateJob(jobId: string, status: ProcessingJobRecord['status'], lastError?: string): void {
+    this.init();
+    if (this.db) {
+      this.db.prepare(`
+        UPDATE processing_jobs
+        SET status = ?, attempts = attempts + 1, lastError = ?, updatedAt = ?
+        WHERE id = ?
+      `).run(status, lastError || null, new Date().toISOString(), jobId);
+    }
+  }
+
+  // --- Backup & Recovery (Section 19.3) ---
+  static createBackup(): string {
+    this.init();
+    const backupDir = path.join(DB_DIR, 'backups');
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+    const backupPath = path.join(backupDir, `backup-${Date.now()}.db`);
+    if (this.db) {
+      // Sync WAL changes into main database before snapshot
+      this.db.pragma('wal_checkpoint(TRUNCATE)');
+      fs.copyFileSync(DB_FILE, backupPath);
+    }
+    return backupPath;
   }
 }

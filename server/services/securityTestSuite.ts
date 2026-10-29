@@ -31,6 +31,23 @@ export class SecurityTestSuite {
     // 2. Cross-user document isolation (Student A cannot access Student B's doc)
     const student1Id = 'usr-student-test-alice';
     const student2Id = 'usr-student-test-bob';
+
+    // Ensure users exist in SQLite database to satisfy FOREIGN KEY constraint
+    Database.createUser({
+      id: student1Id,
+      email: 'alice@test.edu',
+      name: 'Alice Researcher',
+      role: 'student',
+      createdAt: '2026-10-29T10:00:00Z'
+    });
+    Database.createUser({
+      id: student2Id,
+      email: 'bob@test.edu',
+      name: 'Bob Student',
+      role: 'student',
+      createdAt: '2026-10-29T10:00:00Z'
+    });
+
     const aliceDocId = 'doc-private-alice-' + Date.now();
 
     const aliceDoc: DocumentRecord = {
