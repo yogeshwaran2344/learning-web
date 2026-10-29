@@ -16,7 +16,7 @@ import { StorageService } from './storageService';
 const API_BASE = '/api';
 
 export class ApiClient {
-  private static token: string | null = localStorage.getItem('learnlens_auth_token') || 'token-usr-student-1';
+  private static token: string | null = localStorage.getItem('learnlens_auth_token');
 
   static setToken(token: string) {
     this.token = token;
@@ -25,6 +25,56 @@ export class ApiClient {
 
   static getToken(): string | null {
     return this.token || localStorage.getItem('learnlens_auth_token');
+  }
+
+  static logout() {
+    this.token = null;
+    localStorage.removeItem('learnlens_auth_token');
+    localStorage.removeItem('learnlens_current_user');
+  }
+
+  // Authentication
+  static async login(email: string, password?: string): Promise<{ user: any; token: string }> {
+    const data = await this.request<{ user: any; token: string }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password })
+    });
+    if (data.token) {
+      this.setToken(data.token);
+      localStorage.setItem('learnlens_current_user', JSON.stringify(data.user));
+    }
+    return data;
+  }
+
+  static async register(
+    name: string,
+    email: string,
+    password?: string,
+    role: string = 'student',
+    lecturerInviteKey?: string
+  ): Promise<{ user: any; token: string }> {
+    const data = await this.request<{ user: any; token: string }>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ name, email, password, role, lecturerInviteKey })
+    });
+    if (data.token) {
+      this.setToken(data.token);
+      localStorage.setItem('learnlens_current_user', JSON.stringify(data.user));
+    }
+    return data;
+  }
+
+  static async getMe(): Promise<any> {
+    try {
+      const data = await this.request<{ user: any }>('/auth/me');
+      if (data?.user) {
+        localStorage.setItem('learnlens_current_user', JSON.stringify(data.user));
+      }
+      return data.user;
+    } catch {
+      this.logout();
+      return null;
+    }
   }
 
   private static async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {

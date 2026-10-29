@@ -10,7 +10,8 @@ import {
   Sliders,
   Check,
   FileCheck2,
-  Zap
+  Zap,
+  LogOut
 } from 'lucide-react';
 import { AppLanguage, Role, UserPreferences, AcademicDocument } from '../../types';
 
@@ -29,6 +30,9 @@ interface TopBarProps {
   onOpenSystemTracker?: () => void;
   activeDocument: AcademicDocument | null;
   documents: AcademicDocument[];
+  currentUser?: any;
+  onLogout?: () => void;
+  onOpenLogin?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -45,7 +49,10 @@ export const TopBar: React.FC<TopBarProps> = ({
   onOpenIntegrationTest,
   onOpenSystemTracker,
   activeDocument,
-  documents
+  documents,
+  currentUser,
+  onLogout,
+  onOpenLogin
 }) => {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isLangDropdownOpen, setIsLangDropdownOpen] = useState(false);
@@ -215,20 +222,39 @@ export const TopBar: React.FC<TopBarProps> = ({
           <PanelRight className="w-4 h-4" />
         </button>
 
-        {/* User Profile Avatar Pill */}
-        <div className="flex items-center space-x-2 pl-2 border-l border-slate-200 dark:border-slate-700">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-brand-600 to-accent-600 flex items-center justify-center text-white text-xs font-bold">
-            {role === 'student' ? 'ST' : 'PR'}
-          </div>
-          <div className="hidden lg:block text-left">
-            <div className="text-xs font-bold text-slate-900 dark:text-white leading-tight">
-              {role === 'student' ? 'Alex Rivera' : 'Prof. Ramesh'}
+        {/* User Profile Avatar Pill with Sign Out */}
+        {currentUser ? (
+          <div className="flex items-center space-x-2 pl-2 border-l border-slate-200 dark:border-slate-700">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-brand-600 to-accent-600 flex items-center justify-center text-white text-xs font-bold">
+              {currentUser.role === 'student' ? 'ST' : 'PR'}
             </div>
-            <div className="text-[10px] text-slate-400 capitalize">
-              {role} Account
+            <div className="hidden lg:block text-left">
+              <div className="text-xs font-bold text-slate-900 dark:text-white leading-tight">
+                {currentUser.name || (currentUser.role === 'student' ? 'Alex Rivera' : 'Prof. Ramesh')}
+              </div>
+              <div className="text-[10px] text-slate-400 capitalize">
+                {currentUser.role || role} Account
+              </div>
             </div>
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                title="Sign Out of LearnLens"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors ml-1"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
-        </div>
+        ) : (
+          <button
+            onClick={onOpenLogin}
+            className="py-1.5 px-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all"
+          >
+            <User className="w-3.5 h-3.5" />
+            <span>Sign In</span>
+          </button>
+        )}
       </div>
     </header>
   );

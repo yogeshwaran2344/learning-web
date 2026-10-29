@@ -240,6 +240,10 @@ async function runAudit() {
   Database.removeDocumentFromCourse(testCourse.id, dummyDocId);
   Database.deleteDocument(dummyDocId);
 
+  // Restore canonical clean database state
+  const { cleanupDatabase } = await import('./cleanupDatabase');
+  cleanupDatabase();
+
   console.log('\n================================================================');
   console.log('   ALL ROADMAP VERIFICATIONS PASSED (STEPS 36, 37, 38, 39)');
   console.log('================================================================');

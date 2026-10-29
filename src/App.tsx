@@ -32,19 +32,24 @@ import { UsabilityTestModal } from './components/UsabilityTestModal';
 import { ExtractionBenchmarkModal } from './components/ExtractionBenchmarkModal';
 import { IntegrationTestModal } from './components/IntegrationTestModal';
 import { SystemTestTrackerModal } from './components/SystemTestTrackerModal';
+import { AuthModal } from './components/AuthModal';
 
 export function App() {
-  const initialDocs = StorageService.getDocuments();
   const [currentPage, setCurrentPage] = useState<NavigationPage>('dashboard');
-  const [documents, setDocuments] = useState<AcademicDocument[]>(initialDocs);
-  const [activeDocument, setActiveDocument] = useState<AcademicDocument | null>(initialDocs[0] || null);
+  const [documents, setDocuments] = useState<AcademicDocument[]>([]);
+  const [activeDocument, setActiveDocument] = useState<AcademicDocument | null>(null);
   const [studioTab, setStudioTab] = useState<StudioTab>('map');
   const [activeCitation, setActiveCitation] = useState<SourceCitation | null>(null);
   const [isContextPanelOpen, setIsContextPanelOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [savedItems, setSavedItems] = useState<SavedItem[]>(StorageService.getSavedItems());
-  const [courses, setCourses] = useState<LecturerCourse[]>(StorageService.getCourses());
+  const [savedItems, setSavedItems] = useState<SavedItem[]>([]);
+  const [courses, setCourses] = useState<LecturerCourse[]>([]);
   const [preferences, setPreferences] = useState<UserPreferences>(StorageService.getPreferences());
+
+  // Authentication State
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isAuthOpen, setIsAuthOpen] = useState<boolean>(!ApiClient.getToken());
+  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
 
   // Modals
   const [isAccessibilityOpen, setIsAccessibilityOpen] = useState(false);
@@ -58,39 +63,76 @@ export function App() {
   useEffect(() => {
     async function loadInitialData() {
       const isBackendLive = await ApiClient.checkHealth();
-      if (isBackendLive) {
+      const token = ApiClient.getToken();
+
+      if (isBackendLive && token) {
         try {
-          const [backendDocs, backendSaved, backendCourses] = await Promise.all([
-            ApiClient.getDocuments(),
-            ApiClient.getSavedItems(),
-            ApiClient.getCourses()
-          ]);
-          if (backendDocs && backendDocs.length > 0) {
-            setDocuments(backendDocs);
-            setActiveDocument(backendDocs[0]);
-          } else {
-            const localDocs = StorageService.getDocuments();
-            setDocuments(localDocs);
-            setActiveDocument(localDocs[0] || null);
+          const user = await ApiClient.getMe();
+          if (user) {
+            setCurrentUser(user);
+            setIsAuthOpen(false);
+            if (user.role && user.role !== preferences.role) {
+              setPreferences(prev => ({ ...prev, role: user.role }));
+            }
+            const [backendDocs, backendSaved, backendCourses] = await Promise.all([
+              ApiClient.getDocuments(),
+              ApiClient.getSavedItems(),
+              ApiClient.getCourses()
+            ]);
+            setDocuments(backendDocs || []);
+            setActiveDocument(backendDocs?.[0] || null);
+            if (backendSaved) setSavedItems(backendSaved);
+            if (backendCourses) setCourses(backendCourses);
+            setIsCheckingAuth(false);
+            return;
           }
-          if (backendSaved) setSavedItems(backendSaved);
-          if (backendCourses) setCourses(backendCourses);
-          return;
         } catch (e) {
-          console.warn('API sync fallback to local storage:', e);
+          console.warn('API auth verification failed:', e);
         }
       }
 
-      // Fallback
-      const docs = StorageService.getDocuments();
-      setDocuments(docs);
-      setActiveDocument(docs[0] || null);
-      setSavedItems(StorageService.getSavedItems());
-      setCourses(StorageService.getCourses());
+      // If no valid auth session, prompt user to log in from the beginning
+      ApiClient.logout();
+      setCurrentUser(null);
+      setIsAuthOpen(true);
+      setDocuments([]);
+      setActiveDocument(null);
+      setIsCheckingAuth(false);
     }
 
     loadInitialData();
   }, []);
+
+  const handleLoginSuccess = async (user: any) => {
+    setCurrentUser(user);
+    setIsAuthOpen(false);
+    if (user.role) {
+      handleUpdatePreferences({ role: user.role });
+    }
+    try {
+      const [backendDocs, backendSaved, backendCourses] = await Promise.all([
+        ApiClient.getDocuments(),
+        ApiClient.getSavedItems(),
+        ApiClient.getCourses()
+      ]);
+      setDocuments(backendDocs || []);
+      setActiveDocument(backendDocs?.[0] || null);
+      if (backendSaved) setSavedItems(backendSaved);
+      if (backendCourses) setCourses(backendCourses);
+    } catch (e) {
+      console.warn('Post-login data fetch error:', e);
+    }
+  };
+
+  const handleLogout = () => {
+    ApiClient.logout();
+    setCurrentUser(null);
+    setDocuments([]);
+    setActiveDocument(null);
+    setSavedItems([]);
+    setCourses([]);
+    setIsAuthOpen(true);
+  };
 
   // Sync accessibility classes to document body
   useEffect(() => {
@@ -272,6 +314,9 @@ export function App() {
           onOpenSystemTracker={() => setIsSystemTrackerOpen(true)}
           activeDocument={activeDocument}
           documents={documents}
+          currentUser={currentUser}
+          onLogout={handleLogout}
+          onOpenLogin={() => setIsAuthOpen(true)}
         />
 
         {/* Main Workspace (The 8 Dedicated Pages) */}
@@ -282,7 +327,7 @@ export function App() {
               onSelectDocument={handleSelectDocument}
               onNavigate={(page) => setCurrentPage(page)}
               onOpenUpload={() => setCurrentPage('upload')}
-              userName={preferences.role === 'student' ? 'Alex' : 'Prof. Ramesh'}
+              userName={currentUser?.name || (preferences.role === 'student' ? 'Alex' : 'Prof. Ramesh')}
               language={preferences.preferredLanguage}
               onLanguageChange={(lang) => handleUpdatePreferences({ preferredLanguage: lang })}
             />
@@ -411,6 +456,14 @@ export function App() {
       <SystemTestTrackerModal
         isOpen={isSystemTrackerOpen}
         onClose={() => setIsSystemTrackerOpen(false)}
+      />
+
+      {/* Step 40: Authentication & Secure Sign In Modal */}
+      <AuthModal
+        isOpen={isAuthOpen || !currentUser}
+        onSuccess={handleLoginSuccess}
+        canDismiss={Boolean(currentUser)}
+        onClose={() => setIsAuthOpen(false)}
       />
     </div>
   );
