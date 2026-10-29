@@ -1,47 +1,59 @@
-import { ExtractedSectionRecord, AppLanguage } from '../db/schema';
+import { ExtractedSectionRecord, AppLanguage, SourceCitationRecord } from '../db/schema';
 import { DifficultyLevel, GeneratedFormatResult } from './aiGeneratorService';
 
-export interface AiPromptPayload {
-  formatType: string;
-  docTitle: string;
-  language: AppLanguage;
-  difficulty: DifficultyLevel;
-  extractedContext: string;
+export interface DetailedNotesOutput {
+  title: string;
+  overview: string;
+  sections: {
+    heading: string;
+    pageOrSlide: number;
+    definitions: { term: string; definition: string; conditions?: string }[];
+    explanations: string[];
+    equations?: { latex: string; meaning: string }[];
+    conditions?: string[];
+    keyPoints: string[];
+    sourceCitation: SourceCitationRecord;
+  }[];
+  overallSummary: string;
+}
+
+export interface FlashcardOutputItem {
+  id: string;
+  front: string; // Question
+  back: string;  // Answer
+  pageOrSlide: number;
+  sectionTitle: string;
+  category: 'definition' | 'equation' | 'concept' | 'condition';
+  reviewStatus: 'new' | 'learning' | 'mastered';
+  sourceCitation: SourceCitationRecord;
+  explanation: string;
 }
 
 export class AiModelService {
   private static geminiApiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || '';
   private static openaiApiKey = process.env.OPENAI_API_KEY || '';
 
-  /**
-   * Determine if an external LLM API key is configured
-   */
   static hasExternalAiProvider(): boolean {
     return Boolean(this.geminiApiKey || this.openaiApiKey);
   }
 
-  /**
-   * System Prompt strictly enforcing:
-   * 1. Ground truth fidelity - facts must come from extracted source
-   * 2. Page references [Page X] or [Slide Y] for all claims
-   * 3. Explanations beyond the source must be explicitly tagged [Beyond Source Context]
-   * 4. Preservation of mathematical expressions and condition invariants
-   */
-  static getSystemPrompt(language: AppLanguage): string {
+  static getSystemPrompt(language: AppLanguage, formatType: string): string {
     return `You are an expert Academic Tutor and Meaning Preservation Engine for LearnLens AI.
 Target Language: ${language}
+Format to Generate: ${formatType}
 
-CRITICAL RULES:
-1. FAITHFULNESS TO SOURCE: Every key factual statement, concept, definition, and formula must be strictly grounded in the provided Source Passages.
-2. PAGE CITATIONS: Append explicit page citations in format "[Page X]" or "[Slide X]" referencing where the concept appears in the source.
-3. CLEAR PEDAGOGICAL BOUNDARIES: If you provide an analogy, intuition, or supplementary explanation not found in the original source, you MUST explicitly tag it with:
-"[Beyond Source Context]: <your supplementary pedagogical explanation>"
-4. MATHEMATICAL & EQUATION INTEGRITY: Preserve mathematical equations, normalization constants (e.g. 1/sqrt(d_k)), exponents, and invariants exactly. Do NOT drop conditions or assumptions (such as "incompressible", "finite", "non-negative", "orthonormal").
-5. Return clean structured JSON where specified.`;
+STRICT ACADEMIC FIDELITY RULES:
+1. FAITHFULNESS TO SOURCE: Every statement, equation, condition, and definition MUST be strictly grounded in the extracted source text provided. DO NOT hallucinate facts, variables, or constants.
+2. SOURCE REFERENCES: You must attach the exact page number (or slide number) and section title to every heading, concept, and flashcard.
+3. CLEAR PEDAGOGICAL BOUNDARIES: If you provide an intuition, metaphor, or analogy not directly present in the source, you MUST explicitly prepend it with:
+"[Beyond Source Context]: <your pedagogical explanation>"
+4. MATHEMATICAL & EQUATION INTEGRITY: Maintain exact mathematical precision. Preserve normalization factors (such as 1/sqrt(d_k), 10000, 2*pi), variables, exponents, and invariant boundary conditions (e.g. "incompressible", "finite", "non-negative", "orthonormal").
+5. STRUCTURED JSON OUTPUT: Always return valid, well-formed JSON matching the requested schema.`;
   }
 
   /**
-   * Synthesize learning format using external LLM (Gemini or OpenAI) with fallback
+   * Main entry point: Generates structured learning materials with section-by-section chunking
+   * for large documents, strict schema enforcement, and fallback.
    */
   static async generateWithAi(
     documentId: string,
@@ -52,15 +64,206 @@ CRITICAL RULES:
     difficulty: DifficultyLevel = 'intermediate'
   ): Promise<GeneratedFormatResult | null> {
     if (!this.hasExternalAiProvider()) {
-      return null; // Signals caller to use deterministic synthesizer
+      return null; // Signals caller to use high-fidelity deterministic generator
     }
 
     try {
-      const sourcePassages = sections.map(s => 
-        `[${s.slideNumber ? `Slide ${s.slideNumber}` : `Page ${s.pageNumber}`}: ${s.title}]\n${s.content}\n${s.equations?.length ? 'Equations: ' + s.equations.map(e => e.latex).join(', ') : ''}\n${s.conditions?.length ? 'Conditions: ' + s.conditions.join('; ') : ''}`
-      ).join('\n\n---\n\n');
+      if (formatType === 'notes') {
+        return await this.generateStructuredNotes(documentId, docTitle, sections, language, difficulty);
+      } else if (formatType === 'flashcards') {
+        return await this.generateStructuredFlashcards(documentId, docTitle, sections, language, difficulty);
+      } else {
+        return await this.generateGeneralFormat(documentId, docTitle, sections, formatType, language, difficulty);
+      }
+    } catch (err: any) {
+      console.warn(`[AiModelService] External AI generation failed: ${err.message}. Falling back to deterministic generator.`);
+      return null;
+    }
+  }
+
+  /**
+   * Section-by-section generator for Detailed Notes (Section 16.2 & 16.3)
+   */
+  private static async generateStructuredNotes(
+    documentId: string,
+    docTitle: string,
+    sections: ExtractedSectionRecord[],
+    language: AppLanguage,
+    difficulty: DifficultyLevel
+  ): Promise<GeneratedFormatResult | null> {
+    const CHUNK_SIZE = 3; // Process in chunks of max 3 sections to prevent truncation & handle large docs
+    const noteSections: DetailedNotesOutput['sections'] = [];
+    const allCitations: SourceCitationRecord[] = [];
+
+    for (let i = 0; i < sections.length; i += CHUNK_SIZE) {
+      const sectionChunk = sections.slice(i, i + CHUNK_SIZE);
+      const promptContext = sectionChunk.map(s => `
+[Section ${s.pageNumber || s.slideNumber || 1}: "${s.title}"]
+Content: ${s.content}
+${s.equations?.length ? 'Equations: ' + s.equations.map(e => e.latex).join('; ') : ''}
+${s.conditions?.length ? 'Conditions: ' + s.conditions.join('; ') : ''}
+`).join('\n---\n');
 
       const userPrompt = `Document: "${docTitle}"
+Language: ${language}
+Difficulty: ${difficulty}
+Generate detailed structured academic notes for the following sections in JSON format:
+{
+  "sections": [
+    {
+      "heading": "Section Heading",
+      "pageOrSlide": 1,
+      "definitions": [{"term": "...", "definition": "...", "conditions": "..."}],
+      "explanations": ["Sentence 1...", "Sentence 2..."],
+      "equations": [{"latex": "...", "meaning": "..."}],
+      "conditions": ["Invariant 1..."],
+      "keyPoints": ["Point 1...", "Point 2..."]
+    }
+  ]
+}
+
+Source Passages:
+${promptContext}`;
+
+      const rawJson = await this.callLlmRaw(userPrompt, language, 'notes');
+      if (rawJson) {
+        try {
+          const parsed = JSON.parse(this.cleanJsonBlock(rawJson));
+          if (parsed.sections && Array.isArray(parsed.sections)) {
+            for (let idx = 0; idx < parsed.sections.length; idx++) {
+              const secItem = parsed.sections[idx];
+              const matchingSource = sectionChunk[idx] || sectionChunk[0];
+              const pageNum = secItem.pageOrSlide || matchingSource.pageNumber || matchingSource.slideNumber || 1;
+              const citation: SourceCitationRecord = {
+                id: `cite-notes-${documentId}-${secItem.pageOrSlide || idx + 1}`,
+                documentId,
+                pageNumber: pageNum,
+                slideNumber: matchingSource.slideNumber,
+                sectionTitle: secItem.heading || matchingSource.title,
+                exactQuote: (secItem.explanations?.[0] || matchingSource.content).slice(0, 120),
+                contextSnippet: matchingSource.content.slice(0, 200)
+              };
+              secItem.sourceCitation = citation;
+              noteSections.push(secItem);
+              allCitations.push(citation);
+            }
+          }
+        } catch (e) {
+          console.warn('[AiModelService] Failed parsing notes chunk JSON:', e);
+        }
+      }
+    }
+
+    if (noteSections.length === 0) return null;
+
+    const notesOutput: DetailedNotesOutput = {
+      title: docTitle,
+      overview: `Comprehensive academic study notes synthesized from ${sections.length} extracted section(s).`,
+      sections: noteSections,
+      overallSummary: noteSections.map(s => s.keyPoints).flat().slice(0, 5).join(' ')
+    };
+
+    return {
+      formatType: 'notes',
+      language,
+      difficultyLevel: difficulty,
+      content: notesOutput,
+      sourceCitations: allCitations
+    };
+  }
+
+  /**
+   * Section-by-section generator for Flashcards (Section 16.2 & 16.3)
+   */
+  private static async generateStructuredFlashcards(
+    documentId: string,
+    docTitle: string,
+    sections: ExtractedSectionRecord[],
+    language: AppLanguage,
+    difficulty: DifficultyLevel
+  ): Promise<GeneratedFormatResult | null> {
+    const flashcards: FlashcardOutputItem[] = [];
+    const allCitations: SourceCitationRecord[] = [];
+
+    for (let i = 0; i < sections.length; i++) {
+      const sec = sections[i];
+      const userPrompt = `Document: "${docTitle}"
+Section: [Page ${sec.pageNumber || sec.slideNumber || 1}: ${sec.title}]
+Content: ${sec.content}
+${sec.equations?.length ? 'Equations: ' + sec.equations.map(e => e.latex).join('; ') : ''}
+${sec.conditions?.length ? 'Conditions: ' + sec.conditions.join('; ') : ''}
+
+Generate 2 to 3 targeted academic flashcards from this section in JSON format:
+{
+  "flashcards": [
+    {
+      "front": "Specific question about theorem, definition, or formula?",
+      "back": "Accurate, source-grounded answer adhering strictly to conditions.",
+      "category": "definition",
+      "explanation": "Evidence from original source text."
+    }
+  ]
+}`;
+
+      const rawJson = await this.callLlmRaw(userPrompt, language, 'flashcards');
+      if (rawJson) {
+        try {
+          const parsed = JSON.parse(this.cleanJsonBlock(rawJson));
+          if (parsed.flashcards && Array.isArray(parsed.flashcards)) {
+            parsed.flashcards.forEach((fc: any, fcIdx: number) => {
+              const citation: SourceCitationRecord = {
+                id: `fc-cite-${documentId}-${sec.pageNumber}-${fcIdx + 1}`,
+                documentId,
+                pageNumber: sec.pageNumber || 1,
+                slideNumber: sec.slideNumber,
+                sectionTitle: sec.title,
+                exactQuote: fc.back.slice(0, 120),
+                contextSnippet: sec.content.slice(0, 180)
+              };
+              allCitations.push(citation);
+              flashcards.push({
+                id: `fc-${documentId}-${sec.pageNumber}-${fcIdx + 1}`,
+                front: fc.front,
+                back: fc.back,
+                pageOrSlide: sec.pageNumber || sec.slideNumber || 1,
+                sectionTitle: sec.title,
+                category: fc.category || (sec.equations?.length ? 'equation' : 'concept'),
+                reviewStatus: 'new',
+                sourceCitation: citation,
+                explanation: fc.explanation || `Derived from Page ${sec.pageNumber}: ${sec.title}`
+              });
+            });
+          }
+        } catch (e) {
+          console.warn('[AiModelService] Failed parsing flashcard JSON chunk:', e);
+        }
+      }
+    }
+
+    if (flashcards.length === 0) return null;
+
+    return {
+      formatType: 'flashcards',
+      language,
+      difficultyLevel: difficulty,
+      content: flashcards,
+      sourceCitations: allCitations
+    };
+  }
+
+  private static async generateGeneralFormat(
+    documentId: string,
+    docTitle: string,
+    sections: ExtractedSectionRecord[],
+    formatType: string,
+    language: AppLanguage,
+    difficulty: DifficultyLevel
+  ): Promise<GeneratedFormatResult | null> {
+    const sourcePassages = sections.map(s => 
+      `[${s.slideNumber ? `Slide ${s.slideNumber}` : `Page ${s.pageNumber}`}: ${s.title}]\n${s.content}\n${s.equations?.length ? 'Equations: ' + s.equations.map(e => e.latex).join(', ') : ''}\n${s.conditions?.length ? 'Conditions: ' + s.conditions.join('; ') : ''}`
+    ).join('\n\n---\n\n');
+
+    const userPrompt = `Document: "${docTitle}"
 Requested Format: ${formatType}
 Language: ${language}
 Difficulty: ${difficulty}
@@ -70,138 +273,100 @@ ${sourcePassages.slice(0, 8000)}
 
 Generate comprehensive learning materials for "${formatType}". Keep mathematical precision, page citations, and mark any added analogy with [Beyond Source Context].`;
 
-      if (this.geminiApiKey) {
-        return await this.callGemini(documentId, userPrompt, language, formatType, difficulty, sections);
-      } else if (this.openaiApiKey) {
-        return await this.callOpenAI(documentId, userPrompt, language, formatType, difficulty, sections);
+    const rawOutput = await this.callLlmRaw(userPrompt, language, formatType);
+    if (!rawOutput) return null;
+
+    return {
+      formatType: formatType as any,
+      language,
+      difficultyLevel: difficulty,
+      content: {
+        aiGenerated: true,
+        text: rawOutput
+      },
+      hasBeyondNotesAnnotation: rawOutput.includes('[Beyond Source Context]'),
+      additionalContextSummary: rawOutput.includes('[Beyond Source Context]')
+        ? 'Supplementary intuition and analogies included with [Beyond Source Context] tags.'
+        : undefined,
+      sourceCitations: sections.map(s => ({
+        id: `cite-${s.id}`,
+        documentId,
+        pageNumber: s.pageNumber,
+        slideNumber: s.slideNumber,
+        sectionTitle: s.title,
+        exactQuote: s.content.slice(0, 100),
+        contextSnippet: s.content.slice(0, 180)
+      }))
+    };
+  }
+
+  private static async callLlmRaw(prompt: string, language: AppLanguage, formatType: string): Promise<string | null> {
+    if (this.geminiApiKey) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.geminiApiKey}`;
+      const payload = {
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: this.getSystemPrompt(language, formatType) + '\n\n' + prompt }]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: 2048
+        }
+      };
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Gemini API returned HTTP status ${response.status}`);
       }
-    } catch (e) {
-      console.warn('[AiModelService] External LLM call failed, falling back to deterministic synthesizer:', e);
+
+      const data = await response.json();
+      return data?.candidates?.[0]?.content?.parts?.[0]?.text || null;
+    } else if (this.openaiApiKey) {
+      const url = 'https://api.openai.com/v1/chat/completions';
+      const payload = {
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: this.getSystemPrompt(language, formatType) },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.2
+      };
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.openaiApiKey}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error(`OpenAI API returned HTTP status ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data?.choices?.[0]?.message?.content || null;
     }
 
     return null;
   }
 
-  private static async callGemini(
-    documentId: string,
-    prompt: string,
-    language: AppLanguage,
-    formatType: any,
-    difficulty: DifficultyLevel,
-    sections: ExtractedSectionRecord[]
-  ): Promise<GeneratedFormatResult | null> {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.geminiApiKey}`;
-    const payload = {
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            { text: this.getSystemPrompt(language) + '\n\n' + prompt }
-          ]
-        }
-      ],
-      generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 2048
-      }
-    };
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-      throw new Error(`Gemini API error status: ${response.status}`);
+  private static cleanJsonBlock(raw: string): string {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith('```json')) {
+      return trimmed.replace(/^```json\s*/, '').replace(/\s*```$/, '');
     }
-
-    const data = await response.json();
-    const textOutput = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!textOutput) return null;
-
-    return {
-      formatType,
-      language,
-      difficultyLevel: difficulty,
-      content: {
-        aiGenerated: true,
-        provider: 'Gemini-1.5-Flash',
-        text: textOutput
-      },
-      hasBeyondNotesAnnotation: textOutput.includes('[Beyond Source Context]'),
-      additionalContextSummary: textOutput.includes('[Beyond Source Context]')
-        ? 'Supplementary intuition and analogies included with [Beyond Source Context] tags.'
-        : undefined,
-      sourceCitations: sections.map(s => ({
-        id: `cite-${s.id}`,
-        documentId,
-        pageNumber: s.pageNumber,
-        slideNumber: s.slideNumber,
-        sectionTitle: s.title,
-        exactQuote: s.content.slice(0, 100),
-        contextSnippet: s.content.slice(0, 180)
-      }))
-    };
-  }
-
-  private static async callOpenAI(
-    documentId: string,
-    prompt: string,
-    language: AppLanguage,
-    formatType: any,
-    difficulty: DifficultyLevel,
-    sections: ExtractedSectionRecord[]
-  ): Promise<GeneratedFormatResult | null> {
-    const url = 'https://api.openai.com/v1/chat/completions';
-    const payload = {
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: this.getSystemPrompt(language) },
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.2
-    };
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.openaiApiKey}`
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-      throw new Error(`OpenAI API error status: ${response.status}`);
+    if (trimmed.startsWith('```')) {
+      return trimmed.replace(/^```\s*/, '').replace(/\s*```$/, '');
     }
-
-    const data = await response.json();
-    const textOutput = data?.choices?.[0]?.message?.content;
-    if (!textOutput) return null;
-
-    return {
-      formatType,
-      language,
-      difficultyLevel: difficulty,
-      content: {
-        aiGenerated: true,
-        provider: 'GPT-4o-mini',
-        text: textOutput
-      },
-      hasBeyondNotesAnnotation: textOutput.includes('[Beyond Source Context]'),
-      additionalContextSummary: textOutput.includes('[Beyond Source Context]')
-        ? 'Supplementary intuition and analogies included with [Beyond Source Context] tags.'
-        : undefined,
-      sourceCitations: sections.map(s => ({
-        id: `cite-${s.id}`,
-        documentId,
-        pageNumber: s.pageNumber,
-        slideNumber: s.slideNumber,
-        sectionTitle: s.title,
-        exactQuote: s.content.slice(0, 100),
-        contextSnippet: s.content.slice(0, 180)
-      }))
-    };
+    return trimmed;
   }
 }

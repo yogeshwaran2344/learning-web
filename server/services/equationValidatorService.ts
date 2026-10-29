@@ -46,8 +46,10 @@ export class EquationValidatorService {
           const matchFound = combinedGeneratedText.toLowerCase().includes(simplifiedFactor.toLowerCase()) ||
             combinedGeneratedText.includes('√') ||
             combinedGeneratedText.includes('sqrt') ||
+            combinedGeneratedText.includes('square root') ||
             combinedGeneratedText.includes('d_k') ||
-            combinedGeneratedText.includes('dk');
+            combinedGeneratedText.includes('dk') ||
+            combinedGeneratedText.includes('key dimension');
           if (!matchFound && combinedGeneratedText.length > 50) {
             droppedFactors.push(`Dropped mathematical normalization factor: "${factor}" from equation ${latex}`);
             alteredCount++;
@@ -55,7 +57,17 @@ export class EquationValidatorService {
         }
       });
 
-      // 4. Operator and exponent integrity verification
+      // 4. Operator, activation function and exponent integrity verification
+      if (latex.toLowerCase().includes('softmax') && !combinedGeneratedText.toLowerCase().includes('softmax')) {
+        droppedFactors.push(`Altered activation operator: "softmax" was replaced or omitted from equation ${latex}`);
+        alteredCount++;
+      }
+      if (latex.includes('\\sqrt') || latex.includes('sqrt')) {
+        if (!combinedGeneratedText.includes('sqrt') && !combinedGeneratedText.includes('√') && !combinedGeneratedText.includes('square root')) {
+          droppedFactors.push(`Dropped square root radical operator (√) from equation ${latex}`);
+          alteredCount++;
+        }
+      }
       if (latex.includes('^2') && !combinedGeneratedText.includes('^2') && !combinedGeneratedText.includes('squared') && !combinedGeneratedText.includes('²')) {
         droppedFactors.push(`Missing quadratic exponent (^2) from equation: ${latex}`);
         alteredCount++;

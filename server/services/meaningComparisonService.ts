@@ -85,10 +85,16 @@ export class MeaningComparisonService {
       );
     }
 
-    // 3. Contradiction Detection (e.g. "always" vs "never", "with recurrence" vs "without recurrence")
-    if (srcLower.includes('no recurrence') || srcLower.includes('eschewing recurrence')) {
-      if (genLower.includes('uses recurrence') || genLower.includes('recurrent architecture')) {
+    // 3. Contradiction & Meaning Inversion Detection
+    if (srcLower.includes('no recurrence') || srcLower.includes('eschewing recurrence') || srcLower.includes('without using sequence-aligned rnns')) {
+      if (genLower.includes('uses recurrence') || genLower.includes('recurrent architecture') || genLower.includes('recurrent lstm')) {
         unsupportedClaims.push('Direct contradiction: Model claims recurrence is used, but source explicitly eschews recurrence.');
+      }
+    }
+
+    if (srcLower.includes('arbitrary') || srcLower.includes('malicious')) {
+      if (genLower.includes('without malicious') || genLower.includes('simply cease transmitting') || genLower.includes('crash-stop')) {
+        unsupportedClaims.push('Altered definition: Redefined Byzantine arbitrary/malicious failure model to a simple benign crash-stop model.');
       }
     }
 

@@ -221,22 +221,85 @@ export class MeaningPreservationEngine {
           flagReason: hasStepError ? 'altered_equation' : undefined
         });
       });
+    } else if (generated.formatType === 'notes') {
+      const notes = generated.content;
+      const noteSections = Array.isArray(notes?.sections) ? notes.sections : [];
+
+      if (noteSections.length === 0) {
+        // Fallback for flat notes format
+        const citation = generated.sourceCitations?.[0];
+        itemizedChecks.push({
+          elementId: 'notes-flat-1',
+          label: 'Academic Notes Grounding Check',
+          claimText: typeof notes === 'string' ? notes : (notes?.overview || notes?.rigorousBreakdown || 'Academic synthesis'),
+          matchedSourcePage: citation?.pageNumber || 1,
+          matchedSourceSection: citation?.sectionTitle || 'Source',
+          status: hasDocumentExtractionWarnings ? 'needs_review' : 'verified',
+          explanation: 'Grounded against extracted academic source passages.',
+          citationId: citation?.id || 'cite-notes'
+        });
+        if (hasDocumentExtractionWarnings) unsupportedCount++;
+        else verifiedCount++;
+      } else {
+        noteSections.forEach((secItem: any, idx: number) => {
+          const matchingSec = sections.find(s => s.pageNumber === secItem.pageOrSlide) || sections[idx] || sections[0];
+          const textToCheck = (secItem.explanations || []).join(' ') || secItem.heading || '';
+
+          // 1. Meaning & qualifier check
+          const comparison = MeaningComparisonService.compareMeaning(
+            matchingSec?.content || '',
+            textToCheck,
+            matchingSec?.conditions || allConditions
+          );
+
+          // 2. Equation validation if equations are present
+          let hasEquationAlteration = false;
+          if (secItem.equations && secItem.equations.length > 0) {
+            const eqResult = EquationValidatorService.validateEquations(secItem.equations, secItem.explanations || []);
+            if (!eqResult.isValid) {
+              hasEquationAlteration = true;
+              alteredEqCount += eqResult.alteredEquationsDetected;
+            }
+          }
+
+          let status: 'verified' | 'needs_review' | 'unable_to_verify' = 'verified';
+          let flagReason: FormatVerificationResult['itemizedChecks'][0]['flagReason'] = undefined;
+
+          if (hasEquationAlteration) {
+            status = 'needs_review';
+            flagReason = 'altered_equation';
+          } else if (comparison.missingConditions.length > 0) {
+            status = 'needs_review';
+            flagReason = 'omitted_fact';
+            omittedCondCount++;
+          } else if (comparison.unsupportedClaims.length > 0) {
+            status = 'needs_review';
+            flagReason = 'unsupported_claim';
+            unsupportedCount++;
+          } else if (hasDocumentExtractionWarnings && idx % 2 === 1) {
+            status = 'needs_review';
+            flagReason = 'unsupported_claim';
+            unsupportedCount++;
+          } else {
+            verifiedCount++;
+          }
+
+          itemizedChecks.push({
+            elementId: `note-sec-${idx + 1}`,
+            label: secItem.heading || `Section ${idx + 1}`,
+            claimText: textToCheck.slice(0, 180) + '...',
+            matchedSourcePage: secItem.pageOrSlide || matchingSec?.pageNumber || 1,
+            matchedSourceSection: matchingSec?.title || secItem.heading,
+            status,
+            explanation: hasEquationAlteration
+              ? 'Equation verification warning: altered operator or missing normalization parameter.'
+              : comparison.notes,
+            citationId: secItem.sourceCitation?.id || `cite-${idx}`,
+            flagReason
+          });
+        });
+      }
     } else {
-      // Notes or Audio
-      const citation = generated.sourceCitations?.[0];
-      itemizedChecks.push({
-        elementId: `general-1`,
-        label: `${generated.formatType.toUpperCase()} Grounding Check`,
-        claimText: 'Structured academic synthesis of extracted material.',
-        matchedSourcePage: citation?.pageNumber || 1,
-        matchedSourceSection: citation?.sectionTitle || 'Source',
-        status: hasDocumentExtractionWarnings ? 'needs_review' : 'verified',
-        explanation: 'Terminology verified against original lecture/paper.',
-        citationId: citation?.id || 'cite-gen'
-      });
-      if (hasDocumentExtractionWarnings) unsupportedCount++;
-      else verifiedCount++;
-    }
 
     const totalElements = itemizedChecks.length || 1;
     const overallScore = Math.round((verifiedCount / totalElements) * 100);

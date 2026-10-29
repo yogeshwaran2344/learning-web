@@ -304,6 +304,14 @@ export class DocumentController {
     if (!success) {
       return res.status(404).json({ error: 'Document not found or already deleted.' });
     }
+    // Delete physical uploaded file if present
+    if (doc.storagePath && fs.existsSync(doc.storagePath)) {
+      try {
+        fs.unlinkSync(doc.storagePath);
+      } catch (err) {
+        console.warn('Failed unlinking storage file:', err);
+      }
+    }
     res.json({ success: true, message: 'Document and all associated learning materials deleted.' });
   }
 

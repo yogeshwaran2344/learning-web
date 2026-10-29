@@ -5,17 +5,33 @@ import { SavedItemRecord } from '../db/schema';
 
 export class SavedController {
   static list(req: AuthenticatedRequest, res: Response) {
-    const userId = req.user?.id || 'usr-student-1';
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Authentication credentials required.' });
+    }
     const items = Database.getSavedItems(userId);
     res.json({ savedItems: items });
   }
 
   static create(req: AuthenticatedRequest, res: Response) {
-    const userId = req.user?.id || 'usr-student-1';
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Authentication credentials required.' });
+    }
     const { documentId, documentTitle, type, title, content, citation } = req.body;
 
     if (!title || !content) {
       return res.status(400).json({ error: 'Title and content are required.' });
+    }
+
+    // Check if duplicate item already exists to prevent duplication on repeated requests
+    const existingItems = Database.getSavedItems(userId);
+    const isDuplicate = existingItems.some(
+      it => it.documentId === documentId && it.title === title && it.type === type
+    );
+    if (isDuplicate) {
+      const match = existingItems.find(it => it.documentId === documentId && it.title === title);
+      return res.status(200).json({ item: match, message: 'Existing bookmark retrieved (no duplicate created).' });
     }
 
     const item: SavedItemRecord = {
@@ -35,10 +51,13 @@ export class SavedController {
   }
 
   static delete(req: AuthenticatedRequest, res: Response) {
-    const userId = req.user?.id || 'usr-student-1';
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Authentication credentials required.' });
+    }
     const success = Database.removeSavedItem(req.params.id, userId);
     if (!success) {
-      return res.status(404).json({ error: 'Saved item not found.' });
+      return res.status(404).json({ error: 'Saved item not found or unauthorized.' });
     }
     res.json({ success: true });
   }
@@ -46,7 +65,10 @@ export class SavedController {
 
 export class QuizController {
   static submitAttempt(req: AuthenticatedRequest, res: Response) {
-    const userId = req.user?.id || 'usr-student-1';
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Authentication credentials required.' });
+    }
     const { docId } = req.params;
     const { answers, totalQuestions } = req.body;
 
@@ -69,7 +91,10 @@ export class QuizController {
   }
 
   static getAttempts(req: AuthenticatedRequest, res: Response) {
-    const userId = req.user?.id || 'usr-student-1';
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Authentication credentials required.' });
+    }
     const attempts = Database.getQuizAttempts(userId, req.params.docId);
     res.json({ attempts });
   }

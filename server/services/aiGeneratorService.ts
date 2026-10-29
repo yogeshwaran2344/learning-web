@@ -248,7 +248,7 @@ export class AiGeneratorService {
     };
   }
 
-  // --- 3. Detailed Notes ---
+  // --- 3. Detailed Notes (Section 16.2: Headings, definitions, explanations, key points, source references) ---
   private static generateDetailedNotes(
     documentId: string,
     docTitle: string,
@@ -256,40 +256,55 @@ export class AiGeneratorService {
     language: AppLanguage,
     difficulty: DifficultyLevel
   ): GeneratedFormatResult {
-    const sec = sections[0] || {
-      pageNumber: 1,
-      title: docTitle,
-      content: 'Academic overview.'
-    };
+    const allCitations: SourceCitationRecord[] = [];
+    const noteSections = sections.map((sec, idx) => {
+      let breakdown = `Formal academic derivation: ${sec.content}. The key theoretical premise requires that all conditions are strictly satisfied, guaranteeing invariant consistency across system states.`;
+      if (language === 'Kannada') {
+        breakdown = `ಸೈದ್ಧಾಂತಿಕ ವಿವರಣೆ: ${sec.content}. ಮೂಲ ಲೇಖನದಲ್ಲಿ ನಿಗದಿಪಡಿಸಲಾದ ಷರತ್ತುಗಳು ಸಿಸ್ಟಮ್ ಸ್ಥಿರತೆಯನ್ನು ಸಂಪೂರ್ಣವಾಗಿ ಖಾತರಿಪಡಿಸುತ್ತವೆ.`;
+      } else if (language === 'Hindi') {
+        breakdown = `सैद्धांतिक विश्लेषण: ${sec.content}. मुख्य सैद्धांतिक आधार यह सुनिश्चित करता है कि सभी परिभाषित शर्तें पूर्णतः संतुष्ट हों, जिससे प्रणाली की स्थिरता बनी रहे।`;
+      }
 
-    let breakdown = `Formal academic derivation: ${sec.content}. The key theoretical premise requires that all conditions are strictly satisfied, guaranteeing invariant consistency across system states.`;
-    if (language === 'Kannada') {
-      breakdown = `ಸೈದ್ಧಾಂತಿಕ ವಿವರಣೆ: ${sec.content}. ಮೂಲ ಲೇಖನದಲ್ಲಿ ನಿಗದಿಪಡಿಸಲಾದ ಷರತ್ತುಗಳು ಸಿಸ್ಟಮ್ ಸ್ಥಿರತೆಯನ್ನು ಸಂಪೂರ್ಣವಾಗಿ ಖಾತರಿಪಡಿಸುತ್ತವೆ.`;
-    } else if (language === 'Hindi') {
-      breakdown = `सैद्धांतिक विश्लेषण: ${sec.content}. मुख्य सैद्धांतिक आधार यह सुनिश्चित करता है कि सभी परिभाषित शर्तें पूर्णतः संतुष्ट हों, जिससे प्रणाली की स्थिरता बनी रहे।`;
-    }
+      const citation: SourceCitationRecord = {
+        id: `cite-notes-${documentId}-${sec.pageNumber || idx + 1}`,
+        documentId,
+        pageNumber: sec.pageNumber || 1,
+        slideNumber: sec.slideNumber,
+        sectionTitle: sec.title,
+        exactQuote: sec.content.slice(0, 140) + '...',
+        contextSnippet: sec.content.slice(0, 220)
+      };
+      allCitations.push(citation);
 
-    const citation: SourceCitationRecord = {
-      id: `cite-notes-${documentId}`,
-      documentId,
-      pageNumber: sec.pageNumber,
-      sectionTitle: sec.title,
-      exactQuote: sec.content.slice(0, 140) + '...',
-      contextSnippet: sec.content.slice(0, 220)
-    };
+      const sentences = sec.content.split(/[.?!]\s+/).filter(s => s.length > 20);
+
+      return {
+        heading: sec.title,
+        pageOrSlide: sec.pageNumber || sec.slideNumber || idx + 1,
+        definitions: sec.definitions || [],
+        explanations: sentences.slice(0, 3),
+        equations: sec.equations || [],
+        conditions: sec.conditions || [],
+        keyPoints: [
+          `Grounded in ${sec.slideNumber ? `Slide ${sec.slideNumber}` : `Page ${sec.pageNumber}`}: ${sec.title}`,
+          sec.conditions?.[0] ? `Boundary Condition: ${sec.conditions[0]}` : 'Mathematical consistency must be maintained.',
+          sec.equations?.[0] ? `Key Equation: ${sec.equations[0].latex}` : 'Empirical and analytical validation required.'
+        ],
+        sourceCitation: citation
+      };
+    });
 
     return {
       formatType: 'notes',
       language,
       difficultyLevel: difficulty,
       content: {
-        title: sec.title,
-        rigorousBreakdown: breakdown,
-        equations: sec.equations || [],
-        conditions: sec.conditions || [],
-        citations: [citation]
+        title: docTitle,
+        overview: `Comprehensive academic study notes synthesized across ${sections.length} section(s).`,
+        sections: noteSections,
+        overallSummary: noteSections.map(s => s.keyPoints).flat().slice(0, 5).join(' ')
       },
-      sourceCitations: [citation]
+      sourceCitations: allCitations
     };
   }
 
@@ -359,7 +374,7 @@ export class AiGeneratorService {
     };
   }
 
-  // --- 5. Flashcards ---
+  // --- 5. Flashcards (Section 16.2: Questions, answers, source references, review status) ---
   private static generateFlashcards(
     documentId: string,
     sections: ExtractedSectionRecord[],
@@ -382,7 +397,8 @@ export class AiGeneratorService {
       const citation: SourceCitationRecord = {
         id: `fc-cite-${idx + 1}`,
         documentId,
-        pageNumber: sec.pageNumber,
+        pageNumber: sec.pageNumber || 1,
+        slideNumber: sec.slideNumber,
         sectionTitle: sec.title,
         exactQuote: back,
         contextSnippet: sec.content.slice(0, 200)
@@ -393,16 +409,53 @@ export class AiGeneratorService {
         id: `fc-${documentId}-${idx + 1}`,
         front,
         back,
+        pageOrSlide: sec.pageNumber || sec.slideNumber || idx + 1,
+        sectionTitle: sec.title,
         category: sec.equations && sec.equations.length > 0 ? 'equation' : 'definition',
+        reviewStatus: 'new',
         masteryLevel: 0,
         difficulty,
         sourceCitation: citation,
+        explanation: `Sourced from Page ${sec.pageNumber || 1}: ${sec.title}`,
         practiceOptions: [
           { text: back, isCorrect: true, explanation: 'Directly stated in original source text.' },
           { text: 'Contradicts the invariant parameter bounds.', isCorrect: false, explanation: 'False claim.' },
           { text: 'Legacy approximation without rigorous verification.', isCorrect: false, explanation: 'Inaccurate.' }
         ]
       });
+
+      // If section has equations, add a dedicated equation card
+      if (sec.equations && sec.equations.length > 0) {
+        const eq = sec.equations[0];
+        const eqCitation: SourceCitationRecord = {
+          id: `fc-cite-eq-${idx + 1}`,
+          documentId,
+          pageNumber: sec.pageNumber || 1,
+          slideNumber: sec.slideNumber,
+          sectionTitle: sec.title,
+          exactQuote: eq.latex,
+          contextSnippet: sec.content.slice(0, 200)
+        };
+        citations.push(eqCitation);
+
+        flashcards.push({
+          id: `fc-${documentId}-eq-${idx + 1}`,
+          front: `State the mathematical formulation for ${eq.label || sec.title}:`,
+          back: `${eq.latex} — ${eq.meaning}`,
+          pageOrSlide: sec.pageNumber || sec.slideNumber || idx + 1,
+          sectionTitle: sec.title,
+          category: 'equation',
+          reviewStatus: 'new',
+          masteryLevel: 0,
+          difficulty,
+          sourceCitation: eqCitation,
+          explanation: `Equation verified from Page ${sec.pageNumber || 1}.`,
+          practiceOptions: [
+            { text: eq.latex, isCorrect: true, explanation: 'Verified equation.' },
+            { text: 'Missing normalization constant', isCorrect: false, explanation: 'Incorrect formula.' }
+          ]
+        });
+      }
     });
 
     return {
