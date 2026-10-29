@@ -5,11 +5,11 @@ import { AuthService } from '../services/authService';
 export class AuthController {
   static register(req: AuthenticatedRequest, res: Response) {
     try {
-      const { name, email, password, role } = req.body;
+      const { name, email, password, role, lecturerInviteKey } = req.body;
       if (!email || !name) {
         return res.status(400).json({ error: 'Name and email are required.' });
       }
-      const result = AuthService.register(name, email, password, role);
+      const result = AuthService.register(name, email, password, role, lecturerInviteKey);
       res.status(201).json(result);
     } catch (e: any) {
       res.status(400).json({ error: e.message });

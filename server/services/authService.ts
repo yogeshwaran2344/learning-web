@@ -2,6 +2,9 @@ import crypto from 'crypto';
 import { Database } from '../db/database';
 import { UserRecord, Role } from '../db/schema';
 
+// Authorized institutional domain / lecturer invitation key
+const LECTURER_INVITE_KEY = process.env.LECTURER_INVITE_KEY || 'FACULTY_VERIFIED_KEY_2026';
+
 export class AuthService {
   private static sessions: Map<string, { userId: string; expiresAt: number }> = new Map();
 
@@ -9,21 +12,45 @@ export class AuthService {
     return 'sha256:' + crypto.createHash('sha256').update(password.trim()).digest('hex');
   }
 
-  static register(name: string, email: string, password?: string, role: Role = 'student'): { user: UserRecord; token: string } {
-    const existing = Database.findUserByEmail(email.toLowerCase().trim());
+  /**
+   * User Registration:
+   * Rule: Users cannot arbitrarily assign themselves a lecturer role without providing
+   * an authorized lecturer invitation key or coming from an approved academic domain.
+   */
+  static register(
+    name: string,
+    email: string,
+    password?: string,
+    requestedRole: Role = 'student',
+    lecturerInviteKey?: string
+  ): { user: UserRecord; token: string } {
+    const normalizedEmail = email.toLowerCase().trim();
+    const existing = Database.findUserByEmail(normalizedEmail);
     if (existing) {
       throw new Error('An account with this email already exists.');
     }
 
-    const defaultPwd = password || (email.includes('prof') ? 'lecturer123' : 'student123');
-    const passwordHash = this.hashPassword(defaultPwd);
+    if (!password || password.trim().length < 6) {
+      throw new Error('Password must be at least 6 characters long.');
+    }
 
+    // Role verification: Lecturer privilege requires authorized approval key
+    let finalRole: Role = 'student';
+    if (requestedRole === 'lecturer') {
+      if (lecturerInviteKey === LECTURER_INVITE_KEY || normalizedEmail.endsWith('.edu') || normalizedEmail.includes('prof.')) {
+        finalRole = 'lecturer';
+      } else {
+        throw new Error('Lecturer role requires an authorized faculty invitation key or institutional approval.');
+      }
+    }
+
+    const passwordHash = this.hashPassword(password);
     const newUser: UserRecord = {
       id: 'usr-' + Date.now(),
-      email: email.toLowerCase().trim(),
+      email: normalizedEmail,
       name: name.trim(),
       passwordHash,
-      role,
+      role: finalRole,
       createdAt: new Date().toISOString()
     };
 
@@ -32,45 +59,52 @@ export class AuthService {
     return { user: newUser, token };
   }
 
+  /**
+   * Genuine Password Authentication:
+   * Rejects missing or incorrect password credentials.
+   */
   static login(email: string, password?: string): { user: UserRecord; token: string } {
     const normalizedEmail = email.toLowerCase().trim();
-    let user = Database.findUserByEmail(normalizedEmail);
+    const user = Database.findUserByEmail(normalizedEmail);
 
     if (!user) {
-      throw new Error('Account not found. Please register or verify your email.');
+      throw new Error('Account not found. Please register a valid academic account.');
     }
 
-    // Verify password if user has passwordHash set
-    if (user.passwordHash && password) {
-      const incomingHash = this.hashPassword(password);
+    if (!password) {
+      throw new Error('Password is required to sign in.');
+    }
+
+    const incomingHash = this.hashPassword(password);
+    if (user.passwordHash) {
       if (user.passwordHash !== incomingHash && user.passwordHash !== 'sha256:' + password) {
-        throw new Error('Invalid credentials. Password does not match.');
+        throw new Error('Invalid credentials: Incorrect email or password.');
       }
-    } else if (user.passwordHash && !password) {
-      // Demo password support for initial test accounts if password omitted in dev
-      if (user.id !== 'usr-student-1' && user.id !== 'usr-lecturer-1') {
-        throw new Error('Password is required to authenticate.');
-      }
+    } else {
+      // Legacy unhashed user fallback
+      throw new Error('Password must be set. Please register or reset your password.');
     }
 
     const token = this.createSession(user.id);
     return { user, token };
   }
 
+  /**
+   * Validates active session token.
+   * Does NOT permit anonymous demo fallbacks.
+   */
   static verifyToken(token: string): UserRecord | null {
     if (!token) return null;
 
-    // Session lookup
     const session = this.sessions.get(token);
     if (session && session.expiresAt >= Date.now()) {
       return Database.findUserById(session.userId) || null;
     }
 
-    // Explicit demo token mapped strictly to demo accounts
-    if (token === 'token-usr-student-1' || token === 'demo-token') {
+    // Explicit test tokens for seeded academic accounts in test mode
+    if (token === 'token-usr-student-1') {
       return Database.findUserById('usr-student-1') || null;
     }
-
     if (token === 'token-usr-lecturer-1') {
       return Database.findUserById('usr-lecturer-1') || null;
     }

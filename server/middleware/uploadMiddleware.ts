@@ -21,11 +21,17 @@ const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCa
   const allowedExtensions = ['.pdf', '.pptx', '.ppt', '.png', '.jpg', '.jpeg', '.txt', '.md', '.tex'];
   const ext = path.extname(file.originalname).toLowerCase();
 
-  if (allowedExtensions.includes(ext)) {
-    cb(null, true);
-  } else {
-    cb(new Error(`Unsupported file format: ${ext}. Only PDFs, PPT/PPTX presentations, and scanned note images are supported.`));
+  // 1. Verify extension
+  if (!allowedExtensions.includes(ext)) {
+    return cb(new Error(`Unsupported file format: ${ext}. Only PDFs, PPT/PPTX presentations, and scanned note images are supported.`));
   }
+
+  // 2. Validate MIME type consistency
+  if (ext === '.pdf' && file.mimetype && !file.mimetype.includes('pdf') && !file.mimetype.includes('octet-stream')) {
+    return cb(new Error('File content does not match .pdf format. Upload rejected.'));
+  }
+
+  cb(null, true);
 };
 
 export const uploadMiddleware = multer({
