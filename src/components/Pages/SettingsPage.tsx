@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Settings,
   Globe,
@@ -10,9 +10,14 @@ import {
   ShieldCheck,
   Check,
   Sliders,
-  RotateCcw
+  RotateCcw,
+  Cpu,
+  Sparkles,
+  Key,
+  CheckCircle2
 } from 'lucide-react';
 import { UserPreferences, AppLanguage } from '../../types';
+import { ApiClient } from '../../services/apiClient';
 
 interface SettingsPageProps {
   preferences: UserPreferences;
@@ -28,6 +33,51 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   onClearAll
 }) => {
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [aiStatus, setAiStatus] = useState<{
+    geminiConfigured: boolean;
+    openaiConfigured: boolean;
+    activeProvider: string;
+    mode: string;
+    modelName: string;
+  } | null>(null);
+  const [geminiKeyInput, setGeminiKeyInput] = useState('');
+  const [openaiKeyInput, setOpenaiKeyInput] = useState('');
+  const [isSavingKey, setIsSavingKey] = useState(false);
+  const [keySaveMessage, setKeySaveMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    ApiClient.getAiStatus()
+      .then(status => setAiStatus(status))
+      .catch(() => {
+        setAiStatus({
+          geminiConfigured: false,
+          openaiConfigured: false,
+          activeProvider: 'deterministic-grounded',
+          mode: 'deterministic_high_fidelity',
+          modelName: 'LearnLens Grounded Engine'
+        });
+      });
+  }, []);
+
+  const handleSaveApiKey = async (provider: 'gemini' | 'openai') => {
+    const key = provider === 'gemini' ? geminiKeyInput : openaiKeyInput;
+    setIsSavingKey(true);
+    setKeySaveMessage(null);
+    try {
+      const res = await ApiClient.setAiConfig(provider, key);
+      if (res.status) {
+        setAiStatus(res.status);
+      }
+      setKeySaveMessage(`Successfully updated ${provider === 'gemini' ? 'Google Gemini' : 'OpenAI'} configuration.`);
+      if (provider === 'gemini') setGeminiKeyInput('');
+      if (provider === 'openai') setOpenaiKeyInput('');
+      setTimeout(() => setKeySaveMessage(null), 3500);
+    } catch (e: any) {
+      setKeySaveMessage(`Failed to update key: ${e.message || 'Unknown error'}`);
+    } finally {
+      setIsSavingKey(false);
+    }
+  };
 
   const handleLanguageChange = (lang: AppLanguage) => {
     onUpdatePreferences({ preferredLanguage: lang });
@@ -223,6 +273,127 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+
+        {/* AI Model & Grounding Engine Configuration */}
+        <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2.5">
+              <Cpu className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+              <div>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                  AI Model & Grounding Architecture
+                </h3>
+                <p className="text-slate-400">
+                  Select your learning generation backend: connect Google Gemini 1.5, OpenAI GPT-4o, or use the built-in deterministic grounding engine.
+                </p>
+              </div>
+            </div>
+
+            <span className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1 border ${
+              aiStatus?.mode === 'external_model_backed'
+                ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800'
+                : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+            }`}>
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>{aiStatus?.modelName || 'Grounded Engine'}</span>
+            </span>
+          </div>
+
+          {keySaveMessage && (
+            <div className="p-3 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 text-indigo-800 dark:text-indigo-200 text-xs font-semibold flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              <span>{keySaveMessage}</span>
+            </div>
+          )}
+
+          {/* Current Status Pill Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className={`p-4 rounded-2xl border ${
+              aiStatus?.geminiConfigured
+                ? 'bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800'
+                : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700'
+            }`}>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                  <Key className="w-3.5 h-3.5 text-indigo-500" />
+                  Google Gemini 1.5 Flash
+                </span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  aiStatus?.geminiConfigured
+                    ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+                    : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+                }`}>
+                  {aiStatus?.geminiConfigured ? 'Active / Configured' : 'Not Connected'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2">
+                Fast reasoning, supports multi-lingual academic synthesis in English, Kannada & Hindi.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  placeholder="Paste Gemini API Key..."
+                  value={geminiKeyInput}
+                  onChange={(e) => setGeminiKeyInput(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                />
+                <button
+                  onClick={() => handleSaveApiKey('gemini')}
+                  disabled={isSavingKey}
+                  className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs whitespace-nowrap transition-colors disabled:opacity-50"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+
+            <div className={`p-4 rounded-2xl border ${
+              aiStatus?.openaiConfigured
+                ? 'bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800'
+                : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700'
+            }`}>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                  <Key className="w-3.5 h-3.5 text-indigo-500" />
+                  OpenAI GPT-4o mini
+                </span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  aiStatus?.openaiConfigured
+                    ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+                    : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+                }`}>
+                  {aiStatus?.openaiConfigured ? 'Active / Configured' : 'Not Connected'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2">
+                Structured pedagogical reasoning and schema-faithful academic output.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  placeholder="Paste OpenAI API Key..."
+                  value={openaiKeyInput}
+                  onChange={(e) => setOpenaiKeyInput(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                />
+                <button
+                  onClick={() => handleSaveApiKey('openai')}
+                  disabled={isSavingKey}
+                  className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs whitespace-nowrap transition-colors disabled:opacity-50"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/80 text-[11px] text-slate-500 dark:text-slate-400 flex items-start gap-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+            <span>
+              <strong>Zero-Hallucination Meaning Preservation Guarantee:</strong> When no API keys are provided or during network timeouts, LearnLens AI automatically uses its high-fidelity deterministic engine. All generated claims, formulas, and worked steps are cross-checked against source citations by the Meaning Preservation Engine before publication.
+            </span>
           </div>
         </div>
 

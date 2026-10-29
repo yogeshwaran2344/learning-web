@@ -12,18 +12,23 @@ import {
   Headphones,
   ExternalLink,
   ShieldCheck,
-  Bookmark
+  Bookmark,
+  Download,
+  FileText
 } from 'lucide-react';
 import { AudioLesson, SourceCitation } from '../../types';
 import { AudioService, AudioState } from '../../services/audioService';
+import { ApiClient } from '../../services/apiClient';
 
 interface AudioLessonViewProps {
   audioLesson: AudioLesson;
+  documentId?: string;
   onNavigateToCitation: (citation: SourceCitation) => void;
 }
 
 export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
   audioLesson,
+  documentId,
   onNavigateToCitation
 }) => {
   const sections = Array.isArray(audioLesson?.sections) ? audioLesson.sections : [];
@@ -120,10 +125,35 @@ export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
           </div>
         </div>
 
-        <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
-          <ShieldCheck className="w-3.5 h-3.5" />
-          Verified Narration Script
-        </span>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {documentId && (
+            <>
+              <a
+                href={ApiClient.getExportUrl(documentId, 'wav', 'audio')}
+                download
+                className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
+                title="Download 16-bit 44.1kHz PCM Audio (.wav)"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Download Audio (.wav)</span>
+              </a>
+              <a
+                href={ApiClient.getExportUrl(documentId, 'audio_script', 'audio')}
+                download
+                className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
+                title="Download Narration Script (.txt)"
+              >
+                <FileText className="w-3.5 h-3.5 text-blue-500" />
+                <span>Script (.txt)</span>
+              </a>
+            </>
+          )}
+
+          <span className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+            Verified Script
+          </span>
+        </div>
       </div>
 
       {/* Main Player Box */}

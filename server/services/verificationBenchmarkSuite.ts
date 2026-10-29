@@ -116,7 +116,7 @@ export class VerificationBenchmarkSuite {
       }
     ];
 
-    // Compute metrics
+    // Compute metrics dynamically from actual test executions
     const total = testCases.length;
     const errorsToCatch = testCases.filter(t => t.expectedFlagged);
     const caughtErrors = errorsToCatch.filter(t => t.systemFlagged);
@@ -126,9 +126,13 @@ export class VerificationBenchmarkSuite {
     const falseAlarms = cleanCases.filter(t => t.systemFlagged);
     const falseAlarmRate = Number(((falseAlarms.length / Math.max(1, cleanCases.length)) * 100).toFixed(1));
 
-    const sourceLinkAccuracy = 99.1;
-    const equationDetectionPerformance = 100.0;
-    const coverage = 98.4;
+    const correctVerdicts = testCases.filter(t => t.isCorrectVerdict).length;
+    const sourceLinkAccuracy = Number(((correctVerdicts / Math.max(1, total)) * 100).toFixed(1));
+
+    const eqCases = testCases.filter(t => t.category.includes('equation'));
+    const equationDetectionPerformance = Number(((eqCases.filter(t => t.isCorrectVerdict).length / Math.max(1, eqCases.length)) * 100).toFixed(1));
+
+    const coverage = Number((((caughtErrors.length + (cleanCases.length - falseAlarms.length)) / Math.max(1, total)) * 100).toFixed(1));
 
     // Step 6 Completion Checklist (0/7)
     const checklist = [

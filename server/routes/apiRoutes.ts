@@ -13,6 +13,7 @@ import { ExportController } from '../controllers/exportController';
 import { FeedbackController } from '../controllers/feedbackController';
 import { IntegrationTestSuite } from '../services/integrationTestSuite';
 import { SystemTestTracker } from '../services/systemTestTracker';
+import { AiModelService } from '../services/aiModelService';
 
 export const apiRouter = Router();
 
@@ -89,4 +90,18 @@ apiRouter.get('/system/integration-test', (req, res) => {
 apiRouter.get('/system/test-tracker', (req, res) => {
   const result = SystemTestTracker.runFullTracker();
   res.json({ testTracker: result });
+});
+
+// 11. AI Model Provider Status & Dynamic API Key Configuration
+apiRouter.get('/system/ai-status', (req, res) => {
+  res.json({ status: AiModelService.getProviderStatus() });
+});
+
+apiRouter.post('/system/ai-config', authMiddleware, (req, res) => {
+  const { provider, apiKey } = req.body;
+  if (!provider || (provider !== 'gemini' && provider !== 'openai')) {
+    return res.status(400).json({ error: 'Provider must be "gemini" or "openai"' });
+  }
+  AiModelService.setCustomApiKey(provider, apiKey || '');
+  res.json({ success: true, status: AiModelService.getProviderStatus() });
 });

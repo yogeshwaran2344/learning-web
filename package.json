@@ -9,7 +9,8 @@
     "dev:all": "concurrently -n \"API,VITE\" -c \"cyan,magenta\" \"npm run server\" \"npm run dev\"",
     "start": "tsx server/index.ts",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "tsx server/runSystemTracker.ts && tsx server/runRoadmapAudit.ts"
   },
   "dependencies": {
     "adm-zip": "^0.6.1",

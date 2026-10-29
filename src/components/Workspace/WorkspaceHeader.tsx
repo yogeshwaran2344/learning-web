@@ -71,10 +71,16 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
               <h1 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white truncate max-w-md">
                 {document.title}
               </h1>
-              <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
-                <ShieldCheck className="w-3 h-3" />
-                {document.meaningPreservation.overallFidelityScore}% Verified
-              </span>
+              {document.meaningPreservation && document.meaningPreservation.overallFidelityScore > 0 ? (
+                <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                  <ShieldCheck className="w-3 h-3" />
+                  {document.meaningPreservation.overallFidelityScore}% Verified
+                </span>
+              ) : (
+                <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-300 dark:border-slate-700">
+                  Not Verified
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-sm">
               {document.author} • {document.category}

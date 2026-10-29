@@ -37,6 +37,24 @@ export class AiModelService {
     return Boolean(this.geminiApiKey || this.openaiApiKey);
   }
 
+  static getProviderStatus() {
+    return {
+      geminiConfigured: Boolean(this.geminiApiKey),
+      openaiConfigured: Boolean(this.openaiApiKey),
+      activeProvider: this.geminiApiKey ? 'gemini' : (this.openaiApiKey ? 'openai' : 'deterministic-grounded'),
+      mode: this.hasExternalAiProvider() ? 'external_model_backed' : 'deterministic_high_fidelity',
+      modelName: this.geminiApiKey ? 'Gemini 1.5 Flash' : (this.openaiApiKey ? 'GPT-4o mini' : 'LearnLens Grounded Engine')
+    };
+  }
+
+  static setCustomApiKey(provider: 'gemini' | 'openai', key: string) {
+    if (provider === 'gemini') {
+      this.geminiApiKey = key.trim();
+    } else if (provider === 'openai') {
+      this.openaiApiKey = key.trim();
+    }
+  }
+
   static getSystemPrompt(language: AppLanguage, formatType: string): string {
     return `You are an expert Academic Tutor and Meaning Preservation Engine for LearnLens AI.
 Target Language: ${language}

@@ -243,13 +243,21 @@ export const MyDocumentsPage: React.FC<MyDocumentsPageProps> = ({
                 <div className="flex items-center space-x-3 self-end md:self-center shrink-0">
                   {/* Meaning Fidelity score */}
                   <div className="text-right hidden sm:block">
-                    <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center justify-end gap-1">
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      <span>{doc.meaningPreservation?.overallFidelityScore ?? 96}% Fidelity</span>
-                    </div>
-                    <div className="text-[10px] text-slate-400">
-                      {hasWarning ? 'Review Needed' : 'Formally Verified'}
-                    </div>
+                    {doc.meaningPreservation && doc.meaningPreservation.overallFidelityScore > 0 ? (
+                      <>
+                        <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center justify-end gap-1">
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          <span>{doc.meaningPreservation.overallFidelityScore}% Fidelity</span>
+                        </div>
+                        <div className="text-[10px] text-slate-400">
+                          {hasWarning ? 'Review Needed' : 'Formally Verified'}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-[11px] font-semibold text-slate-400">
+                        Not Verified
+                      </div>
+                    )}
                   </div>
 
                   {/* Actions buttons */}

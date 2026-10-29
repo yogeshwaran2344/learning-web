@@ -431,10 +431,16 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                     <span className="px-2 py-0.5 rounded-md font-bold uppercase tracking-wider text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                       {doc.fileType}
                     </span>
-                    <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      {doc.meaningPreservation?.overallFidelityScore ?? 96}%
-                    </span>
+                    {doc.meaningPreservation && doc.meaningPreservation.overallFidelityScore > 0 ? (
+                      <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        {doc.meaningPreservation.overallFidelityScore}%
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-slate-400">
+                        Not Verified
+                      </span>
+                    )}
                   </div>
 
                   <h3 className="font-bold text-sm text-slate-900 dark:text-white line-clamp-2">

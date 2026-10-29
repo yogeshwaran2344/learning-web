@@ -52,11 +52,16 @@ export class StorageService {
           }],
       extractionWarnings: Array.isArray(doc.extractionWarnings) ? doc.extractionWarnings : [],
       meaningPreservation: doc.meaningPreservation || {
-        overallFidelityScore: 96,
-        equationAccuracyScore: 98,
-        unsupportedClaimsCount: 0,
-        omittedKeyConceptsCount: 0,
-        mathValidationStatus: 'verified',
+        overallFidelityScore: 0,
+        factRetentionRate: 0,
+        equationIntegrityRate: 0,
+        conditionAccuracyRate: 0,
+        terminologyConsistencyRate: 0,
+        unsupportedClaimsDetected: 0,
+        alteredEquationsDetected: 0,
+        missingConditionsDetected: 0,
+        lastAuditDate: '',
+        verifiedByEngine: false,
         factChecks: []
       },
       conceptMap: doc.conceptMap || {

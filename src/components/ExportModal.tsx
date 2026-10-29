@@ -30,7 +30,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   currentTab = 'notes',
   currentLanguage = 'English'
 }) => {
-  const [exportFormat, setExportFormat] = useState<'pdf' | 'pptx' | 'csv' | 'markdown' | 'audio' | 'json'>('pdf');
+  const [exportFormat, setExportFormat] = useState<'pdf' | 'pptx' | 'csv' | 'markdown' | 'audio' | 'wav' | 'json'>('pdf');
   const [exportType, setExportType] = useState<string>(
     currentTab === 'quiz' ? 'quiz' : currentTab === 'flashcards' ? 'flashcards' : currentTab === 'audio' ? 'audio' : 'notes'
   );
@@ -44,11 +44,12 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     setIsExporting(true);
     const url = ApiClient.getExportUrl(document.id, exportFormat, exportType, selectedLanguage);
 
-    // Open download in a new window or iframe
+    // Open download directly
     const link = window.document.createElement('a');
     link.href = url;
     link.target = '_blank';
-    link.setAttribute('download', `${document.title}_${exportFormat}.${exportFormat === 'audio' ? 'txt' : exportFormat === 'pdf' || exportFormat === 'pptx' ? 'html' : exportFormat}`);
+    const ext = exportFormat === 'audio' ? 'txt' : exportFormat === 'wav' ? 'wav' : exportFormat;
+    link.setAttribute('download', `${document.title}_${exportFormat}.${ext}`);
     window.document.body.appendChild(link);
     link.click();
     window.document.body.removeChild(link);
@@ -108,7 +109,9 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                 <span className="font-bold text-slate-900 dark:text-white line-clamp-1">{document.title}</span>
                 <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1 text-[11px]">
                   <ShieldCheck className="w-3.5 h-3.5" />
-                  {document.meaningPreservation?.overallFidelityScore ?? 96}% Grounded
+                  {document.meaningPreservation && document.meaningPreservation.overallFidelityScore > 0
+                    ? `${document.meaningPreservation.overallFidelityScore}% Grounded`
+                    : 'Not Verified'}
                 </span>
               </div>
               <p className="text-[11px] text-slate-500">

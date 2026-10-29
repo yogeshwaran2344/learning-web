@@ -351,6 +351,25 @@ export class ApiClient {
     return data.progress;
   }
 
+  // AI Model Status & Configuration
+  static async getAiStatus(): Promise<{
+    geminiConfigured: boolean;
+    openaiConfigured: boolean;
+    activeProvider: string;
+    mode: string;
+    modelName: string;
+  }> {
+    const data = await this.request<{ status: any }>('/system/ai-status');
+    return data.status;
+  }
+
+  static async setAiConfig(provider: 'gemini' | 'openai', apiKey: string): Promise<any> {
+    return this.request('/system/ai-config', {
+      method: 'POST',
+      body: JSON.stringify({ provider, apiKey })
+    });
+  }
+
   // Document Export (Step 38)
   static getExportUrl(docId: string, format: string = 'pdf', type: string = 'notes', language: string = 'English'): string {
     const token = this.getToken();

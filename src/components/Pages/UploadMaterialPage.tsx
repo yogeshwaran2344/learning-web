@@ -157,89 +157,33 @@ Condition: Dimensions of x and F must match or be projected via shortcut matrix 
       const res = await ApiClient.uploadDocument(formData);
 
       setLifecycleState('verifying');
-      await new Promise(r => setTimeout(r, 600));
+      await new Promise(r => setTimeout(r, 400));
 
-      const doc = res.document;
+      const backendDoc = res.document;
       const extraction = res.extraction;
       const isReviewNeeded = extraction?.qualityReport?.userStatus === 'needs_review' ||
         fileType === 'scanned_notes' ||
-        (doc.extractionWarnings && doc.extractionWarnings.length > 0);
+        (backendDoc.extractionWarnings && backendDoc.extractionWarnings.length > 0);
 
-      // Convert backend document record to full AcademicDocument with sections
-      const clientDoc: AcademicDocument = {
-        ...doc,
-        sections: extraction?.sections || [],
-        conceptMap: { nodes: [], edges: [] },
-        explanations: [],
-        flashcards: [],
-        audioLesson: { id: `audio-${doc.id}`, title: doc.title, totalDurationSeconds: 120, sections: [] },
-        meaningPreservation: res.verification || {
-          overallFidelityScore: isReviewNeeded ? 92.5 : 99.1,
-          factRetentionRate: 98,
-          equationIntegrityRate: 100,
-          conditionAccuracyRate: isReviewNeeded ? 88.0 : 98.0,
-          terminologyConsistencyRate: 99.0,
-          unsupportedClaimsDetected: isReviewNeeded ? 1 : 0,
-          alteredEquationsDetected: 0,
-          missingConditionsDetected: 0,
-          lastAuditDate: new Date().toISOString(),
-          verifiedByEngine: !isReviewNeeded,
-          factChecks: []
-        }
-      };
-
-      // Synthesize client-side format caches if needed
-      const synthesized = DocumentProcessor.processText(
-        doc.title,
-        rawText,
-        doc.author,
-        doc.category
-      );
-      clientDoc.conceptMap = synthesized.conceptMap;
-      clientDoc.explanations = synthesized.explanations;
-      clientDoc.flashcards = synthesized.flashcards;
-      clientDoc.audioLesson = synthesized.audioLesson;
-
-      setCreatedBackendDoc(clientDoc);
+      // Use the genuine backend document and verified engine report
+      setCreatedBackendDoc(backendDoc);
 
       if (isReviewNeeded) {
         const warnings = extraction?.qualityReport?.diagnostics?.map((d: any) => d.message) ||
-          doc.extractionWarnings || [
-            'Page 3: Ink smudging detected across boundary conditions. Confidence: 84%.',
+          backendDoc.extractionWarnings || [
             'Equations flagged for manual lecturer/student verification before study reliance.'
           ];
         setDiagnosticWarnings(warnings);
         setLifecycleState('needs_review');
       } else {
         setLifecycleState('completed');
-        await new Promise(r => setTimeout(r, 400));
-        onDocumentCreated(clientDoc);
+        await new Promise(r => setTimeout(r, 300));
+        onDocumentCreated(backendDoc);
       }
     } catch (e: any) {
-      console.warn('Real upload fallback to client processor:', e);
-      // Fallback client processor to avoid blocking student if offline
-      try {
-        const fallbackDoc = DocumentProcessor.processText(
-          docTitle || 'Uploaded Academic Document',
-          rawText,
-          author || 'Academic Researcher',
-          category
-        );
-        fallbackDoc.fileType = fileType;
-        if (fileType === 'scanned_notes') {
-          fallbackDoc.processingStatus = 'warning';
-          fallbackDoc.extractionWarnings = ['Low optical resolution on scanned handwriting.'];
-          setDiagnosticWarnings(fallbackDoc.extractionWarnings);
-          setCreatedBackendDoc(fallbackDoc);
-          setLifecycleState('needs_review');
-        } else {
-          setLifecycleState('completed');
-          onDocumentCreated(fallbackDoc);
-        }
-      } catch (err: any) {
-        setErrorMessage(e.message || 'Processing error occurred.');
-        setLifecycleState('failed');
-      }
+      console.error('[UploadMaterialPage] Real upload error:', e);
+      setLifecycleState('failed');
+      setErrorMessage(e.message || 'Upload failed: The server could not process the document. Please check the file format and try again.');
     }
   };
 

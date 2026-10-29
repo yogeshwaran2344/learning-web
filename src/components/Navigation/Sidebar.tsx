@@ -144,7 +144,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1">
               <span>{activeDocument.fileType.toUpperCase()}</span>
               <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
-                {activeDocument.meaningPreservation.overallFidelityScore}% Verified
+                {activeDocument.meaningPreservation && activeDocument.meaningPreservation.overallFidelityScore > 0
+                  ? `${activeDocument.meaningPreservation.overallFidelityScore}% Verified`
+                  : 'Not Verified'}
               </span>
             </div>
           </div>

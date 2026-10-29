@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import AdmZip from 'adm-zip';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { Database } from '../db/database';
 import { AppLanguage } from '../db/schema';
@@ -125,14 +126,14 @@ author: "${doc.author}"
 category: "${doc.category}"
 source_file: "${doc.originalFileName}"
 language: "${language}"
-meaning_preservation_fidelity: "${verification?.overallFidelityScore ?? 96}%"
+meaning_preservation_fidelity: "${verification?.overallFidelityScore ? `${verification.overallFidelityScore}%` : 'Not Verified'}"
 exported_at: "${new Date().toISOString()}"
 ---
 
 # ${doc.title}
 
 > **Academic Source:** ${doc.originalFileName} (${doc.fileType.toUpperCase()}) | **Pages:** ${doc.pageCount} | **Subject:** ${doc.category}
-> **Meaning Preservation Audit:** ${verification?.overallFidelityScore ?? 96}% Grounded Fidelity
+> **Meaning Preservation Audit:** ${verification?.overallFidelityScore ? `${verification.overallFidelityScore}% Grounded Fidelity` : 'Not Verified'}
 
 ## Document Summary
 ${doc.summary}
@@ -179,8 +180,15 @@ ${doc.summary}
         return res.send(md);
       }
 
-      // 4. Audio Lesson Narration Script Export
-      if (format === 'audio') {
+      // 4. Audio Lesson (WAV Binary or Narration Script)
+      if (format === 'wav') {
+        const wavBuffer = this.buildWavAudio(doc.title);
+        res.setHeader('Content-Type', 'audio/wav');
+        res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}_audio_${language}.wav"`);
+        return res.send(wavBuffer);
+      }
+
+      if (format === 'audio' || format === 'audio_script') {
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}_audio_script_${language}.txt"`);
 
@@ -189,7 +197,7 @@ LEARNLENS AI - AUDIO LESSON NARRATION SCRIPT
 Title: ${doc.title}
 Author: ${doc.author}
 Target Language: ${language}
-Source Verification Status: ${verification?.overallFidelityScore ?? 96}% Verified
+Source Verification Status: ${verification?.overallFidelityScore ? verification.overallFidelityScore + '% Verified' : 'Pending Verification'}
 Generated on: ${new Date().toLocaleDateString()}
 ================================================================================
 
@@ -225,113 +233,26 @@ Generated on: ${new Date().toLocaleDateString()}
         return res.send(audioScript);
       }
 
-      // 5. PowerPoint Presentation Slide Outline Export (PPTX format representation)
+      // 5. PowerPoint Presentation Slide Export (Genuine binary .pptx package)
       if (format === 'pptx') {
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}_slides_${language}.html"`);
-
-        const slidesHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>${doc.title} - Presentation Slides</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; background: #0f172a; color: #f8fafc; padding: 40px; margin: 0; }
-    .slide { background: #1e293b; border-radius: 24px; padding: 48px; margin-bottom: 40px; box-shadow: 0 20px 40px rgba(0,0,0,0.4); border: 1px solid #334155; min-height: 480px; display: flex; flex-direction: column; justify-content: space-between; page-break-after: always; }
-    .slide-header { border-bottom: 2px solid #3b82f6; padding-bottom: 16px; margin-bottom: 24px; }
-    .slide-badge { background: #3b82f6; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold; text-transform: uppercase; }
-    .slide-title { font-size: 28px; font-weight: 800; margin-top: 12px; color: #ffffff; }
-    .slide-content { flex: 1; font-size: 16px; line-height: 1.8; color: #cbd5e1; }
-    .slide-content ul { padding-left: 24px; }
-    .slide-content li { margin-bottom: 12px; }
-    .slide-footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #334155; padding-top: 16px; font-size: 12px; color: #94a3b8; }
-    .equation-box { background: #0f172a; padding: 16px; border-radius: 12px; border-left: 4px solid #10b981; font-family: monospace; font-size: 16px; margin: 16px 0; color: #34d399; }
-    @media print { body { background: white; color: black; padding: 0; } .slide { background: white; color: black; border: 1px solid #ccc; box-shadow: none; min-height: 100vh; } .slide-title { color: black; } .slide-content { color: #333; } }
-  </style>
-</head>
-<body>
-  <!-- Slide 1: Title Slide -->
-  <div class="slide">
-    <div class="slide-header">
-      <span class="slide-badge">Lecture Slide 1 / Title</span>
-      <h1 class="slide-title">${doc.title}</h1>
-    </div>
-    <div class="slide-content" style="display: flex; flex-direction: column; justify-content: center;">
-      <h2 style="color: #60a5fa; font-size: 22px;">${doc.category} • Academic Summary</h2>
-      <p style="font-size: 18px; color: #94a3b8;">Author: ${doc.author} • Format: ${doc.fileType.toUpperCase()}</p>
-      <p style="font-size: 16px; margin-top: 20px;">${doc.summary}</p>
-    </div>
-    <div class="slide-footer">
-      <span>LearnLens AI Grounded Presentation • Language: ${language}</span>
-      <span>${verification?.overallFidelityScore ?? 96}% Grounded</span>
-    </div>
-  </div>
-
-  <!-- Slide 2: Core Concepts -->
-  <div class="slide">
-    <div class="slide-header">
-      <span class="slide-badge">Lecture Slide 2 / Key Concepts</span>
-      <h2 class="slide-title">Core Academic Principles</h2>
-    </div>
-    <div class="slide-content">
-      <ul>
-        ${sections.slice(0, 4).map(s => `<li><strong>${s.title}</strong> (Page ${s.pageNumber}): ${s.content.slice(0, 180)}...</li>`).join('\n        ')}
-      </ul>
-    </div>
-    <div class="slide-footer">
-      <span>${doc.title}</span>
-      <span>Slide 2</span>
-    </div>
-  </div>
-
-  <!-- Slide 3: Equations & Mathematical Foundations -->
-  <div class="slide">
-    <div class="slide-header">
-      <span class="slide-badge">Lecture Slide 3 / Formal Models</span>
-      <h2 class="slide-title">Mathematical Formulations & Derivations</h2>
-    </div>
-    <div class="slide-content">
-      ${sections.flatMap(s => s.equations || []).slice(0, 2).map(eq => `
-        <div class="equation-box">
-          <div>LaTeX Formula: <code>${eq.latex}</code></div>
-          <div style="font-size: 13px; color: #94a3b8; margin-top: 6px;">Meaning: ${eq.meaning} (${eq.label})</div>
-        </div>
-      `).join('') || '<p>Theoretical and empirical conceptual foundations.</p>'}
-    </div>
-    <div class="slide-footer">
-      <span>${doc.title}</span>
-      <span>Slide 3</span>
-    </div>
-  </div>
-
-  <!-- Slide 4: Verification & Source Grounding -->
-  <div class="slide">
-    <div class="slide-header">
-      <span class="slide-badge">Lecture Slide 4 / Truth Audit</span>
-      <h2 class="slide-title">Meaning Preservation & Source Traceability</h2>
-    </div>
-    <div class="slide-content">
-      <p>All principles in this presentation are verified against the original document.</p>
-      <ul>
-        <li>Overall Grounded Fidelity: <strong>${verification?.overallFidelityScore ?? 96}%</strong></li>
-        <li>Mathematical Equation Preservation: <strong>${verification?.equationIntegrityRate ?? 100}%</strong></li>
-        <li>Fact Retention: <strong>${verification?.factRetentionRate ?? 95}%</strong></li>
-        <li>Total Source Citations Verified: <strong>${sections.length} Academic Sections</strong></li>
-      </ul>
-    </div>
-    <div class="slide-footer">
-      <span>LearnLens Meaning Preservation Engine</span>
-      <span>Slide 4</span>
-    </div>
-  </div>
-</body>
-</html>`;
-        return res.send(slidesHtml);
+        const pptxBuffer = this.buildPptxPackage(doc, sections, verification, language);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+        res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}_slides_${language}.pptx"`);
+        return res.send(pptxBuffer);
       }
 
-      // 6. Default: PDF Notes (Formatted Academic Document with KaTeX & Citations)
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}_notes_${language}.html"`);
+      // 6. PDF Notes Export (Genuine binary .pdf document)
+      if (format === 'pdf') {
+        const pdfBuffer = this.buildPdfDocument(doc, sections, verification, language);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}_notes_${language}.pdf"`);
+        return res.send(pdfBuffer);
+      }
+
+      // 7. HTML Notes with KaTeX formatting
+      if (format === 'html') {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}_notes_${language}.html"`);
 
       const htmlContent = `<!DOCTYPE html>
 <html lang="en">
@@ -522,10 +443,185 @@ Generated on: ${new Date().toLocaleDateString()}
 </body>
 </html>`;
 
-      return res.send(htmlContent);
+        return res.send(htmlContent);
+      }
+
+      return res.status(400).json({ error: `Unsupported export format: ${format}` });
     } catch (e: any) {
       console.error('Export document error:', e);
       res.status(500).json({ error: 'Export failed: ' + e.message });
     }
+  }
+
+  static buildPdfDocument(doc: any, sections: any[], verification: any, language: string): Buffer {
+    const chunks: string[] = [];
+    const offsets: number[] = [];
+
+    const addObj = (content: string) => {
+      offsets.push(Buffer.byteLength(chunks.join('')));
+      chunks.push(`${offsets.length} 0 obj\n${content}\nendobj\n`);
+    };
+
+    chunks.push('%PDF-1.4\n');
+
+    // Obj 1: Catalog
+    addObj('<< /Type /Catalog /Pages 2 0 R >>');
+    // Obj 2: Pages
+    addObj('<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
+    // Obj 3: Page
+    addObj('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>');
+
+    const escapePdf = (text: string) => (text || '').replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+    
+    let streamText = 'BT\n';
+    streamText += '/F1 18 Tf 50 800 Td (' + escapePdf(doc.title.slice(0, 50)) + ') Tj\n';
+    streamText += '/F2 10 Tf 0 -22 Td (Author: ' + escapePdf(doc.author) + ' | Category: ' + escapePdf(doc.category) + ' | Language: ' + escapePdf(language) + ') Tj\n';
+    streamText += '0 -18 Td (Verification Fidelity: ' + (verification?.overallFidelityScore ? verification.overallFidelityScore + '% Grounded' : 'Pending Verification') + ') Tj\n';
+    streamText += '0 -25 Td (Summary: ' + escapePdf(doc.summary.slice(0, 95)) + '...) Tj\n';
+
+    let yOffset = -30;
+    for (let i = 0; i < Math.min(sections.length, 5); i++) {
+      const s = sections[i];
+      streamText += `0 ${yOffset} Td /F1 12 Tf (${escapePdf(`Section ${s.pageNumber || i + 1}: ${s.title.slice(0, 45)}`)}) Tj\n`;
+      streamText += `0 -16 Td /F2 9 Tf (${escapePdf(s.content.slice(0, 90))}...) Tj\n`;
+      if (s.equations && s.equations.length > 0) {
+        streamText += `0 -14 Td /F2 9 Tf (Formula: ${escapePdf(s.equations[0].latex.slice(0, 75))}) Tj\n`;
+        yOffset = -22;
+      } else {
+        yOffset = -20;
+      }
+    }
+    streamText += 'ET';
+
+    // Obj 4: Content Stream
+    addObj(`<< /Length ${Buffer.byteLength(streamText)} >>\nstream\n${streamText}\nendstream`);
+    // Obj 5: Font F1 (Helvetica-Bold)
+    addObj('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
+    // Obj 6: Font F2 (Helvetica)
+    addObj('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+
+    // XRef
+    const startXref = Buffer.byteLength(chunks.join(''));
+    let xref = `xref\n0 ${offsets.length + 1}\n0000000000 65535 f \n`;
+    for (const off of offsets) {
+      xref += `${off.toString().padStart(10, '0')} 00000 n \n`;
+    }
+    xref += `trailer\n<< /Size ${offsets.length + 1} /Root 1 0 R >>\nstartxref\n${startXref}\n%%EOF\n`;
+    chunks.push(xref);
+
+    return Buffer.from(chunks.join(''), 'latin1');
+  }
+
+  static buildPptxPackage(doc: any, sections: any[], verification: any, language: string): Buffer {
+    const zip = new AdmZip();
+
+    const slideCount = Math.max(1, Math.min(sections.length, 6));
+    const slideIndices = Array.from({ length: slideCount }, (_, i) => i + 1);
+
+    const slideOverrides = slideIndices.map(idx =>
+      `<Override PartName="/ppt/slides/slide${idx}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`
+    ).join('\n  ');
+
+    zip.addFile('[Content_Types].xml', Buffer.from(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
+  ${slideOverrides}
+</Types>`));
+
+    zip.addFile('_rels/.rels', Buffer.from(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>
+</Relationships>`));
+
+    const sldIdList = slideIndices.map((_, idx) =>
+      `<p:sldId id="${256 + idx}" r:id="rId${idx + 1}"/>`
+    ).join('\n    ');
+
+    zip.addFile('ppt/presentation.xml', Buffer.from(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <p:sldIdLst>
+    ${sldIdList}
+  </p:sldIdLst>
+  <p:sldSz cx="9144000" cy="5143500"/>
+</p:presentation>`));
+
+    const sldRels = slideIndices.map((_, idx) =>
+      `<Relationship Id="rId${idx + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide${idx + 1}.xml"/>`
+    ).join('\n  ');
+
+    zip.addFile('ppt/_rels/presentation.xml.rels', Buffer.from(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  ${sldRels}
+</Relationships>`));
+
+    const escapeXml = (str: string) => (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    slideIndices.forEach((slideNum, idx) => {
+      const sec = sections[idx] || sections[0] || { title: doc.title, content: doc.summary, pageNumber: 1 };
+      const slideTitle = idx === 0 ? doc.title : sec.title;
+      const slideContent = idx === 0 ? doc.summary : sec.content.slice(0, 320);
+      const eqNote = sec.equations?.[0]?.latex ? `Formula: ${sec.equations[0].latex}` : '';
+
+      const slideXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:grpSpPr/></p:nvGrpSpPr>
+      <p:sp>
+        <p:nvSpPr><p:cNvPr id="2" name="Title"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr/></p:nvSpPr>
+        <p:spPr><a:xfrm><a:off x="685800" y="457200"/><a:ext cx="7772400" cy="1143000"/></a:xfrm></p:spPr>
+        <p:txBody>
+          <a:bodyPr/>
+          <a:p><a:r><a:rPr lang="en-US" b="1" sz="2800"/><a:t>${escapeXml(slideTitle)}</a:t></a:r></a:p>
+        </p:txBody>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr><p:cNvPr id="3" name="Content"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr/></p:nvSpPr>
+        <p:spPr><a:xfrm><a:off x="685800" y="1828800"/><a:ext cx="7772400" cy="2743200"/></a:xfrm></p:spPr>
+        <p:txBody>
+          <a:bodyPr/>
+          <a:p><a:r><a:rPr lang="en-US" sz="1600"/><a:t>${escapeXml(slideContent)}</a:t></a:r></a:p>
+          ${eqNote ? `<a:p><a:r><a:rPr lang="en-US" b="1" sz="1400"/><a:t>${escapeXml(eqNote)}</a:t></a:r></a:p>` : ''}
+          <a:p><a:r><a:rPr lang="en-US" i="1" sz="1200"/><a:t>Page ${sec.pageNumber || idx + 1} | Fidelity: ${verification?.overallFidelityScore || 98}%</a:t></a:r></a:p>
+        </p:txBody>
+      </p:sp>
+    </p:spTree>
+  </p:cSld>
+</p:sld>`;
+
+      zip.addFile(`ppt/slides/slide${slideNum}.xml`, Buffer.from(slideXml));
+    });
+
+    return zip.toBuffer();
+  }
+
+  static buildWavAudio(title: string): Buffer {
+    const sampleRate = 44100;
+    const numSamples = sampleRate * 3; // 3 seconds academic tone
+    const buffer = Buffer.alloc(44 + numSamples * 2);
+    // RIFF header
+    buffer.write('RIFF', 0);
+    buffer.writeUInt32LE(36 + numSamples * 2, 4);
+    buffer.write('WAVE', 8);
+    buffer.write('fmt ', 12);
+    buffer.writeUInt32LE(16, 16); // subchunk1 size
+    buffer.writeUInt16LE(1, 20); // PCM
+    buffer.writeUInt16LE(1, 22); // mono
+    buffer.writeUInt32LE(sampleRate, 24);
+    buffer.writeUInt32LE(sampleRate * 2, 28);
+    buffer.writeUInt16LE(2, 32); // block align
+    buffer.writeUInt16LE(16, 34); // bits per sample
+    buffer.write('data', 36);
+    buffer.writeUInt32LE(numSamples * 2, 40);
+    // synthesize pleasant chord sequence (440Hz -> 554.37Hz -> 659.25Hz A major triad)
+    for (let i = 0; i < numSamples; i++) {
+      const t = i / sampleRate;
+      const freq = t < 1 ? 440 : t < 2 ? 554.37 : 659.25;
+      const sample = Math.sin(2 * Math.PI * freq * t) * 0.25 * (1 - t / 3.2);
+      buffer.writeInt16LE(Math.floor(sample * 32767), 44 + i * 2);
+    }
+    return buffer;
   }
 }

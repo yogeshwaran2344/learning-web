@@ -138,7 +138,9 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({
                 <div>
                   <span className="text-slate-400">Fidelity: </span>
                   <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                    {activeDocument.meaningPreservation.overallFidelityScore}%
+                    {activeDocument.meaningPreservation && activeDocument.meaningPreservation.overallFidelityScore > 0
+                      ? `${activeDocument.meaningPreservation.overallFidelityScore}%`
+                      : 'Not Verified'}
                   </span>
                 </div>
                 <div>

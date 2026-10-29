@@ -39,9 +39,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
     (acc, d) => acc + (d.flashcards?.filter(f => f.masteryLevel === 2).length || 0),
     0
   );
-  const averageFidelity = documents.length > 0
-    ? (documents.reduce((acc, d) => acc + (d.meaningPreservation?.overallFidelityScore ?? 98), 0) / documents.length).toFixed(1)
-    : '99.0';
+  const verifiedDocs = documents.filter(d => d.meaningPreservation && d.meaningPreservation.overallFidelityScore > 0);
+  const averageFidelity = verifiedDocs.length > 0
+    ? (verifiedDocs.reduce((acc, d) => acc + (d.meaningPreservation?.overallFidelityScore || 0), 0) / verifiedDocs.length).toFixed(1)
+    : 'N/A';
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-10">
