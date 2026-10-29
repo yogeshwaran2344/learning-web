@@ -6,6 +6,7 @@
 import DatabaseConstructor from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
+import { AiGeneratorService } from './services/aiGeneratorService';
 
 const DB_PATH = path.resolve(process.cwd(), 'server', 'data', 'learnlens.db');
 
@@ -243,6 +244,39 @@ export function cleanupDatabase() {
       }
     ])
   );
+
+  // 6.5. Seed Generated Materials for all 7 formats across canonical documents
+  const insertMat = db.prepare(`
+    INSERT OR REPLACE INTO generated_materials (id, documentId, formatType, language, content, generatedAt)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+
+  const canonicalDocIds = ['doc-transformer-attention', 'doc-quantum-teleportation', 'doc-byzantine-agreement'];
+  const allFormats: ('map' | 'simplified' | 'notes' | 'worked' | 'flashcards' | 'audio' | 'quiz')[] = [
+    'map', 'simplified', 'notes', 'worked', 'flashcards', 'audio', 'quiz'
+  ];
+
+  for (const docId of canonicalDocIds) {
+    const docRow = db.prepare('SELECT title FROM documents WHERE id = ?').get(docId) as any;
+    const secRows = db.prepare('SELECT * FROM extracted_sections WHERE documentId = ?').all(docId) as any[];
+    const sections = secRows.map(r => ({
+      ...r,
+      equations: JSON.parse(r.equations || '[]'),
+      definitions: JSON.parse(r.definitions || '[]'),
+      conditions: JSON.parse(r.conditions || '[]'),
+      examples: JSON.parse(r.examples || '[]'),
+      uncertainSymbols: JSON.parse(r.uncertainSymbols || '[]')
+    }));
+
+    for (const fmt of allFormats) {
+      try {
+        const generated = AiGeneratorService.generateFormat(docId, docRow.title, sections, fmt, 'English');
+        insertMat.run(`mat-${fmt}-${docId}`, docId, fmt, 'English', JSON.stringify(generated), new Date().toISOString());
+      } catch (err) {
+        console.warn(`Failed to seed format ${fmt} for ${docId}:`, err);
+      }
+    }
+  }
 
   // 7. Restore Clean Course Packs
   const updateCourse = db.prepare(`

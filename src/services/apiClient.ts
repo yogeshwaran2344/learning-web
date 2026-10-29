@@ -158,6 +158,11 @@ export class ApiClient {
   }
 
   // Learning Generator & Section 5.6 Test Suite
+  static async getMaterials(documentId: string): Promise<any[]> {
+    const data = await this.request<{ materials: any[] }>(`/documents/${documentId}/materials`);
+    return data.materials || [];
+  }
+
   static async generateMaterial(
     documentId: string,
     formatType: StudioTab,

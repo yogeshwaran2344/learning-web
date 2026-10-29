@@ -9,6 +9,71 @@ import { MeaningPreservationEngine } from '../services/meaningPreservationEngine
 import { AiGeneratorService } from '../services/aiGeneratorService';
 import { ExtractionTestSuite } from '../services/extractionTestSuite';
 
+export function enrichDocumentWithMaterials(doc: DocumentRecord): any {
+  const sections = Database.getSectionsByDocId(doc.id);
+  const verification = Database.getVerification(doc.id);
+  let materials = Database.getMaterialsByDocId(doc.id);
+
+  const neededFormats: ('map' | 'simplified' | 'notes' | 'worked' | 'flashcards' | 'audio' | 'quiz')[] = [
+    'map', 'simplified', 'notes', 'worked', 'flashcards', 'audio', 'quiz'
+  ];
+
+  // If any format is missing, pre-generate and save it now so all tabs are populated with deep content
+  for (const fmt of neededFormats) {
+    if (!materials.some(m => m.formatType === fmt)) {
+      try {
+        const generated = AiGeneratorService.generateFormat(doc.id, doc.title, sections, fmt, 'English');
+        const matRec = {
+          id: `mat-${fmt}-${doc.id}`,
+          documentId: doc.id,
+          formatType: fmt,
+          language: 'English' as const,
+          content: generated,
+          generatedAt: new Date().toISOString()
+        };
+        Database.saveMaterial(matRec);
+        materials.push(matRec);
+      } catch (err) {
+        console.warn(`Enrichment format generation warning for ${fmt}:`, err);
+      }
+    }
+  }
+
+  const unwrap = (obj: any) => obj?.content !== undefined && (obj.formatType !== undefined || obj.language !== undefined) ? obj.content : obj;
+
+  const mapMat = materials.find(m => m.formatType === 'map')?.content;
+  const simplifiedMat = materials.find(m => m.formatType === 'simplified')?.content;
+  const notesMat = materials.find(m => m.formatType === 'notes')?.content;
+  const workedMat = materials.find(m => m.formatType === 'worked')?.content;
+  const flashcardsMat = materials.find(m => m.formatType === 'flashcards')?.content;
+  const audioMat = materials.find(m => m.formatType === 'audio')?.content;
+  const quizMat = materials.find(m => m.formatType === 'quiz')?.content;
+
+  const conceptMap = unwrap(mapMat) || { nodes: [], links: [] };
+  const simplified = unwrap(simplifiedMat);
+  const notes = unwrap(notesMat);
+  const worked = unwrap(workedMat);
+  const flashcards = unwrap(flashcardsMat) || [];
+  const audioLesson = unwrap(audioMat) || { id: `audio-${doc.id}`, title: doc.title, totalDurationSeconds: 120, sections: [] };
+  const quiz = unwrap(quizMat) || [];
+
+  const explanations = Array.isArray(simplified) ? simplified : [simplified].filter(Boolean);
+
+  return {
+    ...doc,
+    sections,
+    meaningPreservation: verification || undefined,
+    verificationStatus: verification ? (verification.overallFidelityScore >= 90 ? 'verified' : 'needs_review') : 'not_verified',
+    conceptMap,
+    explanations,
+    flashcards,
+    audioLesson,
+    notes,
+    worked,
+    quiz
+  };
+}
+
 export class DocumentController {
   static async upload(req: AuthenticatedRequest, res: Response) {
     try {
@@ -96,25 +161,45 @@ export class DocumentController {
       // If RealExtractor parsed exact pages, slides, or scanned notes with formulas & warnings,
       // preserve real section records directly with page, slide, and section identifiers
       if (realExtractedSections.length > 0) {
-        extraction.sections = realExtractedSections.map((s, idx) => ({
-          id: `sec-${s.sourceType}-${docId}-${idx + 1}`,
-          documentId: docId,
-          pageNumber: s.pageNumber,
-          slideNumber: s.slideNumber,
-          chapterTitle: s.sectionIdentifier || `Section ${idx + 1}`,
-          title: s.title,
-          content: s.content,
-          speakerNotes: s.speakerNotes,
-          equations: (s.equations || []).map((e: any, eqIdx: number) => ({
-            latex: e.latex,
-            label: e.label || `Formula (${eqIdx + 1})`,
-            meaning: e.meaning || `Extracted formula from ${s.title}`
-          })),
-          definitions: [],
-          conditions: s.conditions || [],
-          examples: [],
-          uncertainSymbols: s.uncertainSymbols
-        }));
+        extraction.sections = realExtractedSections.map((s, idx) => {
+          // Extract definitions and conditions from text
+          const sentences = s.content.split(/(?<=[.?!])\s+/);
+          const defs: any[] = [];
+          sentences.forEach((sent: string) => {
+            if (/is defined as|refers to|denotes|is the|is a mechanism|means/i.test(sent)) {
+              const match = sent.split(/is defined as|refers to|denotes|is a mechanism|is a|means/i);
+              if (match[0] && match[1]) {
+                defs.push({ term: match[0].trim(), definition: match[1].trim() });
+              }
+            }
+          });
+          const conds: string[] = Array.isArray(s.conditions) ? [...s.conditions] : [];
+          sentences.forEach((sent: string) => {
+            if (/must|requires|strictly|condition|assuming|provided that|invariant|guarantee/i.test(sent) && sent.length < 240) {
+              if (!conds.includes(sent.trim())) conds.push(sent.trim());
+            }
+          });
+
+          return {
+            id: `sec-${s.sourceType || 'gen'}-${docId}-${idx + 1}`,
+            documentId: docId,
+            pageNumber: s.pageNumber || idx + 1,
+            slideNumber: s.slideNumber,
+            chapterTitle: s.sectionIdentifier || `Section ${idx + 1}`,
+            title: s.title,
+            content: s.content,
+            speakerNotes: s.speakerNotes,
+            equations: (s.equations || []).map((e: any, eqIdx: number) => ({
+              latex: e.latex,
+              label: e.label || `Formula (${eqIdx + 1})`,
+              meaning: e.meaning || `Extracted formula from ${s.title}`
+            })),
+            definitions: defs,
+            conditions: conds,
+            examples: [],
+            uncertainSymbols: s.uncertainSymbols
+          };
+        });
 
         extraction.pageCount = Math.max(...extraction.sections.map(sec => sec.pageNumber || sec.slideNumber || 1));
         extraction.wordCount = extraction.sections.reduce((acc, sec) => acc + sec.content.split(/\s+/).filter(Boolean).length, 0);
@@ -160,19 +245,30 @@ export class DocumentController {
       const auditReport = MeaningPreservationEngine.auditDocument(docId, extraction.sections, hasWarning);
       Database.saveVerification(auditReport);
 
-      // Pre-synthesize initial learning formats
-      const initialMap = AiGeneratorService.generateFormat(docId, docRecord.title, extraction.sections, 'map', 'English');
-      Database.saveMaterial({
-        id: `mat-map-${docId}`,
-        documentId: docId,
-        formatType: 'map',
-        language: 'English',
-        content: initialMap,
-        generatedAt: new Date().toISOString()
-      });
+      // Pre-synthesize all 7 learning formats so tabs are fully loaded with deep explanations
+      const initialFormats: ('map' | 'simplified' | 'notes' | 'worked' | 'flashcards' | 'audio' | 'quiz')[] = [
+        'map', 'simplified', 'notes', 'worked', 'flashcards', 'audio', 'quiz'
+      ];
+      for (const fmt of initialFormats) {
+        try {
+          const matResult = AiGeneratorService.generateFormat(docId, docRecord.title, extraction.sections, fmt, 'English');
+          Database.saveMaterial({
+            id: `mat-${fmt}-${docId}`,
+            documentId: docId,
+            formatType: fmt,
+            language: 'English',
+            content: matResult,
+            generatedAt: new Date().toISOString()
+          });
+        } catch (genErr) {
+          console.warn(`Format pre-generation warning for ${fmt}:`, genErr);
+        }
+      }
+
+      const enriched = enrichDocumentWithMaterials(docRecord);
 
       res.status(201).json({
-        document: docRecord,
+        document: enriched,
         extraction,
         verification: auditReport
       });
@@ -186,21 +282,7 @@ export class DocumentController {
     const userId = req.user?.id;
     const role = req.user?.role;
     const docs = Database.getDocuments(userId, role);
-    const enriched = docs.map(d => {
-      // Critical 6: Return genuine verification result if one exists; do not fabricate misleading default scores
-      const verification = Database.getVerification(d.id);
-      const sections = Database.getSectionsByDocId(d.id);
-      return {
-        ...d,
-        sections,
-        meaningPreservation: verification || undefined,
-        verificationStatus: verification ? (verification.overallFidelityScore >= 90 ? 'verified' : 'needs_review') : 'not_verified',
-        flashcards: (d as any).flashcards || [],
-        conceptMap: (d as any).conceptMap || { nodes: [], links: [] },
-        explanations: (d as any).explanations || [],
-        audioLesson: (d as any).audioLesson || { title: d.title, totalDurationSeconds: 120, segments: [] }
-      };
-    });
+    const enriched = docs.map(d => enrichDocumentWithMaterials(d));
     res.json({ documents: enriched });
   }
 
@@ -214,9 +296,8 @@ export class DocumentController {
     if (doc.ownerId !== userId && role !== 'lecturer') {
       return res.status(403).json({ error: 'Access denied: You do not have permission to view this document.' });
     }
-    const sections = Database.getSectionsByDocId(doc.id);
-    const verification = Database.getVerification(doc.id);
-    res.json({ document: doc, sections, verification });
+    const enriched = enrichDocumentWithMaterials(doc);
+    res.json({ document: enriched, sections: enriched.sections, verification: enriched.meaningPreservation });
   }
 
   static getStatus(req: AuthenticatedRequest, res: Response) {

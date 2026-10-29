@@ -113,6 +113,15 @@ export interface ExplanationLevel {
   citations: SourceCitation[];
   hasBeyondNotesAnnotation?: boolean;
   additionalContextSummary?: string;
+  sections?: {
+    sectionTitle: string;
+    pageNumber: number;
+    simplifiedConcept: string;
+    realWorldIntuition?: string;
+    formulaExplanation?: string;
+    invariantRule?: string;
+    sourceCitation?: SourceCitation;
+  }[];
 }
 
 export interface Flashcard {
