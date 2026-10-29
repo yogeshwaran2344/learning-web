@@ -29,3 +29,11 @@ dist-ssr
 .env
 .env.*
 !.env.example
+
+# Local SQLite databases and backups
+server/data/*.db*
+server/data/backups/
+server/data/step27_tests/
+server/data/uploads/*
+!server/data/uploads/.gitkeep
+

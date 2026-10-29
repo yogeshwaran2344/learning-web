@@ -72,8 +72,18 @@ STRICT ACADEMIC FIDELITY RULES:
         return await this.generateStructuredNotes(documentId, docTitle, sections, language, difficulty);
       } else if (formatType === 'flashcards') {
         return await this.generateStructuredFlashcards(documentId, docTitle, sections, language, difficulty);
+      } else if (formatType === 'map') {
+        return await this.generateStructuredConceptMap(documentId, docTitle, sections, language, difficulty);
+      } else if (formatType === 'simplified') {
+        return await this.generateStructuredSimplified(documentId, docTitle, sections, language, difficulty);
+      } else if (formatType === 'worked') {
+        return await this.generateStructuredWorked(documentId, docTitle, sections, language, difficulty);
+      } else if (formatType === 'audio') {
+        return await this.generateStructuredAudio(documentId, docTitle, sections, language, difficulty);
+      } else if (formatType === 'quiz') {
+        return await this.generateStructuredQuiz(documentId, docTitle, sections, language, difficulty);
       } else {
-        return await this.generateGeneralFormat(documentId, docTitle, sections, formatType, language, difficulty);
+        return null;
       }
     } catch (err: any) {
       console.warn(`[AiModelService] External AI generation failed: ${err.message}. Falling back to deterministic generator.`);
@@ -251,53 +261,412 @@ Generate 2 to 3 targeted academic flashcards from this section in JSON format:
     };
   }
 
-  private static async generateGeneralFormat(
+  /**
+   * Structured generator for Concept Maps (Section 16.2 & 16.3)
+   */
+  private static async generateStructuredConceptMap(
     documentId: string,
     docTitle: string,
     sections: ExtractedSectionRecord[],
-    formatType: string,
     language: AppLanguage,
     difficulty: DifficultyLevel
   ): Promise<GeneratedFormatResult | null> {
-    const sourcePassages = sections.map(s => 
-      `[${s.slideNumber ? `Slide ${s.slideNumber}` : `Page ${s.pageNumber}`}: ${s.title}]\n${s.content}\n${s.equations?.length ? 'Equations: ' + s.equations.map(e => e.latex).join(', ') : ''}\n${s.conditions?.length ? 'Conditions: ' + s.conditions.join('; ') : ''}`
-    ).join('\n\n---\n\n');
+    const promptContext = sections.slice(0, 6).map((s, idx) => `
+[Section ${idx + 1} (Page/Slide ${s.pageNumber || s.slideNumber || idx + 1}): "${s.title}"]
+Content: ${s.content}
+${s.equations?.length ? 'Equations: ' + s.equations.map(e => e.latex).join('; ') : ''}
+${s.conditions?.length ? 'Conditions: ' + s.conditions.join('; ') : ''}
+`).join('\n---\n');
 
     const userPrompt = `Document: "${docTitle}"
-Requested Format: ${formatType}
 Language: ${language}
 Difficulty: ${difficulty}
 
-Source Content:
-${sourcePassages.slice(0, 8000)}
+Synthesize a connected concept map DAG from the following sections in JSON format:
+{
+  "nodes": [
+    {
+      "id": "node-1",
+      "label": "Concept Label (max 28 chars)",
+      "category": "core", // choose from: "core", "mechanism", "equation", "condition", "application"
+      "summary": "Core definition or theorem summary grounded in source.",
+      "prerequisites": [],
+      "importance": "foundational", // "foundational", "high", or "medium"
+      "pageOrSlide": 1
+    }
+  ],
+  "edges": [
+    {
+      "from": "node-1",
+      "to": "node-2",
+      "relation": "descriptive relationship"
+    }
+  ]
+}
 
-Generate comprehensive learning materials for "${formatType}". Keep mathematical precision, page citations, and mark any added analogy with [Beyond Source Context].`;
+Source Passages:
+${promptContext}`;
 
-    const rawOutput = await this.callLlmRaw(userPrompt, language, formatType);
-    if (!rawOutput) return null;
+    const rawJson = await this.callLlmRaw(userPrompt, language, 'map');
+    if (!rawJson) return null;
 
-    return {
-      formatType: formatType as any,
-      language,
-      difficultyLevel: difficulty,
-      content: {
-        aiGenerated: true,
-        text: rawOutput
-      },
-      hasBeyondNotesAnnotation: rawOutput.includes('[Beyond Source Context]'),
-      additionalContextSummary: rawOutput.includes('[Beyond Source Context]')
-        ? 'Supplementary intuition and analogies included with [Beyond Source Context] tags.'
-        : undefined,
-      sourceCitations: sections.map(s => ({
-        id: `cite-${s.id}`,
+    try {
+      const parsed = JSON.parse(this.cleanJsonBlock(rawJson));
+      if (!parsed.nodes || !Array.isArray(parsed.nodes) || parsed.nodes.length === 0) {
+        return null;
+      }
+
+      const citations: SourceCitationRecord[] = [];
+      const nodes = parsed.nodes.map((node: any, idx: number) => {
+        const pageNum = node.pageOrSlide || sections[idx]?.pageNumber || 1;
+        const matchingSec = sections.find(s => s.pageNumber === pageNum) || sections[idx] || sections[0];
+        const citation: SourceCitationRecord = {
+          id: `cite-${node.id || idx + 1}`,
+          documentId,
+          pageNumber: pageNum,
+          slideNumber: matchingSec?.slideNumber,
+          sectionTitle: matchingSec?.title || node.label,
+          exactQuote: (node.summary || matchingSec?.content || '').slice(0, 140),
+          contextSnippet: (matchingSec?.content || '').slice(0, 200)
+        };
+        citations.push(citation);
+        return {
+          id: node.id || `node-${idx + 1}`,
+          label: node.label,
+          category: node.category || 'core',
+          summary: node.summary,
+          prerequisites: Array.isArray(node.prerequisites) ? node.prerequisites : [],
+          importance: node.importance || 'high',
+          difficulty,
+          sourceCitation: citation
+        };
+      });
+
+      return {
+        formatType: 'map',
+        language,
+        difficultyLevel: difficulty,
+        content: { nodes, edges: parsed.edges || [] },
+        sourceCitations: citations
+      };
+    } catch (e) {
+      console.warn('[AiModelService] Failed parsing concept map JSON:', e);
+      return null;
+    }
+  }
+
+  /**
+   * Structured generator for Simplified Explanations (3 tiers + key takeaways + beyond context)
+   */
+  private static async generateStructuredSimplified(
+    documentId: string,
+    docTitle: string,
+    sections: ExtractedSectionRecord[],
+    language: AppLanguage,
+    difficulty: DifficultyLevel
+  ): Promise<GeneratedFormatResult | null> {
+    const sec = sections[0] || { pageNumber: 1, title: docTitle, content: 'Academic exposition.' };
+    const promptContext = sections.slice(0, 3).map(s => `[Page ${s.pageNumber}: ${s.title}]\n${s.content}`).join('\n---\n');
+
+    const userPrompt = `Document: "${docTitle}"
+Language: ${language}
+Difficulty: ${difficulty}
+
+Synthesize a 3-tier academic explanation in JSON format:
+{
+  "title": "${sec.title}",
+  "summary": "Core 2-3 sentence academic summary directly grounded in the source.",
+  "intuitiveAnalogy": "[Beyond Source Context]: Pedagogical analogy or metaphor explaining the mechanism clearly.",
+  "rigorousBreakdown": "Formal mathematical and theoretical breakdown preserving all technical terms and qualifiers.",
+  "workedExample": "Concrete calculation or example step maintaining exact invariants.",
+  "keyTakeaways": [
+    "Core takeaway 1...",
+    "Boundary condition takeaway 2...",
+    "Verified application takeaway 3..."
+  ]
+}
+
+Source Passages:
+${promptContext}`;
+
+    const rawJson = await this.callLlmRaw(userPrompt, language, 'simplified');
+    if (!rawJson) return null;
+
+    try {
+      const parsed = JSON.parse(this.cleanJsonBlock(rawJson));
+      const citation: SourceCitationRecord = {
+        id: `cite-expl-${documentId}`,
         documentId,
-        pageNumber: s.pageNumber,
-        slideNumber: s.slideNumber,
-        sectionTitle: s.title,
-        exactQuote: s.content.slice(0, 100),
-        contextSnippet: s.content.slice(0, 180)
-      }))
-    };
+        pageNumber: sec.pageNumber || 1,
+        slideNumber: sec.slideNumber,
+        sectionTitle: sec.title,
+        exactQuote: (sec.content || '').slice(0, 140),
+        contextSnippet: (sec.content || '').slice(0, 220)
+      };
+
+      const hasBeyond = Boolean(parsed.intuitiveAnalogy && parsed.intuitiveAnalogy.includes('[Beyond Source Context]'));
+
+      return {
+        formatType: 'simplified',
+        language,
+        difficultyLevel: difficulty,
+        hasBeyondNotesAnnotation: hasBeyond,
+        additionalContextSummary: hasBeyond
+          ? 'Supplementary intuition and analogies included with [Beyond Source Context] tags.'
+          : undefined,
+        content: {
+          title: parsed.title || sec.title,
+          summary: parsed.summary || sec.content.slice(0, 200),
+          intuitiveAnalogy: parsed.intuitiveAnalogy || 'Conceptual pedagogical model.',
+          rigorousBreakdown: parsed.rigorousBreakdown || sec.content,
+          workedExample: parsed.workedExample || 'Standard derivation step.',
+          keyTakeaways: Array.isArray(parsed.keyTakeaways) ? parsed.keyTakeaways : [],
+          citations: [citation]
+        },
+        sourceCitations: [citation]
+      };
+    } catch (e) {
+      console.warn('[AiModelService] Failed parsing simplified explanation JSON:', e);
+      return null;
+    }
+  }
+
+  /**
+   * Structured generator for Worked Examples
+   */
+  private static async generateStructuredWorked(
+    documentId: string,
+    docTitle: string,
+    sections: ExtractedSectionRecord[],
+    language: AppLanguage,
+    difficulty: DifficultyLevel
+  ): Promise<GeneratedFormatResult | null> {
+    const sec = sections[0] || { pageNumber: 1, title: docTitle, content: 'Problem statement and derivation.' };
+    const eq = sec.equations?.[0]?.latex || 'f(x) = y';
+
+    const userPrompt = `Document: "${docTitle}"
+Language: ${language}
+Difficulty: ${difficulty}
+Primary Equation: ${eq}
+
+Generate a step-by-step mathematical worked example in JSON format:
+{
+  "title": "Worked Problem: ${sec.title}",
+  "problemStatement": "Clear problem formulation under verified boundary conditions.",
+  "solutionSteps": [
+    "Step 1: Identify given input values and confirm boundary conditions.",
+    "Step 2: Apply primary formulation ${eq}.",
+    "Step 3: Evaluate operations and normalize variance.",
+    "Step 4: Verify computed bounds adhere strictly to theoretical requirements."
+  ]
+}
+
+Source Passages:
+${sec.content.slice(0, 2500)}`;
+
+    const rawJson = await this.callLlmRaw(userPrompt, language, 'worked');
+    if (!rawJson) return null;
+
+    try {
+      const parsed = JSON.parse(this.cleanJsonBlock(rawJson));
+      const citation: SourceCitationRecord = {
+        id: `cite-worked-${documentId}`,
+        documentId,
+        pageNumber: sec.pageNumber || 1,
+        slideNumber: sec.slideNumber,
+        sectionTitle: sec.title,
+        exactQuote: (sec.content || '').slice(0, 140),
+        contextSnippet: (sec.content || '').slice(0, 220)
+      };
+
+      return {
+        formatType: 'worked',
+        language,
+        difficultyLevel: difficulty,
+        content: {
+          title: parsed.title || `Worked Problem: ${sec.title}`,
+          problemStatement: parsed.problemStatement || `Calculate output under formula ${eq}.`,
+          solutionSteps: Array.isArray(parsed.solutionSteps) ? parsed.solutionSteps : [],
+          citation
+        },
+        sourceCitations: [citation]
+      };
+    } catch (e) {
+      console.warn('[AiModelService] Failed parsing worked example JSON:', e);
+      return null;
+    }
+  }
+
+  /**
+   * Structured generator for Audio Lessons
+   */
+  private static async generateStructuredAudio(
+    documentId: string,
+    docTitle: string,
+    sections: ExtractedSectionRecord[],
+    language: AppLanguage,
+    difficulty: DifficultyLevel
+  ): Promise<GeneratedFormatResult | null> {
+    const targetSections = sections.slice(0, 4);
+    const promptContext = targetSections.map((s, idx) => `
+[Section ${idx + 1} (Page ${s.pageNumber || s.slideNumber || idx + 1}): "${s.title}"]
+${s.content}
+`).join('\n---\n');
+
+    const userPrompt = `Document: "${docTitle}"
+Language: ${language}
+Difficulty: ${difficulty}
+
+Generate an engaging spoken audio lecture script across sections in JSON format:
+{
+  "title": "${docTitle} (${language} Audio Lesson)",
+  "sections": [
+    {
+      "sectionTitle": "1. Introduction to ...",
+      "scriptText": "Clear spoken narrative explaining this section with exact definitions and invariant conditions.",
+      "pageOrSlide": 1
+    }
+  ]
+}
+
+Source Passages:
+${promptContext}`;
+
+    const rawJson = await this.callLlmRaw(userPrompt, language, 'audio');
+    if (!rawJson) return null;
+
+    try {
+      const parsed = JSON.parse(this.cleanJsonBlock(rawJson));
+      if (!parsed.sections || !Array.isArray(parsed.sections)) return null;
+
+      const citations: SourceCitationRecord[] = [];
+      const audioSections = parsed.sections.map((secItem: any, idx: number) => {
+        const matchingSec = targetSections[idx] || targetSections[0];
+        const pageNum = secItem.pageOrSlide || matchingSec.pageNumber || 1;
+        const citation: SourceCitationRecord = {
+          id: `acite-${idx + 1}`,
+          documentId,
+          pageNumber: pageNum,
+          slideNumber: matchingSec.slideNumber,
+          sectionTitle: secItem.sectionTitle || matchingSec.title,
+          exactQuote: (secItem.scriptText || matchingSec.content).slice(0, 140),
+          contextSnippet: matchingSec.content.slice(0, 200)
+        };
+        citations.push(citation);
+        const script = secItem.scriptText || '';
+        const durationSeconds = Math.max(30, Math.round(script.split(/\s+/).length / 2.5));
+
+        return {
+          id: `audio-sec-${idx + 1}`,
+          sectionTitle: secItem.sectionTitle || `${idx + 1}. ${matchingSec.title}`,
+          durationSeconds,
+          scriptText: script,
+          sourceCitation: citation
+        };
+      });
+
+      return {
+        formatType: 'audio',
+        language,
+        difficultyLevel: difficulty,
+        content: {
+          id: `audio-${documentId}`,
+          title: parsed.title || `${docTitle} (${language} Audio Lesson)`,
+          totalDurationSeconds: audioSections.reduce((acc: number, s: any) => acc + s.durationSeconds, 0),
+          sections: audioSections
+        },
+        sourceCitations: citations
+      };
+    } catch (e) {
+      console.warn('[AiModelService] Failed parsing audio lesson JSON:', e);
+      return null;
+    }
+  }
+
+  /**
+   * Structured generator for Practice Quizzes
+   */
+  private static async generateStructuredQuiz(
+    documentId: string,
+    docTitle: string,
+    sections: ExtractedSectionRecord[],
+    language: AppLanguage,
+    difficulty: DifficultyLevel
+  ): Promise<GeneratedFormatResult | null> {
+    const targetSections = sections.slice(0, 4);
+    const promptContext = targetSections.map((s, idx) => `
+[Section ${idx + 1} (Page ${s.pageNumber || s.slideNumber || idx + 1}): "${s.title}"]
+${s.content}
+${s.equations?.length ? 'Equations: ' + s.equations.map(e => e.latex).join('; ') : ''}
+${s.conditions?.length ? 'Conditions: ' + s.conditions.join('; ') : ''}
+`).join('\n---\n');
+
+    const userPrompt = `Document: "${docTitle}"
+Language: ${language}
+Difficulty: ${difficulty}
+
+Generate targeted multiple-choice practice questions in JSON format:
+{
+  "questions": [
+    {
+      "question": "Which statement is mathematically and conceptually verified for <topic>?",
+      "category": "definition", // "definition", "equation", or "condition"
+      "pageOrSlide": 1,
+      "options": [
+        { "text": "Correct option directly stated in source", "isCorrect": true, "explanation": "Grounded in source text." },
+        { "text": "Distractor violating condition or parameter", "isCorrect": false, "explanation": "False claim." },
+        { "text": "Distractor omitting essential invariant", "isCorrect": false, "explanation": "Inaccurate." }
+      ]
+    }
+  ]
+}
+
+Source Passages:
+${promptContext}`;
+
+    const rawJson = await this.callLlmRaw(userPrompt, language, 'quiz');
+    if (!rawJson) return null;
+
+    try {
+      const parsed = JSON.parse(this.cleanJsonBlock(rawJson));
+      if (!parsed.questions || !Array.isArray(parsed.questions)) return null;
+
+      const citations: SourceCitationRecord[] = [];
+      const questions = parsed.questions.map((q: any, idx: number) => {
+        const matchingSec = targetSections[idx] || targetSections[0];
+        const pageNum = q.pageOrSlide || matchingSec.pageNumber || 1;
+        const citation: SourceCitationRecord = {
+          id: `q-cite-${idx + 1}`,
+          documentId,
+          pageNumber: pageNum,
+          slideNumber: matchingSec.slideNumber,
+          sectionTitle: matchingSec.title,
+          exactQuote: (q.options?.find((o: any) => o.isCorrect)?.text || matchingSec.content).slice(0, 140),
+          contextSnippet: matchingSec.content.slice(0, 200)
+        };
+        citations.push(citation);
+
+        return {
+          id: `q-${documentId}-${idx + 1}`,
+          question: q.question,
+          category: q.category || 'definition',
+          difficulty,
+          options: q.options || [],
+          sourceCitation: citation
+        };
+      });
+
+      return {
+        formatType: 'quiz',
+        language,
+        difficultyLevel: difficulty,
+        content: questions,
+        sourceCitations: citations
+      };
+    } catch (e) {
+      console.warn('[AiModelService] Failed parsing quiz JSON:', e);
+      return null;
+    }
   }
 
   private static async callLlmRaw(prompt: string, language: AppLanguage, formatType: string): Promise<string | null> {
