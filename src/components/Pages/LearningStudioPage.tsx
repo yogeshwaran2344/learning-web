@@ -21,7 +21,8 @@ import {
   Info,
   Download,
   Settings,
-  MessageSquare
+  MessageSquare,
+  Loader2
 } from 'lucide-react';
 import {
   AcademicDocument,
@@ -164,16 +165,43 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
     }
   };
 
-  const tabs: { id: StudioTab; number: string; label: string; icon: React.ReactNode; color: string }[] = [
-    { id: 'original', number: '01', label: 'Original', icon: <FileText className="w-3.5 h-3.5" />, color: 'text-slate-500' },
-    { id: 'map', number: '02', label: 'Concept Map', icon: <Network className="w-3.5 h-3.5" />, color: 'text-blue-500' },
-    { id: 'simplified', number: '03', label: 'Simplified', icon: <Lightbulb className="w-3.5 h-3.5" />, color: 'text-amber-500' },
-    { id: 'notes', number: '04', label: 'Detailed Notes', icon: <BookOpen className="w-3.5 h-3.5" />, color: 'text-indigo-500' },
-    { id: 'worked', number: '05', label: 'Worked Examples', icon: <FlaskConical className="w-3.5 h-3.5" />, color: 'text-emerald-500' },
-    { id: 'flashcards', number: '06', label: 'Flashcards', icon: <Layers className="w-3.5 h-3.5" />, color: 'text-purple-500' },
-    { id: 'audio', number: '07', label: 'Audio', icon: <Headphones className="w-3.5 h-3.5" />, color: 'text-emerald-500' },
-    { id: 'quiz', number: '08', label: 'Practice Quiz', icon: <Award className="w-3.5 h-3.5" />, color: 'text-amber-500' },
+  const tabs: { id: StudioTab; number: string; label: string; tooltip: string; icon: React.ReactNode; color: string }[] = [
+    { id: 'original', number: '01', label: 'Original', tooltip: 'Original PDF/Document text with source highlighting', icon: <FileText className="w-4 h-4" />, color: 'text-slate-500' },
+    { id: 'map', number: '02', label: 'Concept Map', tooltip: 'Hierarchical knowledge graph and prerequisite relationships', icon: <Network className="w-4 h-4" />, color: 'text-blue-500' },
+    { id: 'simplified', number: '03', label: 'Simplified Explanation', tooltip: 'Plain-language explanation with real-world analogies', icon: <Lightbulb className="w-4 h-4" />, color: 'text-amber-500' },
+    { id: 'notes', number: '04', label: 'Detailed Notes', tooltip: 'Exhaustive notes with definitions, equations, and conditions', icon: <BookOpen className="w-4 h-4" />, color: 'text-indigo-500' },
+    { id: 'worked', number: '05', label: 'Worked Examples', tooltip: 'Step-by-step mathematical calculations and derivations', icon: <FlaskConical className="w-4 h-4" />, color: 'text-emerald-500' },
+    { id: 'flashcards', number: '06', label: 'Flashcards', tooltip: 'Spaced repetition flashcards with mastery tracking', icon: <Layers className="w-4 h-4" />, color: 'text-purple-500' },
+    { id: 'quiz', number: '07', label: 'Practice Quiz', tooltip: 'Diagnostic quiz with explanations and source citations', icon: <Award className="w-4 h-4" />, color: 'text-amber-500' },
+    { id: 'audio', number: '08', label: 'Audio Lessons', tooltip: 'Narrated spoken lesson with chapter navigation', icon: <Headphones className="w-4 h-4" />, color: 'text-emerald-500' }
   ];
+
+  const handleTabKeyDown = (e: React.KeyboardEvent, index: number) => {
+    let targetIndex = -1;
+    if (e.key === 'ArrowRight') {
+      targetIndex = (index + 1) % tabs.length;
+    } else if (e.key === 'ArrowLeft') {
+      targetIndex = (index - 1 + tabs.length) % tabs.length;
+    } else if (e.key === 'Home') {
+      targetIndex = 0;
+    } else if (e.key === 'End') {
+      targetIndex = tabs.length - 1;
+    }
+
+    if (targetIndex !== -1) {
+      e.preventDefault();
+      const targetTab = tabs[targetIndex];
+      setActiveTab(targetTab.id);
+      setVerificationResult(null);
+      setRightPanelMode('formats');
+
+      const buttons = tabsScrollRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+      if (buttons && buttons[targetIndex]) {
+        buttons[targetIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        buttons[targetIndex].focus();
+      }
+    }
+  };
 
   const handleCitationClick = (cite: SourceCitation) => {
     setHighlightedCitation(cite);
@@ -482,41 +510,110 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
           </div>
         </div>
 
-        {/* 8 Tabs List with Horizontal Scroll Buttons and Format Dropdown */}
-        <div className="flex items-center gap-1.5 pt-1">
-          {/* Scroll Left Button */}
+        {/* Mobile Format Selector Dropdown (visible on < sm screens) */}
+        <div className="sm:hidden w-full pt-1 relative">
           <button
-            onClick={() => handleScrollTabs('left')}
-            className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 shrink-0 transition-colors"
-            title="Scroll Tabs Left"
+            onClick={() => setIsFormatDropdownOpen(v => !v)}
+            className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-100 transition-colors shadow-2xs"
+            aria-label="Format Selector"
+            aria-expanded={isFormatDropdownOpen}
           >
-            <ChevronLeft className="w-3.5 h-3.5" />
+            <div className="flex items-center space-x-2 truncate">
+              {isGenerating ? (
+                <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
+              ) : (
+                <span className={tabs.find(t => t.id === activeTab)?.color}>
+                  {tabs.find(t => t.id === activeTab)?.icon}
+                </span>
+              )}
+              <span className="truncate">
+                {tabs.find(t => t.id === activeTab)?.number}. {tabs.find(t => t.id === activeTab)?.label}
+              </span>
+            </div>
+            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isFormatDropdownOpen ? 'rotate-180' : ''}`} />
           </button>
 
-          {/* Scrollable Tabs */}
-          <div
-            ref={tabsScrollRef}
-            className="flex items-center space-x-1.5 overflow-x-auto text-xs font-semibold scrollbar-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] flex-1 py-0.5"
-          >
-            {tabs.map((tab) => {
-              const isActive = activeTab === tab.id;
-              return (
+          {isFormatDropdownOpen && (
+            <div className="absolute top-full left-0 right-0 mt-1 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl z-50 p-1.5 space-y-1 animate-in fade-in zoom-in-95 duration-100">
+              <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                All 8 Learning Formats
+              </div>
+              {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => {
                     setActiveTab(tab.id);
                     setVerificationResult(null);
+                    setRightPanelMode('formats');
+                    setIsFormatDropdownOpen(false);
                   }}
-                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl whitespace-nowrap transition-all shrink-0 ${
-                    isActive
-                      ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm font-bold'
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
+                    activeTab === tab.id
+                      ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300 font-bold'
                       : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
                   }`}
                 >
-                  <span className={`text-[10px] opacity-70 ${isActive ? '' : 'text-slate-400'}`}>
+                  <div className="flex items-center gap-2.5 truncate">
+                    <span className={activeTab === tab.id ? 'text-blue-600' : tab.color}>{tab.icon}</span>
+                    <span className="truncate">{tab.number}. {tab.label}</span>
+                  </div>
+                  {activeTab === tab.id && <Check className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Desktop & Tablet Horizontal Tab Navigation Bar (visible on >= sm screens) */}
+        <div className="hidden sm:flex items-center gap-1.5 pt-1">
+          {/* Scroll Left Button */}
+          <button
+            onClick={() => handleScrollTabs('left')}
+            className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 shrink-0 transition-colors cursor-pointer"
+            title="Scroll Tabs Left"
+            aria-label="Scroll Tabs Left"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+
+          {/* Scrollable Tabs */}
+          <div
+            ref={tabsScrollRef}
+            role="tablist"
+            aria-label="Learning Formats"
+            className="flex items-center space-x-1.5 overflow-x-auto text-xs font-semibold scrollbar-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] flex-1 py-1"
+          >
+            {tabs.map((tab, tabIdx) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  role="tab"
+                  id={`tab-${tab.id}`}
+                  aria-selected={isActive}
+                  aria-controls={`tabpanel-${tab.id}`}
+                  tabIndex={isActive ? 0 : -1}
+                  title={tab.tooltip}
+                  onKeyDown={(e) => handleTabKeyDown(e, tabIdx)}
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    setVerificationResult(null);
+                    setRightPanelMode('formats');
+                  }}
+                  className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl whitespace-nowrap transition-all shrink-0 cursor-pointer focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none min-h-[38px] ${
+                    isActive
+                      ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-md font-bold ring-2 ring-blue-500/20'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <span className={`text-[10px] font-mono opacity-70 ${isActive ? '' : 'text-slate-400'}`}>
                     {tab.number}
                   </span>
-                  <span className={isActive ? '' : tab.color}>{tab.icon}</span>
+                  {isGenerating && isActive ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500 shrink-0" />
+                  ) : (
+                    <span className={isActive ? '' : tab.color}>{tab.icon}</span>
+                  )}
                   <span>{tab.label}</span>
                 </button>
               );
@@ -526,47 +623,52 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
           {/* Scroll Right Button */}
           <button
             onClick={() => handleScrollTabs('right')}
-            className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 shrink-0 transition-colors"
+            className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 shrink-0 transition-colors cursor-pointer"
             title="Scroll Tabs Right"
+            aria-label="Scroll Tabs Right"
           >
-            <ChevronRight className="w-3.5 h-3.5" />
+            <ChevronRight className="w-4 h-4" />
           </button>
 
           {/* Compact Format Dropdown Menu Button */}
           <div className="relative shrink-0">
             <button
               onClick={() => setIsFormatDropdownOpen(v => !v)}
-              className="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 transition-colors"
+              className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 transition-colors min-h-[38px] cursor-pointer"
               title="Jump to any learning format"
+              aria-haspopup="listbox"
+              aria-expanded={isFormatDropdownOpen}
             >
-              <Layers className="w-3.5 h-3.5 text-brand-600" />
-              <span className="hidden sm:inline">Formats</span>
-              <ChevronDown className="w-3.5 h-3.5" />
+              <Layers className="w-3.5 h-3.5 text-blue-600" />
+              <span className="hidden md:inline">Formats</span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isFormatDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {isFormatDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-60 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl z-50 p-1.5 space-y-1 animate-in fade-in zoom-in-95 duration-100">
+              <div className="absolute right-0 mt-1.5 w-64 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl z-50 p-2 space-y-1 animate-in fade-in zoom-in-95 duration-100">
                 <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Select Learning Format
+                  Select Learning Format (8)
                 </div>
                 {tabs.map(tab => (
                   <button
                     key={tab.id}
                     onClick={() => {
                       setActiveTab(tab.id);
+                      setVerificationResult(null);
+                      setRightPanelMode('formats');
                       setIsFormatDropdownOpen(false);
                     }}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
                       activeTab === tab.id
-                        ? 'bg-brand-50 text-brand-700 dark:bg-brand-950/80 dark:text-brand-300 font-bold'
+                        ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300 font-bold'
                         : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
                     }`}
                   >
                     <div className="flex items-center gap-2 truncate">
-                      <span className={activeTab === tab.id ? 'text-brand-600' : tab.color}>{tab.icon}</span>
+                      <span className={activeTab === tab.id ? 'text-blue-600' : tab.color}>{tab.icon}</span>
                       <span className="truncate">{tab.number}. {tab.label}</span>
                     </div>
-                    {activeTab === tab.id && <Check className="w-3.5 h-3.5 text-brand-600 shrink-0" />}
+                    {activeTab === tab.id && <Check className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
                   </button>
                 ))}
               </div>
