@@ -39,7 +39,7 @@ const backupsDir = path.resolve(dataDir, 'backups');
 });
 
 // Configure allowed frontend origins
-const rawCorsOrigin = process.env.CORS_ORIGIN || process.env.FRONTEND_URL || '';
+const rawCorsOrigin = process.env.CORS_ORIGIN || process.env.FRONTEND_URL || process.env.RENDER_EXTERNAL_URL || '';
 const corsOrigins = isProd
   ? (rawCorsOrigin ? rawCorsOrigin.split(',').map(s => s.trim()).filter(Boolean) : [])
   : (rawCorsOrigin ? rawCorsOrigin.split(',').map(s => s.trim()).filter(Boolean) : '*');

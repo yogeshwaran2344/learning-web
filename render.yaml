@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: learnlens-academic-platform
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: LECTURER_INVITE_KEY
+        generateValue: true
+      - key: CORS_ORIGIN
+        sync: false
