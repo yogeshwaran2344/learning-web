@@ -116,7 +116,7 @@ ${report?.passedFeatures || 20}/20 tested
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-black text-slate-900 dark:text-white">
-                  LearnLens AI System Verification Suite
+                  LEARNOVA AI System Verification Suite
                 </h2>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
                   Step 34 Complete

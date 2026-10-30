@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: learnlens-academic-platform
+    name: learnova-academic-platform
     env: node
     plan: free
     buildCommand: npm install && npm run build

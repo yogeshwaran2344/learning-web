@@ -222,7 +222,7 @@ ${doc.summary}
         res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}_audio_script_${language}.txt"`);
 
         let audioScript = `================================================================================
-LEARNLENS AI - AUDIO LESSON NARRATION SCRIPT
+LEARNOVA AI - AUDIO LESSON NARRATION SCRIPT
 Title: ${doc.title}
 Author: ${doc.author}
 Target Language: ${language}
@@ -231,7 +231,7 @@ Generated on: ${new Date().toLocaleDateString()}
 ================================================================================
 
 [00:00] [INTRO MUSIC - CALM ACADEMIC TONE]
-[NARRATOR]: Welcome to LearnLens Audio Learning. Today, we examine "${doc.title}", focusing on verified core concepts and mathematical foundations.
+[NARRATOR]: Welcome to LEARNOVA Audio Learning. Today, we examine "${doc.title}", focusing on verified core concepts and mathematical foundations.
 
 `;
         const audioMat = materials.find(m => m.formatType === 'audio' && m.language === language) || materials.find(m => m.formatType === 'audio');
@@ -469,7 +469,7 @@ Generated on: ${new Date().toLocaleDateString()}
   `).join('')}
 
   <div class="footer">
-    <span>LearnLens AI Academic Learning Platform</span>
+    <span>LEARNOVA AI Academic Learning Platform</span>
     <span>Source Grounding Verification ID: ${verification?.documentId || doc.id}</span>
   </div>
 </body>
@@ -682,7 +682,7 @@ Generated on: ${new Date().toLocaleDateString()}
       let streamText = '';
 
       // Header on every page
-      const headerGlyphs = PdfShapingEngine.shapeText(`LearnLens AI Academic Document - Page ${p + 1} of ${pageCount}`, 9);
+      const headerGlyphs = PdfShapingEngine.shapeText(`LEARNOVA AI Academic Document - Page ${p + 1} of ${pageCount}`, 9);
       const headerOps = PdfShapingEngine.encodeLineToPdfOps(headerGlyphs, 9, usedGids);
       streamText += `BT\n50 810 Td\n${headerOps}\nET\n`;
 
@@ -696,7 +696,7 @@ Generated on: ${new Date().toLocaleDateString()}
       }
 
       // Page footer
-      const footerGlyphs = PdfShapingEngine.shapeText(`LearnLens Grounded Verification Engine | Page ${p + 1} of ${pageCount} | All Content Fully Preserved`, 8);
+      const footerGlyphs = PdfShapingEngine.shapeText(`LEARNOVA Grounded Verification Engine | Page ${p + 1} of ${pageCount} | All Content Fully Preserved`, 8);
       const footerOps = PdfShapingEngine.encodeLineToPdfOps(footerGlyphs, 8, usedGids);
       streamText += `BT\n50 40 Td\n${footerOps}\nET\n`;
       contentStreams.push(streamText);
@@ -842,7 +842,7 @@ Generated on: ${new Date().toLocaleDateString()}
 
     // 7. Academic Theme
     zip.addFile('ppt/theme/theme1.xml', Buffer.from(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="LearnLens Academic Theme">
+<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="LEARNOVA Academic Theme">
   <a:themeElements>
     <a:clrScheme name="Academic">
       <a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1>
@@ -1025,7 +1025,7 @@ Generated on: ${new Date().toLocaleDateString()}
     // 3. Full Lesson Pure PCM Acoustic Synthesis (Generates complete lesson duration for offline testing)
     const textToSynthesize = fullText.replace(/[^a-zA-Z0-9\s.,?!]/g, ' ').trim();
     const rawWords = textToSynthesize.split(/\s+/).filter(w => w.length > 0);
-    const words = rawWords.length > 0 ? rawWords : ['LearnLens', 'Audio', 'Lesson'];
+    const words = rawWords.length > 0 ? rawWords : ['LEARNOVA', 'Audio', 'Lesson'];
 
     const sampleRate = 22050;
     const syllables: { start: number; end: number; f0: number; f1: number; f2: number; f3: number; consonant: number }[] = [];

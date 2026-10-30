@@ -16,20 +16,22 @@ import { StorageService } from './storageService';
 const API_BASE = '/api';
 
 export class ApiClient {
-  private static token: string | null = localStorage.getItem('learnlens_auth_token');
+  private static token: string | null = localStorage.getItem('learnova_auth_token') || localStorage.getItem('learnlens_auth_token');
 
   static setToken(token: string) {
     this.token = token;
-    localStorage.setItem('learnlens_auth_token', token);
+    localStorage.setItem('learnova_auth_token', token);
   }
 
   static getToken(): string | null {
-    return this.token || localStorage.getItem('learnlens_auth_token');
+    return this.token || localStorage.getItem('learnova_auth_token') || localStorage.getItem('learnlens_auth_token');
   }
 
   static logout() {
     this.token = null;
+    localStorage.removeItem('learnova_auth_token');
     localStorage.removeItem('learnlens_auth_token');
+    localStorage.removeItem('learnova_current_user');
     localStorage.removeItem('learnlens_current_user');
   }
 
@@ -41,7 +43,7 @@ export class ApiClient {
     });
     if (data.token) {
       this.setToken(data.token);
-      localStorage.setItem('learnlens_current_user', JSON.stringify(data.user));
+      localStorage.setItem('learnova_current_user', JSON.stringify(data.user));
     }
     return data;
   }
@@ -59,7 +61,7 @@ export class ApiClient {
     });
     if (data.token) {
       this.setToken(data.token);
-      localStorage.setItem('learnlens_current_user', JSON.stringify(data.user));
+      localStorage.setItem('learnova_current_user', JSON.stringify(data.user));
     }
     return data;
   }
@@ -68,7 +70,7 @@ export class ApiClient {
     try {
       const data = await this.request<{ user: any }>('/auth/me');
       if (data?.user) {
-        localStorage.setItem('learnlens_current_user', JSON.stringify(data.user));
+        localStorage.setItem('learnova_current_user', JSON.stringify(data.user));
       }
       return data.user;
     } catch {

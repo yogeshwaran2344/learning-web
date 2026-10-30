@@ -59,7 +59,7 @@ app.use((req, res, next) => {
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'healthy',
-    service: 'LearnLens AI Backend API',
+    service: 'LEARNOVA AI Backend API',
     version: '1.0.0',
     environment: config.env,
     timestamp: new Date().toISOString()
@@ -87,9 +87,9 @@ app.get('*', (req, res, next) => {
     res.status(200).send(`
       <!DOCTYPE html>
       <html>
-        <head><title>LearnLens AI</title></head>
+        <head><title>LEARNOVA AI</title></head>
         <body style="font-family:sans-serif;padding:40px;text-align:center;">
-          <h2>LearnLens AI Backend API is Running!</h2>
+          <h2>LEARNOVA AI Backend API is Running!</h2>
           <p>Frontend static build was not found. Please run <code>npm run build</code>.</p>
           <p><a href="/api/health">Check API Health Status</a></p>
         </body>
@@ -116,14 +116,14 @@ process.on('unhandledRejection', (reason) => {
 });
 
 const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[LearnLens Backend] Server running at http://0.0.0.0:${PORT} in ${config.env} mode`);
-  console.log(`[LearnLens Backend] Health probe: http://0.0.0.0:${PORT}/api/health`);
+  console.log(`[LEARNOVA Backend] Server running at http://0.0.0.0:${PORT} in ${config.env} mode`);
+  console.log(`[LEARNOVA Backend] Health probe: http://0.0.0.0:${PORT}/api/health`);
 });
 
 // Graceful Shutdown
 process.on('SIGTERM', () => {
-  console.log('[LearnLens Backend] SIGTERM signal received: closing HTTP server...');
+  console.log('[LEARNOVA Backend] SIGTERM signal received: closing HTTP server...');
   server.close(() => {
-    console.log('[LearnLens Backend] HTTP server closed gracefully.');
+    console.log('[LEARNOVA Backend] HTTP server closed gracefully.');
   });
 });

@@ -51,7 +51,7 @@ export class ErrorBoundary extends Component<Props, State> {
               </div>
               <div>
                 <h1 className="text-xl font-black text-white">Application Encountered an Issue</h1>
-                <p className="text-xs text-slate-400">LearnLens AI caught an unhandled interface exception</p>
+                <p className="text-xs text-slate-400">LEARNOVA AI caught an unhandled interface exception</p>
               </div>
             </div>
 

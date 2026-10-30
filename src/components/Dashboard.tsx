@@ -63,7 +63,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </h1>
 
             <p className="text-slate-300 text-base sm:text-lg max-w-2xl leading-relaxed">
-              Upload academic PDFs, lecture slides, and research publications. LearnLens decomposes dense theory into interactive concept maps, intuitive multi-tier explanations, audio narration, and flashcards—while our <strong className="text-brand-300 font-semibold">Meaning Preservation Engine</strong> verifies equations, theorems, and boundary conditions back to original citations with zero hallucinations.
+              Upload academic PDFs, lecture slides, and research publications. LEARNOVA decomposes dense theory into interactive concept maps, intuitive multi-tier explanations, audio narration, and flashcards—while our <strong className="text-brand-300 font-semibold">Meaning Preservation Engine</strong> verifies equations, theorems, and boundary conditions back to original citations with zero hallucinations.
             </p>
 
             <div className="flex flex-wrap items-center gap-3 pt-2">

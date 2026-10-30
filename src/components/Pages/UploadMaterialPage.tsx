@@ -448,7 +448,7 @@ Condition: Dimensions of x and F must match or be projected via shortcut matrix 
                 Optical Contrast & Legibility Warning Detected
               </h3>
               <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
-                As part of LearnLens's commitment to truth and academic rigor, our engine flags low-contrast handwritten sections rather than hallucinating uncertain content.
+                As part of LEARNOVA's commitment to truth and academic rigor, our engine flags low-contrast handwritten sections rather than hallucinating uncertain content.
               </p>
             </div>
           </div>

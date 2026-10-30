@@ -342,7 +342,7 @@ where pos is the position and i is the dimension. That is, each dimension of the
           id: 'audio-sec-1',
           sectionTitle: '1. Overcoming the Sequential Bottleneck',
           durationSeconds: 65,
-          scriptText: 'Welcome to this LearnLens academic audio lesson on Attention Is All You Need. Prior to this research, natural language processing relied heavily on Recurrent Neural Networks like LSTMs. However, recurrent architectures process text sequentially—step t strictly depends on step t minus one. This prevents GPU parallelization across long passages. The Transformer eliminates recurrence altogether, processing all sequence tokens simultaneously.',
+          scriptText: 'Welcome to this LEARNOVA academic audio lesson on Attention Is All You Need. Prior to this research, natural language processing relied heavily on Recurrent Neural Networks like LSTMs. However, recurrent architectures process text sequentially—step t strictly depends on step t minus one. This prevents GPU parallelization across long passages. The Transformer eliminates recurrence altogether, processing all sequence tokens simultaneously.',
           sourceCitation: {
             id: 'acite-1',
             documentId: 'doc-transformer-attention',
@@ -630,7 +630,7 @@ Because the equation is strictly linear in Psi, it obeys the Principle of Superp
           id: 'audio-qm-sec-1',
           sectionTitle: '1. From Classical Determinism to Probability Amplitudes',
           durationSeconds: 90,
-          scriptText: 'Welcome to this LearnLens audio module on Quantum Mechanics. In 1926, Erwin Schrödinger formalized wave mechanics. Unlike classical mechanics where particles have exact trajectories, quantum particles are described by a complex wave function, Psi. Max Born demonstrated that the square modulus of Psi represents the probability density of locating the particle in space.',
+          scriptText: 'Welcome to this LEARNOVA audio module on Quantum Mechanics. In 1926, Erwin Schrödinger formalized wave mechanics. Unlike classical mechanics where particles have exact trajectories, quantum particles are described by a complex wave function, Psi. Max Born demonstrated that the square modulus of Psi represents the probability density of locating the particle in space.',
           sourceCitation: {
             id: 'acite-qm-1',
             documentId: 'doc-quantum-schrodinger',
@@ -830,7 +830,7 @@ Raft divides time into terms of arbitrary length. Terms are numbered with consec
           id: 'audio-raft-1',
           sectionTitle: '1. Why Raft Replaced Paxos',
           durationSeconds: 75,
-          scriptText: 'Welcome to LearnLens. For decades, Paxos was the gold standard for consensus in distributed systems, but it was notoriously difficult to understand and implement. Diego Ongaro and John Ousterhout designed Raft at Stanford to make consensus intuitive and mathematically verifiable. Raft breaks consensus into three clear subproblems: Leader Election, Log Replication, and Safety.',
+          scriptText: 'Welcome to LEARNOVA. For decades, Paxos was the gold standard for consensus in distributed systems, but it was notoriously difficult to understand and implement. Diego Ongaro and John Ousterhout designed Raft at Stanford to make consensus intuitive and mathematically verifiable. Raft breaks consensus into three clear subproblems: Leader Election, Log Replication, and Safety.',
           sourceCitation: {
             id: 'acite-raft-1',
             documentId: 'doc-raft-consensus',

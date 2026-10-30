@@ -87,7 +87,7 @@ export class AiGeneratorService {
     }
 
     result.generationSource = 'deterministic_fallback';
-    result.modelName = 'LearnLens Grounded Deterministic Engine (Offline Rule-Based)';
+    result.modelName = 'LEARNOVA Grounded Deterministic Engine (Offline Rule-Based)';
     result.isAiFallback = true;
     return result;
   }
@@ -648,11 +648,11 @@ export class AiGeneratorService {
     const audioSections = sections.slice(0, 4).map((sec, idx) => {
       let script = '';
       if (idx === 0) {
-        script = `Welcome to LearnLens Audio Lesson for ${docTitle}. In this lesson, we break down Section 1: ${sec.title}. The author establishes that: ${sec.content.slice(0, 240)}.`;
+        script = `Welcome to LEARNOVA Audio Lesson for ${docTitle}. In this lesson, we break down Section 1: ${sec.title}. The author establishes that: ${sec.content.slice(0, 240)}.`;
         if (language === 'Kannada') {
-          script = `ಸ್ವಾಗತ. ಇದು ${docTitle} ಕುರಿತ ಧ್ವನಿ ಪಾಠ. ಅಧ್ಯಾಯ 1: ${sec.title}. ಲೇಖಕರು ವಿವರಿಸುತ್ತಾರೆ: ${sec.content.slice(0, 200)}.`;
+          script = `ಸ್ವಾಗತ. ಇದು LEARNOVA ${docTitle} ಕುರಿತ ಧ್ವನಿ ಪಾಠ. ಅಧ್ಯಾಯ 1: ${sec.title}. ಲೇಖಕರು ವಿವರಿಸುತ್ತಾರೆ: ${sec.content.slice(0, 200)}.`;
         } else if (language === 'Hindi') {
-          script = `नमस्ते, LearnLens ऑडियो पाठ में आपका स्वागत है। विषय है ${docTitle}। अध्याय 1: ${sec.title}। लेखक बताते हैं: ${sec.content.slice(0, 200)}।`;
+          script = `नमस्ते, LEARNOVA ऑडियो पाठ में आपका स्वागत है। विषय है ${docTitle}। अध्याय 1: ${sec.title}। लेखक बताते हैं: ${sec.content.slice(0, 200)}।`;
         }
       } else {
         script = `Moving to Section ${idx + 1}: ${sec.title}. Here we explore the technical mechanism: ${sec.content.slice(0, 260)}. Remember that boundary conditions must remain strictly non-negative.`;

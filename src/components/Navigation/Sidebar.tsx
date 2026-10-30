@@ -62,7 +62,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div>
               <div className="flex items-center space-x-1.5">
                 <span className="font-extrabold text-base tracking-tight text-slate-900 dark:text-white">
-                  Learn<span className="text-brand-600 dark:text-brand-400">Lens</span>
+                  LEARN<span className="text-brand-600 dark:text-brand-400">OVA</span>
                 </span>
                 <span className="text-[10px] font-bold px-1.5 py-0.2 bg-brand-50 dark:bg-brand-950 text-brand-600 dark:text-brand-400 rounded-md border border-brand-200 dark:border-brand-800">
                   AI

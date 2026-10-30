@@ -74,7 +74,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <GraduationCap className="w-8 h-8" />
           </div>
           <h2 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
-            LearnLens AI
+            LEARNOVA AI
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto">
             Precision Academic Study Platform & Source Grounding Engine

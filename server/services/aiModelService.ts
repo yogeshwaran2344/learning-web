@@ -43,7 +43,7 @@ export class AiModelService {
       openaiConfigured: Boolean(this.openaiApiKey),
       activeProvider: this.geminiApiKey ? 'gemini' : (this.openaiApiKey ? 'openai' : 'deterministic-grounded'),
       mode: this.hasExternalAiProvider() ? 'external_model_backed' : 'deterministic_high_fidelity',
-      modelName: this.geminiApiKey ? 'Gemini 1.5 Flash' : (this.openaiApiKey ? 'GPT-4o mini' : 'LearnLens Grounded Engine')
+      modelName: this.geminiApiKey ? 'Gemini 1.5 Flash' : (this.openaiApiKey ? 'GPT-4o mini' : 'LEARNOVA Grounded Engine')
     };
   }
 
@@ -56,7 +56,7 @@ export class AiModelService {
   }
 
   static getSystemPrompt(language: AppLanguage, formatType: string): string {
-    return `You are an expert Academic Tutor and Meaning Preservation Engine for LearnLens AI.
+    return `You are an expert Academic Tutor and Meaning Preservation Engine for LEARNOVA AI.
 Target Language: ${language}
 Format to Generate: ${formatType}
 

@@ -69,7 +69,7 @@ export const MeaningPreservationView: React.FC<MeaningPreservationViewProps> = (
             </h2>
 
             <p className="text-slate-300 text-xs sm:text-sm leading-relaxed">
-              Unlike generic AI summarizers that risk hallucinations, LearnLens extracts the atomic facts, equations, definitions, and boundary conditions from the original academic source and mathematically audits every generated Concept Map, Explanation, Flashcard, and Audio transcript against them.
+              Unlike generic AI summarizers that risk hallucinations, LEARNOVA extracts the atomic facts, equations, definitions, and boundary conditions from the original academic source and mathematically audits every generated Concept Map, Explanation, Flashcard, and Audio transcript against them.
             </p>
           </div>
 

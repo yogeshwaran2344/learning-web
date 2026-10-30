@@ -54,7 +54,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           openaiConfigured: false,
           activeProvider: 'deterministic-grounded',
           mode: 'deterministic_high_fidelity',
-          modelName: 'LearnLens Grounded Engine'
+          modelName: 'LEARNOVA Grounded Engine'
         });
       });
   }, []);
@@ -392,7 +392,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/80 text-[11px] text-slate-500 dark:text-slate-400 flex items-start gap-2">
             <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
             <span>
-              <strong>Zero-Hallucination Meaning Preservation Guarantee:</strong> When no API keys are provided or during network timeouts, LearnLens AI automatically uses its high-fidelity deterministic engine. All generated claims, formulas, and worked steps are cross-checked against source citations by the Meaning Preservation Engine before publication.
+              <strong>Zero-Hallucination Meaning Preservation Guarantee:</strong> When no API keys are provided or during network timeouts, LEARNOVA AI automatically uses its high-fidelity deterministic engine. All generated claims, formulas, and worked steps are cross-checked against source citations by the Meaning Preservation Engine before publication.
             </span>
           </div>
         </div>

@@ -2,6 +2,14 @@ import { AcademicDocument, UserPreferences, FeedbackReport, SavedItem, LecturerC
 import { SAMPLE_DOCUMENTS, INITIAL_SAVED_ITEMS, INITIAL_COURSES } from '../data/sampleDocuments';
 
 const STORAGE_KEYS = {
+  DOCUMENTS: 'learnova_documents_v2',
+  PREFERENCES: 'learnova_preferences_v2',
+  FEEDBACK: 'learnova_feedback_v2',
+  SAVED_ITEMS: 'learnova_saved_items_v2',
+  COURSES: 'learnova_courses_v2'
+};
+
+const LEGACY_STORAGE_KEYS = {
   DOCUMENTS: 'learnlens_documents_v2',
   PREFERENCES: 'learnlens_preferences_v2',
   FEEDBACK: 'learnlens_feedback_v2',
@@ -79,7 +87,7 @@ export class StorageService {
 
   static getDocuments(): AcademicDocument[] {
     try {
-      const raw = localStorage.getItem(STORAGE_KEYS.DOCUMENTS);
+      const raw = localStorage.getItem(STORAGE_KEYS.DOCUMENTS) || localStorage.getItem(LEGACY_STORAGE_KEYS.DOCUMENTS);
       if (raw === null) {
         return [];
       }
@@ -165,7 +173,7 @@ export class StorageService {
 
   static getPreferences(): UserPreferences {
     try {
-      const raw = localStorage.getItem(STORAGE_KEYS.PREFERENCES);
+      const raw = localStorage.getItem(STORAGE_KEYS.PREFERENCES) || localStorage.getItem(LEGACY_STORAGE_KEYS.PREFERENCES);
       if (!raw) return DEFAULT_PREFERENCES;
       return { ...DEFAULT_PREFERENCES, ...JSON.parse(raw) };
     } catch {
@@ -183,7 +191,7 @@ export class StorageService {
 
   static getSavedItems(): SavedItem[] {
     try {
-      const raw = localStorage.getItem(STORAGE_KEYS.SAVED_ITEMS);
+      const raw = localStorage.getItem(STORAGE_KEYS.SAVED_ITEMS) || localStorage.getItem(LEGACY_STORAGE_KEYS.SAVED_ITEMS);
       if (raw === null) {
         return [];
       }
@@ -223,7 +231,7 @@ export class StorageService {
 
   static getCourses(): LecturerCourse[] {
     try {
-      const raw = localStorage.getItem(STORAGE_KEYS.COURSES);
+      const raw = localStorage.getItem(STORAGE_KEYS.COURSES) || localStorage.getItem(LEGACY_STORAGE_KEYS.COURSES);
       if (raw === null) {
         return [];
       }
@@ -259,7 +267,7 @@ export class StorageService {
 
   static getFeedbackReports(): FeedbackReport[] {
     try {
-      const raw = localStorage.getItem(STORAGE_KEYS.FEEDBACK);
+      const raw = localStorage.getItem(STORAGE_KEYS.FEEDBACK) || localStorage.getItem(LEGACY_STORAGE_KEYS.FEEDBACK);
       return raw ? JSON.parse(raw) : [];
     } catch {
       return [];

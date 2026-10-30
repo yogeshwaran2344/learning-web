@@ -47,7 +47,7 @@ export const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(document, null, 2));
     const downloadAnchor = window.document.createElement('a') as any;
     downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `${document.title.replace(/\s+/g, '_')}_LearnLens_Pack.json`);
+    downloadAnchor.setAttribute("download", `${document.title.replace(/\s+/g, '_')}_Learnova_Pack.json`);
     window.document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();

@@ -239,7 +239,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             {onLogout && (
               <button
                 onClick={onLogout}
-                title="Sign Out of LearnLens"
+                title="Sign Out of LEARNOVA"
                 className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors ml-1"
               >
                 <LogOut className="w-3.5 h-3.5" />

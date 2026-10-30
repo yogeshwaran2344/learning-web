@@ -159,7 +159,7 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({
             <span>Zero-Hallucination Guard</span>
           </div>
           <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-            Every statement generated in LearnLens is cross-checked against atomic facts extracted from the original PDF/PPT.
+            Every statement generated in LEARNOVA is cross-checked against atomic facts extracted from the original PDF/PPT.
           </p>
         </div>
       </div>

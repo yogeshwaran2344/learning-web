@@ -1,6 +1,6 @@
-# LearnLens — Verified Academic Transformation & Meaning Preservation Platform
+# LEARNOVA — Verified Academic Transformation & Meaning Preservation Platform
 
-LearnLens is a state-of-the-art educational and research platform that transforms academic materials (research papers, textbook chapters, lecture slides) into multiple verified learning formats while strictly preserving original meaning, mathematical equations, and boundary conditions.
+LEARNOVA is a state-of-the-art educational and research platform that transforms academic materials (research papers, textbook chapters, lecture slides) into multiple verified learning formats while strictly preserving original meaning, mathematical equations, and boundary conditions.
 
 Every single generated statement, flashcard, and concept node links bi-directionally back to its exact source passage with click-to-highlight traceability.
 
