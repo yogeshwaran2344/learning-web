@@ -1031,6 +1031,682 @@ Curve C must be strictly simple (non-self-intersecting) and traversed counter-cl
         }
       ]
     }
+  },
+  {
+    id: 'doc-os-scheduling',
+    title: 'Operating Systems: CPU Scheduling & Performance Metrics',
+    author: 'Silberschatz, Galvin & Gagne',
+    year: '2026',
+    category: 'Computer Science',
+    fileType: 'pdf',
+    uploadDate: '2026-10-30',
+    processingStatus: 'ready',
+    extractionStatus: 'ready',
+    pageCount: 2,
+    wordCount: 1420,
+    summary: 'Detailed examination of CPU Scheduling algorithms including Shortest Job First, First-Come First-Served, and step-by-step Turnaround Time and Waiting Time derivations.',
+    sections: [
+      {
+        id: 'sec-os-1',
+        title: 'CPU Scheduling – Example',
+        pageNumber: 1,
+        content: `CPU Scheduling – Example\n\nConsider the following set of 5 processes arriving at the ready queue with their respective arrival times and burst times:\n\nProcess | Arrival Time | Burst Time\nP1 | 0 | 5\nP2 | 1 | 3\nP3 | 2 | 1\nP4 | 3 | 5\nP5 | 4 | 2\n\nThe scheduler allocates CPU resources non-preemptively based on arrival order and shortest remaining bursts.\n\nTurnaround time calculations:\nTurnaround Time (TAT) = Completion Time - Arrival Time\nP1: 5 - 0 = 5\nP2: 8 - 1 = 7\nP3: 9 - 2 = 7\nP4: 14 - 3 = 11\nP5: 16 - 4 = 12\n\nAverage turnaround time = (5 + 7 + 7 + 11 + 12) / 5 = 8.4 ms\n\nWaiting time calculations:\nWaiting Time (WT) = Turnaround Time - Burst Time\nP1: 5 - 5 = 0\nP2: 7 - 3 = 4\nP3: 7 - 1 = 6\nP4: 11 - 5 = 6\nP5: 12 - 2 = 10\n\nAverage waiting time = (0 + 4 + 6 + 6 + 10) / 5 = 5.2 ms`,
+        tables: [
+          {
+            caption: 'Process Arrival and Burst Parameters',
+            headers: ['Process', 'Arrival Time', 'Burst Time'],
+            rows: [
+              ['P1', '0', '5'],
+              ['P2', '1', '3'],
+              ['P3', '2', '1'],
+              ['P4', '3', '5'],
+              ['P5', '4', '2']
+            ]
+          }
+        ],
+        equations: [
+          {
+            latex: 'TAT = CT - AT',
+            meaning: 'Turnaround Time equals Completion Time minus Arrival Time',
+            label: 'Equation 1'
+          },
+          {
+            latex: 'WT = TAT - BT',
+            meaning: 'Waiting Time equals Turnaround Time minus Burst Time',
+            label: 'Equation 2'
+          }
+        ],
+        conditions: [
+          'Arrival times and burst times must be non-negative real numbers (AT >= 0, BT > 0).'
+        ]
+      },
+      {
+        id: 'sec-os-2',
+        title: 'Preemptive vs Non-Preemptive Scheduling Invariants',
+        pageNumber: 2,
+        content: `Under non-preemptive scheduling, once the CPU has been allocated to a process, the process holds the CPU until it terminates or switches to the waiting state. In contrast, preemptive scheduling permits higher-priority tasks to interrupt executing threads.\n\nThe governing invariant guarantees that total CPU utilization U <= 1.0, and no process suffers starvation when aging mechanisms are enforced.`,
+        conditions: [
+          'CPU utilization invariant: sum(BT_i / Period_i) <= 1.0'
+        ]
+      }
+    ],
+    conceptMap: {
+      nodes: [
+        {
+          id: 'cm-os-1',
+          label: 'CPU Scheduling Core',
+          category: 'core',
+          summary: 'Manages allocation of processor burst cycles across ready queue processes.',
+          prerequisites: [],
+          importance: 'foundational',
+          sourceCitation: {
+            id: 'os-cite-1',
+            documentId: 'doc-os-scheduling',
+            pageNumber: 1,
+            sectionTitle: 'CPU Scheduling – Example',
+            exactQuote: 'The scheduler allocates CPU resources non-preemptively...',
+            contextSnippet: 'Consider the following set of 5 processes...'
+          }
+        },
+        {
+          id: 'cm-os-2',
+          label: 'Turnaround Time',
+          category: 'equation',
+          summary: 'TAT = Completion Time - Arrival Time',
+          prerequisites: ['cm-os-1'],
+          importance: 'high',
+          sourceCitation: {
+            id: 'os-cite-2',
+            documentId: 'doc-os-scheduling',
+            pageNumber: 1,
+            sectionTitle: 'CPU Scheduling – Example',
+            exactQuote: 'Turnaround Time (TAT) = Completion Time - Arrival Time',
+            contextSnippet: 'Turnaround time calculations...'
+          }
+        },
+        {
+          id: 'cm-os-3',
+          label: 'Waiting Time',
+          category: 'equation',
+          summary: 'WT = Turnaround Time - Burst Time',
+          prerequisites: ['cm-os-2'],
+          importance: 'high',
+          sourceCitation: {
+            id: 'os-cite-3',
+            documentId: 'doc-os-scheduling',
+            pageNumber: 1,
+            sectionTitle: 'CPU Scheduling – Example',
+            exactQuote: 'Waiting Time (WT) = Turnaround Time - Burst Time',
+            contextSnippet: 'Waiting time calculations...'
+          }
+        }
+      ],
+      edges: [
+        { from: 'cm-os-1', to: 'cm-os-2', relation: 'computes via' },
+        { from: 'cm-os-2', to: 'cm-os-3', relation: 'enforces invariant' }
+      ]
+    },
+    explanations: [
+      {
+        title: 'CPU Scheduling in Simple Terms',
+        summary: 'CPU scheduling decides which job runs on the computer processor and in what order.',
+        intuitiveAnalogy: 'Think of a bank teller serving customers: arrival time is when someone walks through the door, burst time is how long their transaction takes, and turnaround time is how long they spent inside.',
+        rigorousBreakdown: 'In FCFS and priority scheduling, processes enter a ready queue at distinct arrival times (AT). The CPU executes each process for its burst time (BT). Key invariant: Turnaround Time = Completion Time - Arrival Time, and Waiting Time = Turnaround Time - Burst Time. Waiting time can never be negative.',
+        workedExample: 'Process P1: AT=0, BT=4, CT=4. Turnaround Time = 4 - 0 = 4ms. Waiting Time = 4 - 4 = 0ms.\nProcess P2: AT=1, BT=3, CT=7. Turnaround Time = 7 - 1 = 6ms. Waiting Time = 6 - 3 = 3ms.\nAverage Turnaround Time = 6.8ms, Average Waiting Time = 3.6ms.',
+        keyTakeaways: [
+          'Arrival Time (AT) is when a process enters the ready queue.',
+          'Burst Time (BT) is the execution time needed on the CPU.',
+          'Turnaround Time (TAT) = Completion Time (CT) - Arrival Time (AT).',
+          'Waiting Time (WT) = Turnaround Time (TAT) - Burst Time (BT).'
+        ],
+        citations: [
+          {
+            id: 'cite-os-exp-1',
+            documentId: 'doc-os-scheduling',
+            pageNumber: 1,
+            sectionTitle: 'CPU Scheduling – Example',
+            exactQuote: 'Turnaround Time (TAT) = Completion Time - Arrival Time',
+            contextSnippet: 'Turnaround Time calculations for processes P1 through P5'
+          }
+        ]
+      }
+    ],
+    flashcards: [
+      {
+        id: 'fc-os-1',
+        front: 'What is Turnaround Time (TAT) in CPU scheduling?',
+        back: 'The total interval from the time of process submission to the time of completion: TAT = Completion Time - Arrival Time.',
+        category: 'equation',
+        masteryLevel: 1,
+        sourceCitation: {
+          id: 'fc-cite-os-1',
+          documentId: 'doc-os-scheduling',
+          pageNumber: 1,
+          sectionTitle: 'CPU Scheduling – Example',
+          exactQuote: 'Turnaround Time (TAT) = Completion Time - Arrival Time',
+          contextSnippet: 'Turnaround time calculations...'
+        }
+      },
+      {
+        id: 'fc-os-2',
+        front: 'What is Waiting Time (WT) in CPU scheduling?',
+        back: 'The total time a process spends waiting in the ready queue: WT = Turnaround Time - Burst Time.',
+        category: 'equation',
+        masteryLevel: 1,
+        sourceCitation: {
+          id: 'fc-cite-os-2',
+          documentId: 'doc-os-scheduling',
+          pageNumber: 1,
+          sectionTitle: 'CPU Scheduling – Example',
+          exactQuote: 'Waiting Time (WT) = Turnaround Time - Burst Time',
+          contextSnippet: 'Waiting time calculations...'
+        }
+      }
+    ],
+    audioLesson: {
+      id: 'audio-os',
+      title: 'CPU Scheduling & Performance Metrics',
+      totalDurationSeconds: 120,
+      sections: [
+        {
+          id: 'audio-os-1',
+          sectionTitle: '1. CPU Scheduling Fundamentals',
+          durationSeconds: 60,
+          scriptText: 'Welcome to LEARNOVA. In this lesson, we analyze CPU scheduling performance metrics using an explicit process queue. Process arrival times and burst times determine both individual response latency and average throughput.',
+          sourceCitation: {
+            id: 'acite-os-1',
+            documentId: 'doc-os-scheduling',
+            pageNumber: 1,
+            sectionTitle: 'CPU Scheduling – Example',
+            exactQuote: 'Consider the following set of 5 processes...',
+            contextSnippet: 'Process | Arrival Time | Burst Time...'
+          }
+        }
+      ]
+    },
+    meaningPreservation: {
+      overallFidelityScore: 98.6,
+      factRetentionRate: 100,
+      equationIntegrityRate: 100,
+      conditionAccuracyRate: 97.0,
+      terminologyConsistencyRate: 99.0,
+      unsupportedClaimsDetected: 0,
+      alteredEquationsDetected: 0,
+      missingConditionsDetected: 0,
+      lastAuditDate: '2026-10-30 20:00 UTC',
+      verifiedByEngine: true,
+      factChecks: [
+        {
+          id: 'chk-os-1',
+          originalFact: 'Turnaround Time TAT = Completion Time - Arrival Time',
+          originalQuote: 'Turnaround Time (TAT) = Completion Time - Arrival Time',
+          pageNumber: 1,
+          formatFound: ['Notes', 'Simplified', 'Worked Examples'],
+          status: 'fully_preserved',
+          confidenceScore: 100,
+          notes: 'Formula verified verbatim.'
+        }
+      ]
+    }
+  },
+  {
+    id: 'doc-intro-neurology',
+    title: 'Intro_to_Neurology',
+    author: 'Prof. J.L. Wilkinson / MCAT Prep',
+    year: '2026',
+    uploadDate: '2026-10-30',
+    category: 'Bioinformatics',
+    fileType: 'pdf',
+    processingStatus: 'ready',
+    extractionStatus: 'ready',
+    pageCount: 4,
+    wordCount: 1420,
+    summary: 'Microscopic anatomy of the nervous system, cytology of the neuron cell body (soma), dendrites, axon hillock, fine cellular organelles, and neurophysiology including saltatory conduction and the pathophysiology of Multiple Sclerosis (MS).',
+    extractionQuality: {
+      userStatus: 'ready',
+      textCompletenessScore: 100,
+      ocrConfidenceScore: 100,
+      equationIntegrityScore: 100,
+      structurePreservationScore: 100,
+      sourceTraceabilityScore: 100,
+      diagnostics: [],
+      hasScannedPages: false,
+      scannedPageNumbers: [],
+      testedAgainstBenchmark: true
+    },
+    sections: [
+      {
+        id: 'sec-neuro-1',
+        title: 'Microscopic Anatomy of the Nervous System',
+        pageNumber: 1,
+        content: `1 Fundamentals\nMicroscopic Anatomy of the Nervous system ... 1\nElements of Neurophysiology ... 4\nElements of Neurogenetics ... 5\n\nMicroscopic Anatomy of the Nervous System\n\n> Neurons are the structural and functional building blocks of the nervous system. This type of cell is specialized for the reception, integration, and transmission of electrical impulses.\n\nNeurons. The cell body (soma) of the neuron is enclosed by the cell membrane and contains the cell nucleus, mitochondria, endoplasmic reticulum, neurotubules, and neurofilaments (Fig. 1.1). Dendrites are short, more or less extensively branched, cellular processes that conduct afferent impulses toward the cell body. They provide the cell with a much larger surface area than the cell body alone, thereby increasing the area available for intercellular contact and for the deployment of cell membrane receptors. Different types of neurons have different characteristic morphological types of dendrites; those of the cerebellar Purkinje cells, for example, resemble a deer's antlers (Fig. 1.2). The axon is a single cell process, usually longer than a dendrite, which emerges from the cell body at the axon hillock. It conducts efferent impulses away from the cell body to another neuron or an effector organ.\n\nGenerally speaking, every neuron has a soma, an axon, and one or more dendrites. The structure and configuration of the nerve cell processes (especially the dendrites) vary depending on the function of the neuron. Thus, neurons can be classified into a number of morphological subtypes (Fig. 1.3).\n\nFig. 1.1 Fine structure of a neuron (after Wilkinson, J.L.: Neuroanatomy for Medical Students, 2nd edn, Butterworth-Heinemann, Oxford 1992).`,
+        definitions: [
+          {
+            term: 'Neuron',
+            definition: 'The structural and functional building blocks of the nervous system, specialized for the reception, integration, and transmission of electrical impulses.'
+          },
+          {
+            term: 'Soma (Cell Body)',
+            definition: 'Enclosed by the cell membrane; houses the nucleus, mitochondria, Nissl bodies (rough ER), Golgi apparatus, and neurofilaments.'
+          },
+          {
+            term: 'Dendrites',
+            definition: 'Extensively branched cellular processes that conduct afferent (incoming) electrical impulses toward the cell body.'
+          },
+          {
+            term: 'Axon',
+            definition: 'A single, elongated cellular process emerging from the axon hillock that conducts efferent (outgoing) action potentials toward target cells.'
+          }
+        ],
+        equations: [
+          {
+            latex: 'v_{conduction} \\propto \\sqrt{d} \\quad \\text{(unmyelinated)} \\quad \\longleftrightarrow \\quad v_{conduction} \\propto d \\quad \\text{(myelinated saltatory)}',
+            meaning: 'Conduction velocity scales with the square root of diameter in unmyelinated fibers, but linearly with diameter in myelinated fibers.',
+            label: 'Axonal Conduction Velocity'
+          }
+        ],
+        conditions: [
+          'Action potentials are all-or-none and initiate only when membrane depolarization reaches the threshold potential (~ -55 mV) at the axon hillock.',
+          'Myelin sheath integrity is essential for saltatory conduction; demyelination halts or delays impulse propagation.'
+        ]
+      },
+      {
+        id: 'sec-neuro-2',
+        title: 'Elements of Neurophysiology & Pathophysiology of Multiple Sclerosis',
+        pageNumber: 2,
+        content: `Multiple sclerosis (MS) is a chronic autoimmune disease characterized by the immune system attacking the central nervous system (CNS), which includes the brain and spinal cord. This attack primarily targets myelin, the protective sheath surrounding nerve fibers, leading to demyelination and subsequent neurological dysfunction.\n\nKey Aspects of MS Pathophysiology:\n1. Autoimmune Response: In MS, the immune system mistakenly identifies components of the CNS as foreign, initiating an inflammatory response. This involves the activation of autoreactive T-lymphocytes and B-lymphocytes that cross the blood-brain barrier.\n2. Demyelination: T-cells release pro-inflammatory cytokines that recruit macrophages. These attack myelin sheaths and destroy oligodendrocytes (the myelin-producing cells of the CNS).\n3. Saltatory Conduction Failure: In healthy myelinated neurons, impulses jump rapidly between nodes of Ranvier. Loss of myelin dissipates electrical charges, causing conduction delays or complete conduction block.\n4. Axonal Sclerosis: Chronic inflammation leads to irreversible axonal degeneration and glial scar formation (sclerotic plaques).\n5. Clinical Symptoms: Visual disturbances (optic neuritis), muscle weakness, spasticity, ataxia, and neuropathic pain.`,
+        definitions: [
+          {
+            term: 'Multiple Sclerosis (MS)',
+            definition: 'A chronic autoimmune disorder where immune cells attack CNS myelin, impairing nerve signal conduction.'
+          },
+          {
+            term: 'Saltatory Conduction',
+            definition: 'The rapid propagation of action potentials jumping along myelinated axons from one node of Ranvier to the next.'
+          },
+          {
+            term: 'Oligodendrocyte',
+            definition: 'Glial cell in the central nervous system responsible for forming and maintaining myelin sheaths around multiple axons.'
+          }
+        ],
+        equations: [
+          {
+            latex: '\\lambda = \\sqrt{\\frac{r_m}{r_i + r_o}} \\quad \\text{(Membrane Length Constant)}',
+            meaning: 'The length constant lambda increases with membrane resistance rm (provided by myelin), allowing electrical potentials to travel further before decaying.',
+            label: 'Length Constant Equation'
+          }
+        ],
+        conditions: [
+          'Demyelination reduces membrane resistance (rm), causing the length constant to drop and preventing depolarization from reaching the next node of Ranvier.'
+        ]
+      },
+      {
+        id: 'sec-neuro-3',
+        title: 'Spinal Cord Projections & Reflex Arcs',
+        pageNumber: 3,
+        content: `The spinal cord organizes sensory afferents through dorsal nerve roots and motor efferents through ventral roots. Reflex arcs operate through monosynaptic and polysynaptic pathways to provide instantaneous homeostatic motor responses without requiring cerebral cortical delay.`,
+        definitions: [
+          {
+            term: 'Reflex Arc',
+            definition: 'Neural pathway that controls a reflex action, typically comprising sensory receptor, afferent neuron, integration center, efferent neuron, and effector.'
+          }
+        ],
+        conditions: [
+          'Lower motor neuron lesions cause flaccid paralysis and hyporeflexia, whereas upper motor neuron lesions produce spasticity and hyperreflexia.'
+        ]
+      },
+      {
+        id: 'sec-neuro-4',
+        title: 'Elements of Neurogenetics & Molecular Invariants',
+        pageNumber: 4,
+        content: `Neurogenetics examines inherited variations in ion channels (channelopathies) and myelin structural proteins, including Myelin Basic Protein (MBP) and Proteolipid Protein (PLP). Genetic predispositions like HLA-DRB1*15:01 significantly increase MS susceptibility.`,
+        definitions: [
+          {
+            term: 'Channelopathy',
+            definition: 'A disease caused by disturbed function of ion channel subunits or the proteins that regulate them.'
+          }
+        ],
+        conditions: [
+          'Resting membrane potential is strictly maintained at ~ -70 mV by the ATP-dependent Na+/K+ ATPase pump pumping 3 Na+ out and 2 K+ in.'
+        ]
+      }
+    ],
+    conceptMap: {
+      nodes: [
+        {
+          id: 'cm-neuro-1',
+          label: 'Neuron Architecture',
+          category: 'core',
+          importance: 'high',
+          summary: 'Structural and functional unit of the nervous system comprising soma, dendrites, and axon.',
+          prerequisites: [],
+          sourceCitation: { id: 'c-n-1', documentId: 'doc-intro-neurology', pageNumber: 1, sectionTitle: 'Microscopic Anatomy', exactQuote: 'Neurons are the structural building blocks', contextSnippet: 'Neuron structure' }
+        },
+        {
+          id: 'cm-neuro-2',
+          label: 'Soma & Organelles',
+          category: 'mechanism',
+          importance: 'medium',
+          summary: 'Cell body housing nucleus, mitochondria, Nissl bodies (rough ER), and Golgi apparatus.',
+          prerequisites: ['cm-neuro-1'],
+          sourceCitation: { id: 'c-n-2', documentId: 'doc-intro-neurology', pageNumber: 1, sectionTitle: 'Microscopic Anatomy', exactQuote: 'The cell body (soma) of the neuron', contextSnippet: 'Organelles' }
+        },
+        {
+          id: 'cm-neuro-3',
+          label: 'Dendritic Trees',
+          category: 'mechanism',
+          importance: 'medium',
+          summary: 'Branched afferent processes receiving synaptic inputs and deploying receptors.',
+          prerequisites: ['cm-neuro-1'],
+          sourceCitation: { id: 'c-n-3', documentId: 'doc-intro-neurology', pageNumber: 1, sectionTitle: 'Microscopic Anatomy', exactQuote: 'Dendrites are short branched processes', contextSnippet: 'Dendrites' }
+        },
+        {
+          id: 'cm-neuro-4',
+          label: 'Axon & Axon Hillock',
+          category: 'core',
+          importance: 'high',
+          summary: 'Initiation site and efferent highway for action potential propagation.',
+          prerequisites: ['cm-neuro-1'],
+          sourceCitation: { id: 'c-n-4', documentId: 'doc-intro-neurology', pageNumber: 1, sectionTitle: 'Microscopic Anatomy', exactQuote: 'The axon is a single cell process', contextSnippet: 'Axon hillock' }
+        },
+        {
+          id: 'cm-neuro-5',
+          label: 'Myelin Sheath',
+          category: 'mechanism',
+          importance: 'high',
+          summary: 'Lipid-rich insulating layer produced by oligodendrocytes in CNS.',
+          prerequisites: ['cm-neuro-4'],
+          sourceCitation: { id: 'c-n-5', documentId: 'doc-intro-neurology', pageNumber: 2, sectionTitle: 'Elements of Neurophysiology', exactQuote: 'myelin, the protective sheath', contextSnippet: 'Myelin sheath' }
+        },
+        {
+          id: 'cm-neuro-6',
+          label: 'Saltatory Conduction',
+          category: 'core',
+          importance: 'high',
+          summary: 'Rapid impulse transmission jumping between Nodes of Ranvier.',
+          prerequisites: ['cm-neuro-5'],
+          sourceCitation: { id: 'c-n-6', documentId: 'doc-intro-neurology', pageNumber: 2, sectionTitle: 'Elements of Neurophysiology', exactQuote: 'impulses jump rapidly between nodes of Ranvier', contextSnippet: 'Saltatory conduction' }
+        },
+        {
+          id: 'cm-neuro-7',
+          label: 'Multiple Sclerosis (MS)',
+          category: 'application',
+          importance: 'high',
+          summary: 'Autoimmune demyelination and axonal degeneration of CNS white matter.',
+          prerequisites: ['cm-neuro-5', 'cm-neuro-6'],
+          sourceCitation: { id: 'c-n-7', documentId: 'doc-intro-neurology', pageNumber: 2, sectionTitle: 'Elements of Neurophysiology', exactQuote: 'Multiple sclerosis is a chronic autoimmune disease', contextSnippet: 'MS pathology' }
+        }
+      ],
+      edges: [
+        { from: 'cm-neuro-1', to: 'cm-neuro-2', relation: 'contains' },
+        { from: 'cm-neuro-1', to: 'cm-neuro-3', relation: 'extends' },
+        { from: 'cm-neuro-1', to: 'cm-neuro-4', relation: 'projects' },
+        { from: 'cm-neuro-4', to: 'cm-neuro-5', relation: 'insulated by' },
+        { from: 'cm-neuro-5', to: 'cm-neuro-6', relation: 'enables' },
+        { from: 'cm-neuro-5', to: 'cm-neuro-7', relation: 'targeted in' }
+      ]
+    },
+    explanations: [
+      {
+        title: 'Microscopic Anatomy of Neurons & MS Pathophysiology',
+        summary: 'How neuronal cell structures transmit electrical signals, and why autoimmune destruction of myelin causes Multiple Sclerosis.',
+        intuitiveAnalogy: 'Think of a neuron like an ultra-high-speed fiber optic networking device: Dendrites are the input antenna arrays, the Soma is the central microchip processor, the Axon is the outgoing network cable, and the Myelin Sheath is the rubber weatherproofing insulation that keeps signals traveling at lightning speed without leaking!',
+        rigorousBreakdown: 'Neurons maintain a negative resting potential (-70 mV) via the Na+/K+ pump. Action potentials initiate at the axon hillock when local dendritic EPSPs summate to -55 mV. In myelinated axons, high membrane resistance prevents current leakage, forcing depolarization to leap from node to node (saltatory conduction). In Multiple Sclerosis, CD4+ and CD8+ T cells cross the blood-brain barrier, triggering macrophage-mediated stripping of myelin. Without insulation, the length constant lambda collapses, causing conduction failure and axonal transection.',
+        workedExample: 'Step 1: Normal myelinated axon: diameter = 10 um, conduction speed ≈ 60 m/s.\nStep 2: Demyelination occurs: membrane resistance rm drops 100-fold.\nStep 3: Length constant lambda = sqrt(rm / (ri + ro)) drops from 2.0 mm to 0.2 mm.\nStep 4: Depolarizing current decays below threshold before reaching next Node of Ranvier -> Conduction block occurs.',
+        keyTakeaways: [
+          'Neurons consist of soma (cell body), branched afferent dendrites, and an efferent axon.',
+          'The axon hillock is the trigger zone for all-or-none action potential generation.',
+          'Myelin sheaths formed by oligodendrocytes enable fast saltatory conduction.',
+          'Multiple Sclerosis is an autoimmune attack on myelin leading to signal conduction failure.'
+        ],
+        citations: [
+          {
+            id: 'cite-neuro-1',
+            documentId: 'doc-intro-neurology',
+            pageNumber: 1,
+            sectionTitle: 'Microscopic Anatomy of the Nervous System',
+            exactQuote: 'Neurons are the structural and functional building blocks of the nervous system. This type of cell is specialized for the reception, integration, and transmission of electrical impulses.',
+            contextSnippet: 'Microscopic anatomy of soma, dendrites, and axon processes.'
+          },
+          {
+            id: 'cite-neuro-2',
+            documentId: 'doc-intro-neurology',
+            pageNumber: 2,
+            sectionTitle: 'Elements of Neurophysiology & Pathophysiology of Multiple Sclerosis',
+            exactQuote: 'Multiple sclerosis (MS) is a chronic autoimmune disease characterized by the immune system attacking the central nervous system (CNS), which includes the brain and spinal cord.',
+            contextSnippet: 'Autoimmune attack on myelin and oligodendrocytes.'
+          }
+        ]
+      }
+    ],
+    flashcards: [
+      {
+        id: 'fc-neuro-1',
+        front: 'What are the three primary anatomical components of a neuron?',
+        back: 'The soma (cell body), dendrites (afferent branched inputs), and the axon (efferent signal transmission cable).',
+        category: 'definition',
+        masteryLevel: 1,
+        sourceCitation: {
+          id: 'fc-cite-neuro-1',
+          documentId: 'doc-intro-neurology',
+          pageNumber: 1,
+          sectionTitle: 'Microscopic Anatomy of the Nervous System',
+          exactQuote: 'Generally speaking, every neuron has a soma, an axon, and one or more dendrites.',
+          contextSnippet: 'Neuron morphological components'
+        }
+      },
+      {
+        id: 'fc-neuro-2',
+        front: 'What is the pathophysiological cause of Multiple Sclerosis (MS)?',
+        back: 'An autoimmune inflammatory response where autoreactive T-cells and macrophages attack CNS myelin sheaths and oligodendrocytes, disrupting saltatory conduction.',
+        category: 'condition',
+        masteryLevel: 1,
+        sourceCitation: {
+          id: 'fc-cite-neuro-2',
+          documentId: 'doc-intro-neurology',
+          pageNumber: 2,
+          sectionTitle: 'Elements of Neurophysiology & Pathophysiology of Multiple Sclerosis',
+          exactQuote: 'This attack primarily targets myelin, the protective sheath surrounding nerve fibers, leading to demyelination and subsequent neurological dysfunction.',
+          contextSnippet: 'MS autoimmune demyelination'
+        }
+      },
+      {
+        id: 'fc-neuro-3',
+        front: 'Why does saltatory conduction fail in demyelinated axons?',
+        back: 'Loss of high-resistance myelin insulation causes current to leak across the membrane, so depolarization decays before reaching the next node of Ranvier.',
+        category: 'equation',
+        masteryLevel: 1,
+        sourceCitation: {
+          id: 'fc-cite-neuro-3',
+          documentId: 'doc-intro-neurology',
+          pageNumber: 2,
+          sectionTitle: 'Elements of Neurophysiology & Pathophysiology of Multiple Sclerosis',
+          exactQuote: 'Loss of myelin dissipates electrical charges, causing conduction delays or complete conduction block.',
+          contextSnippet: 'Conduction failure mechanism'
+        }
+      }
+    ],
+    audioLesson: {
+      id: 'al-neuro-1',
+      title: 'MCAT Neurology: Cellular Anatomy & Pathophysiology of Multiple Sclerosis',
+      totalDurationSeconds: 240,
+      sections: [
+        {
+          id: 'al-sec-1',
+          sectionTitle: '1. Fundamentals of Neuron Cytology',
+          durationSeconds: 120,
+          scriptText: 'Neurons are specialized cells composed of a central soma, branched dendrites that receive inputs, and an axon that conducts action potentials.',
+          sourceCitation: {
+            id: 'acite-n-1',
+            documentId: 'doc-intro-neurology',
+            pageNumber: 1,
+            sectionTitle: 'Microscopic Anatomy of the Nervous System',
+            exactQuote: 'Neurons are the structural and functional building blocks of the nervous system.',
+            contextSnippet: 'Microscopic anatomy of soma, dendrites, and axon processes.'
+          }
+        },
+        {
+          id: 'al-sec-2',
+          sectionTitle: '2. Pathophysiology of Multiple Sclerosis',
+          durationSeconds: 120,
+          scriptText: 'Multiple sclerosis is a chronic autoimmune disease where autoreactive T-cells attack central nervous system myelin, halting saltatory conduction.',
+          sourceCitation: {
+            id: 'acite-n-2',
+            documentId: 'doc-intro-neurology',
+            pageNumber: 2,
+            sectionTitle: 'Elements of Neurophysiology & Pathophysiology of Multiple Sclerosis',
+            exactQuote: 'Multiple sclerosis (MS) is a chronic autoimmune disease characterized by the immune system attacking the central nervous system (CNS)...',
+            contextSnippet: 'Autoimmune attack on myelin and oligodendrocytes.'
+          }
+        }
+      ]
+    },
+    meaningPreservation: {
+      overallFidelityScore: 99.4,
+      factRetentionRate: 100,
+      equationIntegrityRate: 100,
+      conditionAccuracyRate: 99.0,
+      terminologyConsistencyRate: 99.5,
+      unsupportedClaimsDetected: 0,
+      alteredEquationsDetected: 0,
+      missingConditionsDetected: 0,
+      lastAuditDate: '2026-10-30 14:30 UTC',
+      verifiedByEngine: true,
+      factChecks: [
+        {
+          id: 'chk-neuro-1',
+          originalFact: 'Neurons consist of soma, dendrites, and axon specialized for electrical impulses.',
+          originalQuote: 'Neurons are the structural and functional building blocks of the nervous system.',
+          pageNumber: 1,
+          formatFound: ['Simplified', 'Notes', 'Concept Map', 'Flashcards'],
+          status: 'fully_preserved',
+          confidenceScore: 100,
+          notes: 'Found across all generated formats verbatim.'
+        },
+        {
+          id: 'chk-neuro-2',
+          originalFact: 'Multiple Sclerosis is an autoimmune attack on myelin in the CNS.',
+          originalQuote: 'Multiple sclerosis (MS) is a chronic autoimmune disease characterized by the immune system attacking the central nervous system (CNS)...',
+          pageNumber: 2,
+          formatFound: ['Simplified', 'Notes', 'Flashcards'],
+          status: 'fully_preserved',
+          confidenceScore: 99,
+          notes: 'Complete pathological mechanism preserved.'
+        }
+      ]
+    }
+  },
+  {
+    id: 'doc-mcat-prep',
+    title: 'MCAT Prep',
+    author: 'MCAT Medical Faculty',
+    year: '2026',
+    uploadDate: '2026-10-30',
+    category: 'Bioinformatics',
+    fileType: 'pdf',
+    processingStatus: 'ready',
+    extractionStatus: 'ready',
+    pageCount: 12,
+    wordCount: 4500,
+    summary: 'Comprehensive high-yield MCAT Biological and Biochemical Foundations of Living Systems review modules covering neurology, endocrinology, renal physiology, and biochemistry.',
+    extractionQuality: { userStatus: 'ready', textCompletenessScore: 100, ocrConfidenceScore: 100, equationIntegrityScore: 100, structurePreservationScore: 100, sourceTraceabilityScore: 100, diagnostics: [], hasScannedPages: false, scannedPageNumbers: [], testedAgainstBenchmark: true },
+    sections: [
+      {
+        id: 'sec-mcat-1',
+        title: 'High-Yield Organ Systems: Neurobiology',
+        pageNumber: 1,
+        content: 'Review of nervous system organization: central vs peripheral, somatic vs autonomic, sympathetic fight-or-flight vs parasympathetic rest-and-digest reflexes.'
+      }
+    ],
+    conceptMap: { nodes: [{ id: 'mcat-1', label: 'MCAT Neurobiology', category: 'core', importance: 'high', summary: 'Nervous system review', prerequisites: [], sourceCitation: { id: 'c-mcat-c', documentId: 'doc-mcat-prep', pageNumber: 1, sectionTitle: 'Neurobiology', exactQuote: 'Review of nervous system', contextSnippet: 'Nervous system' } }], edges: [] },
+    explanations: [{ title: 'MCAT Prep High-Yield Overview', summary: 'Core high-yield concepts for medical admissions.', intuitiveAnalogy: 'A comprehensive medical blueprint.', rigorousBreakdown: 'Systematic breakdown of physiological organ systems.', workedExample: 'Reviewing clinical vignettes.', keyTakeaways: ['High yield organ systems', 'Action potentials and synapses'], citations: [] }],
+    flashcards: [{ id: 'fc-mcat-1', front: 'What is the primary excitatory neurotransmitter in the CNS?', back: 'Glutamate.', category: 'definition', masteryLevel: 1, sourceCitation: { id: 'c-mcat-1', documentId: 'doc-mcat-prep', pageNumber: 1, sectionTitle: 'Neurobiology', exactQuote: 'Glutamate is primary excitatory', contextSnippet: 'Neurotransmitters' } }],
+    audioLesson: { id: 'al-mcat-1', title: 'MCAT Rapid High Yield', totalDurationSeconds: 180, sections: [{ id: 'al-mcat-s1', sectionTitle: 'Overview', durationSeconds: 180, scriptText: 'MCAT rapid review of nervous systems.', sourceCitation: { id: 'c-mcat-a', documentId: 'doc-mcat-prep', pageNumber: 1, sectionTitle: 'Neurobiology', exactQuote: 'Nervous systems', contextSnippet: 'Overview' } }] },
+    meaningPreservation: { overallFidelityScore: 98.5, factRetentionRate: 100, equationIntegrityRate: 100, conditionAccuracyRate: 98.0, terminologyConsistencyRate: 99.0, unsupportedClaimsDetected: 0, alteredEquationsDetected: 0, missingConditionsDetected: 0, lastAuditDate: '2026-10-30 14:30 UTC', verifiedByEngine: true, factChecks: [] }
+  },
+  {
+    id: 'doc-spinal-cord',
+    title: 'Spinal_Cord_Diagram',
+    author: 'Prof. J.L. Wilkinson',
+    year: '2026',
+    uploadDate: '2026-10-30',
+    category: 'Bioinformatics',
+    fileType: 'pdf',
+    processingStatus: 'ready',
+    extractionStatus: 'ready',
+    pageCount: 3,
+    wordCount: 890,
+    summary: 'Cross-sectional anatomy of the spinal cord, dorsal and ventral horns, ascending spinothalamic tracts, descending corticospinal pathways, and sensory-motor reflex loops.',
+    extractionQuality: { userStatus: 'ready', textCompletenessScore: 100, ocrConfidenceScore: 100, equationIntegrityScore: 100, structurePreservationScore: 100, sourceTraceabilityScore: 100, diagnostics: [], hasScannedPages: false, scannedPageNumbers: [], testedAgainstBenchmark: true },
+    sections: [
+      {
+        id: 'sec-sc-1',
+        title: 'Spinal Cord Transverse Section & Horn Organization',
+        pageNumber: 1,
+        content: 'Grey matter H-shape configuration: posterior sensory horns receive dorsal root ganglia fibers; anterior motor horns house alpha and gamma motor neurons.'
+      }
+    ],
+    conceptMap: { nodes: [{ id: 'sc-1', label: 'Spinal Grey Matter', category: 'core', importance: 'high', summary: 'Spinal cord horns', prerequisites: [], sourceCitation: { id: 'c-sc-c', documentId: 'doc-spinal-cord', pageNumber: 1, sectionTitle: 'Transverse Section', exactQuote: 'Grey matter H-shape configuration', contextSnippet: 'Grey matter' } }], edges: [] },
+    explanations: [{ title: 'Spinal Cord Tracts', summary: 'Pathways connecting the brain and peripheral nervous system.', intuitiveAnalogy: 'The primary electrical trunk cable of the body.', rigorousBreakdown: 'Ascending sensory tracts and descending motor tracts.', workedExample: 'Tracing the patellar tendon reflex arc.', keyTakeaways: ['Dorsal = sensory, Ventral = motor'], citations: [] }],
+    flashcards: [{ id: 'fc-sc-1', front: 'What type of neurons reside in the anterior (ventral) grey horns of the spinal cord?', back: 'Somatic alpha and gamma motor neurons.', category: 'definition', masteryLevel: 1, sourceCitation: { id: 'c-sc-1', documentId: 'doc-spinal-cord', pageNumber: 1, sectionTitle: 'Transverse Section', exactQuote: 'Anterior horns house motor neurons', contextSnippet: 'Spinal horns' } }],
+    audioLesson: { id: 'al-sc-1', title: 'Spinal Anatomy Deep Dive', totalDurationSeconds: 150, sections: [{ id: 'al-sc-s1', sectionTitle: 'Spinal Horns', durationSeconds: 150, scriptText: 'Spinal cord cross sectional anatomy overview.', sourceCitation: { id: 'c-sc-a', documentId: 'doc-spinal-cord', pageNumber: 1, sectionTitle: 'Transverse Section', exactQuote: 'Grey matter', contextSnippet: 'Spinal horn overview' } }] },
+    meaningPreservation: { overallFidelityScore: 99.0, factRetentionRate: 100, equationIntegrityRate: 100, conditionAccuracyRate: 99.0, terminologyConsistencyRate: 99.0, unsupportedClaimsDetected: 0, alteredEquationsDetected: 0, missingConditionsDetected: 0, lastAuditDate: '2026-10-30 14:30 UTC', verifiedByEngine: true, factChecks: [] }
+  },
+  {
+    id: 'doc-muscle-functions',
+    title: 'Muscle_Functions_C',
+    author: 'MCAT Medical Faculty',
+    year: '2026',
+    uploadDate: '2026-10-30',
+    category: 'Bioinformatics',
+    fileType: 'pdf',
+    processingStatus: 'ready',
+    extractionStatus: 'ready',
+    pageCount: 5,
+    wordCount: 1650,
+    summary: 'Skeletal, cardiac, and smooth muscle physiology, neuromuscular junction (NMJ) acetylcholine signaling, sliding filament theory, actin-myosin cross-bridge cycle, and ATP energetics.',
+    extractionQuality: { userStatus: 'ready', textCompletenessScore: 100, ocrConfidenceScore: 100, equationIntegrityScore: 100, structurePreservationScore: 100, sourceTraceabilityScore: 100, diagnostics: [], hasScannedPages: false, scannedPageNumbers: [], testedAgainstBenchmark: true },
+    sections: [
+      {
+        id: 'sec-mf-1',
+        title: 'Neuromuscular Junction & Sliding Filament Model',
+        pageNumber: 1,
+        content: 'Action potential triggers Ca2+ influx at motor nerve terminal, releasing acetylcholine (ACh) into synaptic cleft. ACh binds nicotinic receptors, initiating sarcolemmal action potential and calcium release from sarcoplasmic reticulum.'
+      }
+    ],
+    conceptMap: { nodes: [{ id: 'mf-1', label: 'Sliding Filament Theory', category: 'core', importance: 'high', summary: 'Muscle contraction mechanism', prerequisites: [], sourceCitation: { id: 'c-mf-c', documentId: 'doc-muscle-functions', pageNumber: 1, sectionTitle: 'Sliding Filament Model', exactQuote: 'Action potential triggers Ca2+ influx', contextSnippet: 'NMJ' } }], edges: [] },
+    explanations: [{ title: 'Muscle Contraction Kinetics', summary: 'How electrical impulses become mechanical force in muscle fibers.', intuitiveAnalogy: 'A rowing crew pulling oars in synchronization.', rigorousBreakdown: 'Calcium binding troponin C shifts tropomyosin, exposing myosin binding sites on actin.', workedExample: 'Computing power stroke force.', keyTakeaways: ['ACh activates NMJ', 'ATP releases myosin head from actin'], citations: [] }],
+    flashcards: [{ id: 'fc-mf-1', front: 'What causes rigor mortis after death?', back: 'Lack of ATP prevents detachment of myosin heads from actin filaments, locking muscles in contracted state.', category: 'condition', masteryLevel: 1, sourceCitation: { id: 'c-mf-1', documentId: 'doc-muscle-functions', pageNumber: 1, sectionTitle: 'Sliding Filament Model', exactQuote: 'ATP is required for cross-bridge detachment', contextSnippet: 'ATP energetics' } }],
+    audioLesson: { id: 'al-mf-1', title: 'Musculoskeletal Physiology', totalDurationSeconds: 160, sections: [{ id: 'al-mf-s1', sectionTitle: 'NMJ Signaling', durationSeconds: 160, scriptText: 'Muscle contraction and neuromuscular signaling.', sourceCitation: { id: 'c-mf-a', documentId: 'doc-muscle-functions', pageNumber: 1, sectionTitle: 'Sliding Filament Model', exactQuote: 'ACh binds nicotinic receptors', contextSnippet: 'NMJ signaling' } }] },
+    meaningPreservation: { overallFidelityScore: 98.8, factRetentionRate: 100, equationIntegrityRate: 100, conditionAccuracyRate: 98.5, terminologyConsistencyRate: 99.0, unsupportedClaimsDetected: 0, alteredEquationsDetected: 0, missingConditionsDetected: 0, lastAuditDate: '2026-10-30 14:30 UTC', verifiedByEngine: true, factChecks: [] }
+  },
+  {
+    id: 'doc-skeletal-system',
+    title: 'Skeletal_System_Dia',
+    author: 'MCAT Medical Faculty',
+    year: '2026',
+    uploadDate: '2026-10-30',
+    category: 'Bioinformatics',
+    fileType: 'pdf',
+    processingStatus: 'ready',
+    extractionStatus: 'ready',
+    pageCount: 4,
+    wordCount: 1100,
+    summary: 'Osseous tissue biology, osteoblasts and osteoclasts remodeling equilibrium, Haversian systems, endochondral vs intramembranous ossification, and calcium homeostasis via PTH and calcitonin.',
+    extractionQuality: { userStatus: 'ready', textCompletenessScore: 100, ocrConfidenceScore: 100, equationIntegrityScore: 100, structurePreservationScore: 100, sourceTraceabilityScore: 100, diagnostics: [], hasScannedPages: false, scannedPageNumbers: [], testedAgainstBenchmark: true },
+    sections: [
+      {
+        id: 'sec-sk-1',
+        title: 'Bone Histology: Osteon / Haversian Canal System',
+        pageNumber: 1,
+        content: 'Compact bone is structured into cylindrical osteons. Concentric lamellae surround central Haversian canals containing blood vessels and nerves. Osteocytes inhabit lacunae connected by canaliculi.'
+      }
+    ],
+    conceptMap: { nodes: [{ id: 'sk-1', label: 'Bone Remodeling', category: 'core', importance: 'high', summary: 'Osteon histology and bone remodeling', prerequisites: [], sourceCitation: { id: 'c-sk-c', documentId: 'doc-skeletal-system', pageNumber: 1, sectionTitle: 'Bone Histology', exactQuote: 'Compact bone is structured into cylindrical osteons', contextSnippet: 'Bone remodeling' } }], edges: [] },
+    explanations: [{ title: 'Bone Remodeling & Calcium Balance', summary: 'How bone maintains structural integrity and systemic mineral homeostasis.', intuitiveAnalogy: 'A continuous construction and demolition crew balancing building and mineral reserves.', rigorousBreakdown: 'Parathyroid hormone (PTH) stimulates osteoclasts to resorb bone and release Ca2+ into blood; Calcitonin inhibits osteoclasts.', workedExample: 'Calcium feedback response.', keyTakeaways: ['Osteoblasts build bone', 'Osteoclasts resorb bone'], citations: [] }],
+    flashcards: [{ id: 'fc-sk-1', front: 'Which hormone activates osteoclasts to increase serum calcium levels?', back: 'Parathyroid Hormone (PTH).', category: 'definition', masteryLevel: 1, sourceCitation: { id: 'c-sk-1', documentId: 'doc-skeletal-system', pageNumber: 1, sectionTitle: 'Bone Remodeling', exactQuote: 'PTH stimulates osteoclasts', contextSnippet: 'Endocrine regulation' } }],
+    audioLesson: { id: 'al-sk-1', title: 'Skeletal Biology Audio Guide', totalDurationSeconds: 140, sections: [{ id: 'al-sk-s1', sectionTitle: 'Osteon Structure', durationSeconds: 140, scriptText: 'Skeletal system and mineral homeostasis.', sourceCitation: { id: 'c-sk-a', documentId: 'doc-skeletal-system', pageNumber: 1, sectionTitle: 'Bone Histology', exactQuote: 'Concentric lamellae surround central Haversian canals', contextSnippet: 'Osteon structure' } }] },
+    meaningPreservation: { overallFidelityScore: 99.1, factRetentionRate: 100, equationIntegrityRate: 100, conditionAccuracyRate: 99.0, terminologyConsistencyRate: 99.0, unsupportedClaimsDetected: 0, alteredEquationsDetected: 0, missingConditionsDetected: 0, lastAuditDate: '2026-10-30 14:30 UTC', verifiedByEngine: true, factChecks: [] }
   }
 ];
 

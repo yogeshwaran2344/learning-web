@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   FileText,
   Network,
@@ -13,9 +13,15 @@ import {
   Columns,
   Bookmark,
   ChevronRight,
+  ChevronLeft,
+  ChevronDown,
+  Check,
+  GripVertical,
   Sparkles,
   Info,
-  Download
+  Download,
+  Settings,
+  MessageSquare
 } from 'lucide-react';
 import {
   AcademicDocument,
@@ -33,12 +39,17 @@ import { AudioLessonView } from '../Workspace/AudioLessonView';
 import { PracticeQuizView } from '../Workspace/PracticeQuizView';
 import { GeneratorControlBar } from '../Workspace/GeneratorControlBar';
 import { ExplainThisModal } from '../Workspace/ExplainThisModal';
+import { VerificationAuditModal } from '../Workspace/VerificationAuditModal';
+import { CortexCompanionChat } from '../Workspace/CortexCompanionChat';
 import { AiGeneratorTestModal } from '../AiGeneratorTestModal';
 import { ExportModal } from '../ExportModal';
 import { ApiClient } from '../../services/apiClient';
+import { SAMPLE_DOCUMENTS } from '../../data/sampleDocuments';
 
 interface LearningStudioPageProps {
   document: AcademicDocument;
+  allDocuments?: AcademicDocument[];
+  onSelectDocument?: (doc: AcademicDocument) => void;
   initialTab?: StudioTab;
   onNavigateToCitation: (citation: SourceCitation) => void;
   onUpdateFlashcardMastery: (docId: string, cardId: string, level: number) => void;
@@ -48,6 +59,8 @@ interface LearningStudioPageProps {
 
 export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
   document,
+  allDocuments,
+  onSelectDocument,
   initialTab = 'map',
   onNavigateToCitation,
   onUpdateFlashcardMastery,
@@ -57,6 +70,8 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
   const [activeTab, setActiveTab] = useState<StudioTab>(initialTab);
   const [isSplitView, setIsSplitView] = useState<boolean>(true);
   const [highlightedCitation, setHighlightedCitation] = useState<SourceCitation | null>(null);
+  const [rightPanelMode, setRightPanelMode] = useState<'chat' | 'formats'>('chat');
+  const [fullContextEnabled, setFullContextEnabled] = useState<boolean>(true);
 
   // Phase 5 Generation States
   const [currentLanguage, setCurrentLanguage] = useState<AppLanguage>('English');
@@ -71,8 +86,73 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
   const [explainPageNumber, setExplainPageNumber] = useState<number | undefined>(undefined);
   const [explainSectionTitle, setExplainSectionTitle] = useState<string | undefined>(undefined);
 
+  // Split Panel Resizing state (Default: 68% Document Viewer / 32% Side Context Panel)
+  const [splitRatio, setSplitRatio] = useState<number>(68);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [isAuditModalOpen, setIsAuditModalOpen] = useState<boolean>(false);
+  const [isFormatDropdownOpen, setIsFormatDropdownOpen] = useState<boolean>(false);
+  const mainContainerRef = useRef<HTMLDivElement>(null);
+  const tabsScrollRef = useRef<HTMLDivElement>(null);
+
+  const handleScrollTabs = (direction: 'left' | 'right') => {
+    if (tabsScrollRef.current) {
+      tabsScrollRef.current.scrollBy({
+        left: direction === 'left' ? -180 : 180,
+        behavior: 'smooth'
+      });
+    }
+  };
+
+  const handleDividerMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging || !mainContainerRef.current) return;
+      const rect = mainContainerRef.current.getBoundingClientRect();
+      const newRatio = ((e.clientX - rect.left) / rect.width) * 100;
+      // Clamp between 30% and 80% so neither document nor format panel collapses
+      if (newRatio >= 30 && newRatio <= 80) {
+        setSplitRatio(Math.round(newRatio));
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
+
   // Dynamic overrides per format when student regenerates or switches language
   const [dynamicOverrides, setDynamicOverrides] = useState<Record<string, any>>({});
+
+  const availableDocs = allDocuments && allDocuments.length > 0 ? allDocuments : SAMPLE_DOCUMENTS;
+  const documentTabs = [
+    { id: 'doc-mcat-prep', label: 'MCAT Prep' },
+    { id: 'doc-intro-neurology', label: 'Intro_to_Neurology' },
+    { id: 'doc-spinal-cord', label: 'Spinal_Cord_Diagram' },
+    { id: 'doc-muscle-functions', label: 'Muscle_Functions_C' },
+    { id: 'doc-skeletal-system', label: 'Skeletal_System_Dia' }
+  ];
+
+  const handleDocumentTabClick = (tabId: string) => {
+    const targetDoc = availableDocs.find(
+      d => d.id === tabId || d.title.toLowerCase().includes(tabId.replace('doc-', '').replace(/_/g, ' '))
+    );
+    if (targetDoc && onSelectDocument) {
+      onSelectDocument(targetDoc);
+    }
+  };
 
   const tabs: { id: StudioTab; number: string; label: string; icon: React.ReactNode; color: string }[] = [
     { id: 'original', number: '01', label: 'Original', icon: <FileText className="w-3.5 h-3.5" />, color: 'text-slate-500' },
@@ -299,6 +379,39 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
 
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col bg-white dark:bg-slate-900 select-none overflow-hidden">
+      {/* Top Document Tabs Strip (matching Learning Cortex screenshot) */}
+      <div className="flex items-center justify-between border-b border-slate-800 bg-[#070b14] px-4 py-1.5 overflow-x-auto text-xs font-semibold select-none shrink-0">
+        <div className="flex items-center space-x-1">
+          {documentTabs.map((dTab) => {
+            const isSelected =
+              document.id === dTab.id ||
+              document.title.toLowerCase().includes(dTab.label.toLowerCase().replace(/_/g, ' ')) ||
+              dTab.label.toLowerCase().includes(document.title.toLowerCase().replace(/_/g, ' '));
+            return (
+              <button
+                key={dTab.id}
+                onClick={() => handleDocumentTabClick(dTab.id)}
+                className={`px-3 py-1.5 rounded-lg whitespace-nowrap text-xs transition-all flex items-center gap-1.5 cursor-pointer ${
+                  isSelected
+                    ? 'bg-slate-800 text-blue-300 font-bold border-b-2 border-blue-500 shadow-xs'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                <span>{dTab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          onClick={() => setIsTestModalOpen(true)}
+          className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors ml-2 cursor-pointer"
+          title="Studio Settings & System Diagnostics"
+        >
+          <Settings className="w-4 h-4" />
+        </button>
+      </div>
+
       {/* Studio Header: Document Title & 8 Format Tabs */}
       <div className="border-b border-slate-200 dark:border-slate-800 px-6 py-3 bg-white dark:bg-slate-900 transition-colors">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-2.5">
@@ -308,14 +421,24 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
                 {document.title}
               </span>
               {document.meaningPreservation && document.meaningPreservation.overallFidelityScore > 0 ? (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3" />
-                  {document.meaningPreservation.overallFidelityScore}% Ground Truth Verified
-                </span>
+                <button
+                  onClick={() => setIsAuditModalOpen(true)}
+                  className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1.5 hover:bg-emerald-200 dark:hover:bg-emerald-900 transition-colors cursor-pointer shadow-2xs"
+                  title="Click to view Meaning Preservation Audit & Section Breakdown"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>{document.meaningPreservation.overallFidelityScore}% Verified</span>
+                  <span className="text-[9px] opacity-75 underline">Audit Report</span>
+                </button>
               ) : (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-300 dark:border-slate-700 flex items-center gap-1">
-                  Not Verified
-                </span>
+                <button
+                  onClick={() => setIsAuditModalOpen(true)}
+                  className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-300 dark:border-slate-700 flex items-center gap-1 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                  title="Click to check verification status"
+                >
+                  <span>Not Verified</span>
+                  <span className="text-[9px] opacity-75 underline">Details</span>
+                </button>
               )}
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -349,31 +472,96 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
           </div>
         </div>
 
-        {/* 8 Tabs List */}
-        <div className="flex items-center space-x-1.5 overflow-x-auto text-xs font-semibold pt-1 scrollbar-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-          {tabs.map((tab) => {
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setActiveTab(tab.id);
-                  setVerificationResult(null);
-                }}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl whitespace-nowrap transition-all ${
-                  isActive
-                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm font-bold'
-                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-                }`}
-              >
-                <span className={`text-[10px] opacity-70 ${isActive ? '' : 'text-slate-400'}`}>
-                  {tab.number}
-                </span>
-                <span className={isActive ? '' : tab.color}>{tab.icon}</span>
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
+        {/* 8 Tabs List with Horizontal Scroll Buttons and Format Dropdown */}
+        <div className="flex items-center gap-1.5 pt-1">
+          {/* Scroll Left Button */}
+          <button
+            onClick={() => handleScrollTabs('left')}
+            className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 shrink-0 transition-colors"
+            title="Scroll Tabs Left"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Scrollable Tabs */}
+          <div
+            ref={tabsScrollRef}
+            className="flex items-center space-x-1.5 overflow-x-auto text-xs font-semibold scrollbar-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] flex-1 py-0.5"
+          >
+            {tabs.map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    setVerificationResult(null);
+                  }}
+                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl whitespace-nowrap transition-all shrink-0 ${
+                    isActive
+                      ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm font-bold'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <span className={`text-[10px] opacity-70 ${isActive ? '' : 'text-slate-400'}`}>
+                    {tab.number}
+                  </span>
+                  <span className={isActive ? '' : tab.color}>{tab.icon}</span>
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Scroll Right Button */}
+          <button
+            onClick={() => handleScrollTabs('right')}
+            className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 shrink-0 transition-colors"
+            title="Scroll Tabs Right"
+          >
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Compact Format Dropdown Menu Button */}
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setIsFormatDropdownOpen(v => !v)}
+              className="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 transition-colors"
+              title="Jump to any learning format"
+            >
+              <Layers className="w-3.5 h-3.5 text-brand-600" />
+              <span className="hidden sm:inline">Formats</span>
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+
+            {isFormatDropdownOpen && (
+              <div className="absolute right-0 mt-1.5 w-60 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl z-50 p-1.5 space-y-1 animate-in fade-in zoom-in-95 duration-100">
+                <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Select Learning Format
+                </div>
+                {tabs.map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => {
+                      setActiveTab(tab.id);
+                      setIsFormatDropdownOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-colors ${
+                      activeTab === tab.id
+                        ? 'bg-brand-50 text-brand-700 dark:bg-brand-950/80 dark:text-brand-300 font-bold'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      <span className={activeTab === tab.id ? 'text-brand-600' : tab.color}>{tab.icon}</span>
+                      <span className="truncate">{tab.number}. {tab.label}</span>
+                    </div>
+                    {activeTab === tab.id && <Check className="w-3.5 h-3.5 text-brand-600 shrink-0" />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -391,11 +579,16 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
         onOpenTestSuite={() => setIsTestModalOpen(true)}
       />
 
-      {/* Main Studio Body: Split View (Source on Left, Format on Right) */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left: Original Source View (if split is active or tab is 'original') */}
+      {/* Main Studio Body: Resizable Split View (Document Viewer on Left, Format on Right) */}
+      <div ref={mainContainerRef} className="flex-1 flex overflow-hidden relative select-none">
+        {/* Left: Original Source View (Occupies ~65-70% width default, resizable) */}
         {(isSplitView || activeTab === 'original') && (
-          <div className={`${isSplitView && activeTab !== 'original' ? 'w-1/2 hidden md:block' : 'w-full'} h-full overflow-hidden border-r border-slate-200 dark:border-slate-800`}>
+          <div
+            style={{
+              width: activeTab === 'original' || !isSplitView ? '100%' : `${splitRatio}%`
+            }}
+            className="h-full overflow-hidden transition-all duration-75 flex flex-col shrink-0 border-r border-slate-200 dark:border-slate-800"
+          >
             <OriginalDocumentView
               document={document}
               highlightedCitation={highlightedCitation}
@@ -405,16 +598,81 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
           </div>
         )}
 
-        {/* Right: Active Learning Format View */}
+        {/* Resizable Divider Handle (when split is active and not on 'original' tab) */}
+        {isSplitView && activeTab !== 'original' && (
+          <div
+            onMouseDown={handleDividerMouseDown}
+            className={`w-2 hover:w-2.5 bg-slate-200 dark:bg-slate-800 hover:bg-brand-500 cursor-col-resize select-none relative group transition-colors flex items-center justify-center shrink-0 z-30 ${
+              isDragging ? 'bg-brand-600 w-2.5 shadow-md' : ''
+            }`}
+            title={`Drag to resize (${splitRatio}% document / ${100 - splitRatio}% format panel). Double-click to reset to 68/32.`}
+            onDoubleClick={() => setSplitRatio(68)}
+          >
+            <div className="w-1 h-8 rounded-full bg-slate-400 dark:bg-slate-600 group-hover:bg-white transition-colors" />
+          </div>
+        )}
+
+        {/* Right: Active Learning Format or Cortex Chat (Occupies ~30-35% width default) */}
         {activeTab !== 'original' && (
-          <div className={`${isSplitView ? 'w-full md:w-1/2' : 'w-full'} h-full overflow-y-auto`}>
-            {/* 02 Concept Map */}
-            {activeTab === 'map' && (
-              <ConceptMapView
-                conceptMap={currentConceptMap}
-                onNavigateToCitation={handleCitationClick}
-              />
-            )}
+          <div
+            style={{
+              width: isSplitView ? `${100 - splitRatio}%` : '100%'
+            }}
+            className="h-full overflow-hidden bg-[#0b1120] flex flex-col transition-all duration-75"
+          >
+            {/* Top Switcher Bar between Cortex Assistant and 8 Formats */}
+            <div className="flex items-center justify-between px-3.5 py-2 border-b border-slate-800 bg-[#090d16] shrink-0 select-none">
+              <div className="flex items-center space-x-1 bg-slate-900 border border-slate-800 p-0.5 rounded-xl text-xs font-bold">
+                <button
+                  onClick={() => setRightPanelMode('chat')}
+                  className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                    rightPanelMode === 'chat'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>Cortex Assistant</span>
+                </button>
+                <button
+                  onClick={() => setRightPanelMode('formats')}
+                  className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                    rightPanelMode === 'formats'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>8 Formats</span>
+                </button>
+              </div>
+
+              {rightPanelMode === 'formats' && (
+                <span className="text-[10px] font-bold uppercase text-slate-400">
+                  {tabs.find(t => t.id === activeTab)?.label}
+                </span>
+              )}
+            </div>
+
+            {/* Mode Content: Chat vs 8 Formats */}
+            {rightPanelMode === 'chat' ? (
+              <div className="flex-1 overflow-hidden">
+                <CortexCompanionChat
+                  document={document}
+                  onNavigateToCitation={handleCitationClick}
+                  fullContextEnabled={fullContextEnabled}
+                  onToggleFullContext={setFullContextEnabled}
+                />
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto bg-white dark:bg-slate-900 transition-all duration-75">
+                {/* 02 Concept Map */}
+                {activeTab === 'map' && (
+                  <ConceptMapView
+                    conceptMap={currentConceptMap}
+                    onNavigateToCitation={handleCitationClick}
+                  />
+                )}
 
             {/* 03 Simplified Explanations */}
             {activeTab === 'simplified' && (
@@ -841,13 +1099,15 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
               />
             )}
 
-            {/* 08 Practice Quiz */}
-            {activeTab === 'quiz' && (
-              <PracticeQuizView
-                document={document}
-                onNavigateToCitation={handleCitationClick}
-                onSaveItem={onSaveItem}
-              />
+                {/* 08 Practice Quiz */}
+                {activeTab === 'quiz' && (
+                  <PracticeQuizView
+                    document={document}
+                    onNavigateToCitation={handleCitationClick}
+                    onSaveItem={onSaveItem}
+                  />
+                )}
+              </div>
             )}
           </div>
         )}
@@ -881,6 +1141,25 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
         document={document}
         currentTab={activeTab}
         currentLanguage={currentLanguage}
+      />
+
+      {/* Meaning Preservation Verification & Grounding Audit Modal */}
+      <VerificationAuditModal
+        isOpen={isAuditModalOpen}
+        onClose={() => setIsAuditModalOpen(false)}
+        document={document}
+        onNavigateToSection={(pageNumber, sectionTitle) => {
+          if (!isSplitView) setIsSplitView(true);
+          const cite: SourceCitation = {
+            id: `audit-cite-${pageNumber}`,
+            documentId: document.id,
+            pageNumber,
+            sectionTitle,
+            exactQuote: sectionTitle,
+            contextSnippet: sectionTitle
+          };
+          handleCitationClick(cite);
+        }}
       />
     </div>
   );

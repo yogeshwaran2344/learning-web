@@ -356,6 +356,8 @@ export function App() {
             activeDocument ? (
               <LearningStudioPage
                 document={activeDocument}
+                allDocuments={documents}
+                onSelectDocument={(doc) => setActiveDocument(doc)}
                 initialTab={studioTab}
                 onNavigateToCitation={handleNavigateToCitation}
                 onUpdateFlashcardMastery={handleUpdateFlashcardMastery}
