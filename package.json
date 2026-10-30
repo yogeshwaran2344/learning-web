@@ -4,9 +4,10 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -k -n \"API,VITE\" -c \"cyan,magenta\" \"npm run server\" \"vite\"",
+    "dev:client": "vite",
     "server": "tsx watch server/index.ts",
-    "dev:all": "concurrently -n \"API,VITE\" -c \"cyan,magenta\" \"npm run server\" \"npm run dev\"",
+    "dev:all": "concurrently -k -n \"API,VITE\" -c \"cyan,magenta\" \"npm run server\" \"vite\"",
     "start": "tsx server/index.ts",
     "build": "tsc && vite build",
     "preview": "vite preview",
