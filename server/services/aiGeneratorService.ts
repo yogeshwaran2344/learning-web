@@ -58,32 +58,37 @@ export class AiGeneratorService {
     language: AppLanguage = 'English',
     difficulty: DifficultyLevel = 'intermediate'
   ): GeneratedFormatResult {
+    const safeSections = sections && sections.length > 0 ? sections : [{
+      pageNumber: 1,
+      title: docTitle || 'Introduction',
+      content: 'Foundational academic concepts, verified formulas, and invariant conditions.'
+    }];
+
     let result: GeneratedFormatResult;
     switch (formatType) {
       case 'map':
-        result = this.generateConceptMap(documentId, docTitle, sections, language, difficulty);
+        result = this.generateConceptMap(documentId, docTitle, safeSections, language, difficulty);
         break;
       case 'simplified':
-        result = this.generateSimplifiedExplanation(documentId, docTitle, sections, language, difficulty);
+        result = this.generateSimplifiedExplanation(documentId, docTitle, safeSections, language, difficulty);
         break;
       case 'notes':
-        result = this.generateDetailedNotes(documentId, docTitle, sections, language, difficulty);
+        result = this.generateDetailedNotes(documentId, docTitle, safeSections, language, difficulty);
         break;
       case 'worked':
-        result = this.generateWorkedExamples(documentId, docTitle, sections, language, difficulty);
+        result = this.generateWorkedExamples(documentId, docTitle, safeSections, language, difficulty);
         break;
       case 'flashcards':
-        result = this.generateFlashcards(documentId, sections, language, difficulty);
+        result = this.generateFlashcards(documentId, safeSections, language, difficulty);
         break;
       case 'audio':
-        result = this.generateAudioLesson(documentId, docTitle, sections, language, difficulty);
+        result = this.generateAudioLesson(documentId, docTitle, safeSections, language, difficulty);
         break;
       case 'quiz':
-        result = this.generatePracticeQuiz(documentId, sections, language, difficulty);
+        result = this.generatePracticeQuiz(documentId, safeSections, language, difficulty);
         break;
       default:
-        result = this.generateSimplifiedExplanation(documentId, docTitle, sections, language, difficulty);
-        break;
+        result = this.generateSimplifiedExplanation(documentId, docTitle, safeSections, language, difficulty);
     }
 
     result.generationSource = 'deterministic_fallback';
@@ -92,7 +97,7 @@ export class AiGeneratorService {
     return result;
   }
 
-  // --- 1. Concept Maps ---
+  // --- 1. Concept Maps: Clear hierarchy, fewer nodes, meaningful action verbs ---
   private static generateConceptMap(
     documentId: string,
     docTitle: string,
@@ -102,16 +107,12 @@ export class AiGeneratorService {
   ): GeneratedFormatResult {
     const rootId = `node-root-${documentId}`;
     const rootLabel = language === 'Kannada'
-      ? `ಮೂಲ ಪರಿಕಲ್ಪನೆ: ${docTitle}`
+      ? `ಮೂಲ ತತ್ವ: ${docTitle}`
       : language === 'Hindi'
       ? `मूल सिद्धांत: ${docTitle}`
       : docTitle;
 
-    const firstSec = sections[0] || {
-      pageNumber: 1,
-      title: 'Introduction',
-      content: 'Academic foundation and theoretical framework.'
-    };
+    const firstSec = sections[0];
 
     const nodes: any[] = [
       {
@@ -119,7 +120,7 @@ export class AiGeneratorService {
         label: rootLabel.length > 32 ? rootLabel.slice(0, 29) + '...' : rootLabel,
         category: 'core',
         summary: language === 'Kannada'
-          ? `${docTitle} ನ ಮೂಲ ಸಿದ್ಧಾಂತ ಮತ್ತು ಪ್ರಾಥಮಿಕ ನಿಯಮಗಳು.`
+          ? `${docTitle} ನ ಪ್ರಮುಖ ಅಡಿಪಾಯ ಮತ್ತು ನಿಯಮಗಳು.`
           : language === 'Hindi'
           ? `${docTitle} का केंद्रीय सिद्धांत और आवश्यक नियम।`
           : `Foundational thesis and core principle of ${docTitle}.`,
@@ -140,8 +141,8 @@ export class AiGeneratorService {
     const edges: any[] = [];
     const citations: SourceCitationRecord[] = [nodes[0].sourceCitation];
 
-    // Filter by difficulty: beginner shows top 4 nodes; advanced includes equation/condition nodes
-    const maxNodes = difficulty === 'beginner' ? 4 : difficulty === 'intermediate' ? 6 : 9;
+    // Filter to a clean, focused node count to avoid tangled visual maps
+    const maxNodes = difficulty === 'beginner' ? 4 : difficulty === 'intermediate' ? 5 : 7;
     const targetSections = sections.slice(0, maxNodes);
 
     targetSections.forEach((sec, idx) => {
@@ -159,7 +160,8 @@ export class AiGeneratorService {
       const citation: SourceCitationRecord = {
         id: `cite-${nodeId}`,
         documentId,
-        pageNumber: sec.pageNumber,
+        pageNumber: sec.pageNumber || 1,
+        slideNumber: sec.slideNumber,
         sectionTitle: sec.title,
         exactQuote: firstSentence,
         contextSnippet: sec.content.slice(0, 180) + '...'
@@ -177,14 +179,22 @@ export class AiGeneratorService {
         sourceCitation: citation
       });
 
+      // Semantic action verbs on relationships
+      let relationVerb = 'elaborates into';
+      if (isEquationNode) {
+        relationVerb = language === 'Kannada' ? 'ಗಣಿತ ಸೂತ್ರೀಕರಣ' : language === 'Hindi' ? 'सूत्र निर्धारित करता है' : 'computes via';
+      } else if (isConditionNode) {
+        relationVerb = language === 'Kannada' ? 'ನಿರ್ಬಂಧಿಸುತ್ತದೆ' : language === 'Hindi' ? 'प्रतिबंधित करता है' : 'enforces invariant';
+      } else if (idx === 0) {
+        relationVerb = language === 'Kannada' ? 'ಅಡಿಪಾಯವಾಗಿದೆ' : language === 'Hindi' ? 'आधार बनाता है' : 'establishes basis';
+      } else {
+        relationVerb = language === 'Kannada' ? 'ಸಂಪರ್ಕಿಸುತ್ತದೆ' : language === 'Hindi' ? 'जोड़ता है' : 'guarantees';
+      }
+
       edges.push({
         from: rootId,
         to: nodeId,
-        relation: isEquationNode
-          ? (language === 'Kannada' ? 'ಗಣಿತ ಸೂತ್ರೀಕರಣ' : language === 'Hindi' ? 'गणितीय सूत्र' : 'formulates equation')
-          : isConditionNode
-          ? (language === 'Kannada' ? 'ನಿರ್ಬಂಧಿಸುತ್ತದೆ' : language === 'Hindi' ? 'प्रतिबंधित करता है' : 'conditioned by')
-          : (language === 'Kannada' ? 'ವಿಸ್ತರಿಸುತ್ತದೆ' : language === 'Hindi' ? 'विस्तार करता है' : 'elaborates into')
+        relation: relationVerb
       });
     });
 
@@ -197,7 +207,7 @@ export class AiGeneratorService {
     };
   }
 
-  // --- 2. Simplified Explanations ---
+  // --- 2. Simplified Explanations: 6-Part Structured Framework ---
   private static generateSimplifiedExplanation(
     documentId: string,
     docTitle: string,
@@ -205,21 +215,65 @@ export class AiGeneratorService {
     language: AppLanguage,
     difficulty: DifficultyLevel
   ): GeneratedFormatResult {
-    const primarySec = sections[0] || {
-      pageNumber: 1,
-      title: docTitle,
-      content: 'Fundamental academic exposition and properties.'
-    };
-
+    const primarySec = sections[0];
     const allCitations: SourceCitationRecord[] = [];
 
-    // 1. High-level intuition & overarching analogy
+    // Domain detection
+    const fullText = docTitle + ' ' + sections.map(s => s.title + ' ' + s.content).join(' ');
+    const isTransformer = /attention|transformer|softmax|dot-product/i.test(fullText);
+    const isByzantine = /byzantine|pbft|consensus|paxos|raft|fault/i.test(fullText);
+    const isQuantum = /quantum|wave function|schrodinger|qubit|superposition/i.test(fullText);
+
+    // 1. Defined Terms glossary
+    let definedTerms: { term: string; definition: string }[] = [];
+    let practicalExample = '';
+    let everydayAnalogy = '';
+    let industryApplication = '';
+
+    if (isTransformer) {
+      definedTerms = [
+        { term: 'Attention Mechanism', definition: 'A method allowing an AI model to connect related words in a sentence, regardless of how far apart they are.' },
+        { term: 'Key Vector (K)', definition: 'A feature representation of what a word offers or represents in the vocabulary.' },
+        { term: 'Scaling Factor (1/√d_k)', definition: 'A normalization constant that stabilizes mathematical variance so training gradients do not vanish.' }
+      ];
+      practicalExample = 'In a translation tool, translating "The animal didn\'t cross the street because it was tired" assigns 92% attention weight from "it" to "animal", avoiding misinterpreting "street".';
+      everydayAnalogy = 'Think of searching in a library with a flashlight. Instead of reading every book linearly from cover to cover, your flashlight immediately illuminates the exact paragraphs you need.';
+      industryApplication = 'Powers modern state-of-the-art AI language models, translation engines, and automated protein folding predictors.';
+    } else if (isByzantine) {
+      definedTerms = [
+        { term: 'Consensus', definition: 'A protocol enabling distributed computers to agree on a single shared state even if some nodes fail.' },
+        { term: 'Byzantine Fault', definition: 'An arbitrary failure mode where a server crashes, drops packets, or sends conflicting, deceptive data.' },
+        { term: 'Quorum', definition: 'The minimum number of voting nodes required to commit a valid state update.' }
+      ];
+      practicalExample = 'If a distributed bank database runs on 7 servers and 2 servers crash or send corrupt transactions, the system continues safely because 7 >= 3(2) + 1.';
+      everydayAnalogy = 'Think of a jury trial: to reach a verdict, a supermajority must agree. Even if one or two jurors are confused, the decision remains legally sound.';
+      industryApplication = 'Guarantees reliability across distributed cloud stores, blockchain protocols, and spacecraft flight computers.';
+    } else if (isQuantum) {
+      definedTerms = [
+        { term: 'Wave Function (Ψ)', definition: 'A mathematical description containing all probabilities of a particle\'s physical properties.' },
+        { term: 'Superposition', definition: 'The physical ability of a quantum particle to exist in multiple potential states simultaneously until observed.' },
+        { term: 'Born Rule', definition: 'The law stating that the square of the wave function modulus gives the probability of locating the particle.' }
+      ];
+      practicalExample = 'In MRI scanners, quantum nuclear magnetic resonance measures how atomic spins respond to magnetic pulses, generating clear internal body scans.';
+      everydayAnalogy = 'Think of a spinning coin: while spinning on a table, it is a blur of both heads and tails simultaneously until your hand slaps it down into one definite state.';
+      industryApplication = 'Underpins modern semiconductors, lasers, quantum encryption networks, and quantum chemistry simulators.';
+    } else {
+      definedTerms = [
+        { term: 'Primary Concept', definition: `The foundational academic principle described in Section "${primarySec.title}".` },
+        { term: 'Governing Invariant', definition: primarySec.conditions?.[0] || 'A fundamental rule that must strictly remain true under all transformations.' }
+      ];
+      practicalExample = `In experimental trials, applying this method guarantees that measurements yield consistent, repeatable results within tolerance bounds.`;
+      everydayAnalogy = `Think of following a trusted blueprint: measuring dimensions accurately ensures that every part fits together with zero structural defects.`;
+      industryApplication = `Applied in scientific modeling, software optimization, and production engineering systems.`;
+    }
+
+    // 2. Multilingual Overarching Analogy
     let overallAnalogy = '';
     let additionalContext = '';
 
     if (language === 'Kannada') {
       overallAnalogy = difficulty === 'beginner'
-        ? `ಸುಲಭ ವಿವರಣೆ: ${docTitle} ಎಂಬುದು ಸುಸಂಘಟಿತ ಜ್ಞಾನ ವ್ಯವಸ್ಥೆಯಂತೆ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತದೆ. ಪ್ರತಿಯೊಂದು ಘಟಕವೂ ತನ್ನದೇ ಆದ ಪಾತ್ರವನ್ನು ಹೊಂದಿದ್ದು, ಸಂಕೀರ್ಣ ನಿಯಮಗಳನ್ನು ಸರಳವಾದ ಹಂತಗಳಲ್ಲಿ ಪೂರೈಸುತ್ತದೆ.`
+        ? `ಸುಲಭ ವಿವರಣೆ: ${docTitle} ಒಂದು ಸುಸಂಘಟಿತ ಜ್ಞಾನ ವ್ಯವಸ್ಥೆಯಂತೆ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತದೆ. ಪ್ರತಿಯೊಂದು ಘಟಕವೂ ತನ್ನದೇ ಆದ ಪಾತ್ರವನ್ನು ಹೊಂದಿದ್ದು, ಸಂಕೀರ್ಣ ನಿಯಮಗಳನ್ನು ಸರಳವಾದ ಹಂತಗಳಲ್ಲಿ ಪೂರೈಸುತ್ತದೆ.`
         : `ಪರಿಕಲ್ಪನಾ ದೃಷ್ಟಾಂತ: ${docTitle} ಒಂದು ಸ್ವಯಂಚಾಲಿತ ಗ್ರಂಥಾಲಯದಂತಿದೆ; ಇಲ್ಲಿ ಮಾಹಿತಿಗಳನ್ನು ಪ್ರತ್ಯೇಕವಾಗಿ ಹುಡುಕುವ ಬದಲು, ಎಲ್ಲಾ ಸಂಬಂಧಿತ ಅಂಶಗಳನ್ನು ಏಕಕಾಲದಲ್ಲಿ ಪರಿಶೀಲಿಸಿ ಸೂಕ್ತ ಉತ್ತರವನ್ನು ನೀಡಲಾಗುತ್ತದೆ.`;
       additionalContext = 'ಗಮನಿಸಿ: ಈ ದೃಷ್ಟಾಂತವು ಅಧ್ಯಯನವನ್ನು ಸರಳಗೊಳಿಸಲು ನೀಡಲಾದ ಪೂರಕ ಉದಾಹರಣೆಯಾಗಿದೆ (ಮೂಲ ಪಠ್ಯದ ನಿಖರ ಗಣಿತ ಷರತ್ತುಗಳು ಅಖಂಡವಾಗಿವೆ).';
     } else if (language === 'Hindi') {
@@ -236,7 +290,7 @@ export class AiGeneratorService {
       additionalContext = 'Pedagogical analogy provided as supplementary conceptual anchor (beyond raw uploaded text; technical invariants remain strictly preserved).';
     }
 
-    // 2. Section-by-section simplified conceptual walkthrough
+    // 3. Section Walkthrough following the 6-Part Structure
     const simplifiedSections = sections.map((sec, idx) => {
       const cite: SourceCitationRecord = {
         id: `cite-expl-${documentId}-${idx + 1}`,
@@ -252,52 +306,50 @@ export class AiGeneratorService {
       const sentences = sec.content.split(/(?<=[.?!])\s+/).filter(s => s.trim().length > 15);
       const coreIdea = sentences.slice(0, 2).join(' ') || sec.content.slice(0, 160);
 
-      // Section-specific analogy and plain-language explanation
-      let conceptExplanation = '';
-      let sectionAnalogy = '';
-      let formulaExpl = '';
-      let invariantRule = sec.conditions?.[0] || 'Mathematical consistency and non-negative bounds must be verified.';
+      // 6-Part Framework fields
+      const whatIsIt = difficulty === 'beginner'
+        ? `In simple terms: ${coreIdea.slice(0, 150)} This defines what the section accomplishes without using overly dense jargon.`
+        : difficulty === 'advanced'
+        ? `Rigorous Definition: ${coreIdea}. Governs high-order state transitions with strict boundary invariance.`
+        : `Conceptual Overview: ${coreIdea}. Establishes the governing relationship among the primary variables.`;
 
-      if (language === 'Kannada') {
-        conceptExplanation = `ಈ ವಿಭಾಗವು (${sec.title}) ವಿಷಯದ ಪ್ರಮುಖ ತತ್ವವನ್ನು ಸ್ಪಷ್ಟಪಡಿಸುತ್ತದೆ: ${coreIdea}`;
-        sectionAnalogy = `ದೃಷ್ಟಾಂತ: ಇದನ್ನು ಒಂದು ರಸ್ತೆ ಸಂಚಾರ ನಿಯಂತ್ರಣ ವ್ಯವಸ್ಥೆಗೆ ಹೋಲಿಸಬಹುದು, ಇಲ್ಲಿ ಪ್ರತಿ ವಾಹನವೂ ನಿಗದಿತ ಪಥದಲ್ಲಿ ಚಲಿಸುತ್ತದೆ.`;
-        if (sec.equations && sec.equations.length > 0) {
-          formulaExpl = `ಸೂತ್ರದ ವಿವರಣೆ: ${sec.equations[0].latex} — ಇದು ವ್ಯವಸ್ಥೆಯ ಸಮತೋಲನವನ್ನು ಕಾಪಾಡುವ ಗಣಿತ ಸಂಬಂಧವಾಗಿದೆ.`;
-        }
-      } else if (language === 'Hindi') {
-        conceptExplanation = `यह अध्याय (${sec.title}) मुख्य सिद्धांत को सरलता से समझाता है: ${coreIdea}`;
-        sectionAnalogy = `रूपक: इसे एक आधुनिक ट्रैफिक सिग्नल की तरह समझें, जहाँ प्रवाह को सुचारू रखने के लिए सभी मार्गों का समन्वय किया जाता है।`;
-        if (sec.equations && sec.equations.length > 0) {
-          formulaExpl = `सूत्र विश्लेषण: ${sec.equations[0].latex} — यह समीकरण प्रणाली की स्थिरता और संतुलन बनाए रखने के लिए अनिवार्य है।`;
-        }
-      } else {
-        conceptExplanation = `In "${sec.title}", the text establishes the fundamental principle: ${coreIdea} This ensures that the system avoids unpredictable states and preserves consistent behavior.`;
-        sectionAnalogy = `Practical Mental Model: Imagine organizing an index of books where every keyword immediately points to its exact chapter, avoiding the need to flip through every single page.`;
-        if (sec.equations && sec.equations.length > 0) {
-          const eq = sec.equations[0];
-          formulaExpl = `Plain-Language Formula Breakdown: ${eq.latex} — ${eq.meaning || 'Relates the primary variables to ensure output stability without numerical divergence.'}`;
-        }
+      const whyItMatters = `This is crucial because without it, the system would produce inconsistent outputs or face computational bottlenecks.`;
+      const howItWorks = `The process operates by evaluating input parameters, verifying boundary conditions, and calculating intermediate states step by step.`;
+
+      const stepByStep = [
+        'Step 1: Check that all initial parameters and preconditions are satisfied.',
+        'Step 2: Apply the governing transformation formula or algorithmic rule.',
+        'Step 3: Normalize outputs to keep values within safe numerical bounds.',
+        'Step 4: Verify that the result satisfies the original invariant condition.'
+      ];
+
+      let formulaExpl = '';
+      if (sec.equations && sec.equations.length > 0) {
+        const eq = sec.equations[0];
+        formulaExpl = `Formula Breakdown: ${eq.latex} — ${eq.meaning || 'Relates the primary variables to ensure output stability without numerical divergence.'}`;
       }
+
+      const invariantRule = sec.conditions?.[0] || 'Mathematical consistency and non-negative bounds must be verified.';
 
       return {
         sectionTitle: sec.title,
         pageNumber: sec.pageNumber || sec.slideNumber || idx + 1,
-        simplifiedConcept: conceptExplanation,
-        realWorldIntuition: sectionAnalogy,
+        simplifiedConcept: whatIsIt,
+        whatIsIt,
+        whyItMatters,
+        howItWorks,
+        stepByStep,
+        realWorldIntuition: everydayAnalogy,
+        realWorldExamples: {
+          practicalExample,
+          everydayAnalogy,
+          industryApplication
+        },
         formulaExplanation: formulaExpl,
         invariantRule,
         sourceCitation: cite
       };
     });
-
-    const primaryCitation = allCitations[0] || {
-      id: `cite-expl-${documentId}`,
-      documentId,
-      pageNumber: primarySec.pageNumber || 1,
-      sectionTitle: primarySec.title,
-      exactQuote: primarySec.content.slice(0, 140) + '...',
-      contextSnippet: primarySec.content.slice(0, 220)
-    };
 
     const takeaways = [
       `Grounded in ${sections.length} extracted section(s) across ${docTitle}.`,
@@ -316,6 +368,12 @@ export class AiGeneratorService {
         title: docTitle,
         summary: primarySec.content.split(/(?<=[.?!])\s+/).slice(0, 2).join(' '),
         intuitiveAnalogy: overallAnalogy,
+        definedTerms,
+        realWorldExamples: {
+          practicalExample,
+          everydayAnalogy,
+          industryApplication
+        },
         sections: simplifiedSections,
         keyTakeaways: takeaways,
         citations: allCitations
@@ -324,7 +382,7 @@ export class AiGeneratorService {
     };
   }
 
-  // --- 3. Detailed Notes (Section 16.2: Headings, definitions, explanations, key points, source references) ---
+  // --- 3. Detailed Notes: Structured with Headings, Definitions Box & Examples ---
   private static generateDetailedNotes(
     documentId: string,
     docTitle: string,
@@ -334,7 +392,7 @@ export class AiGeneratorService {
   ): GeneratedFormatResult {
     const allCitations: SourceCitationRecord[] = [];
     const noteSections = sections.map((sec, idx) => {
-      let breakdown = `Formal academic exposition for ${sec.title}: ${sec.content} The theoretical framework establishes that all core constraints must be rigorously maintained, ensuring system invariants and structural integrity across all state transitions.`;
+      let breakdown = `Academic study notes for ${sec.title}: ${sec.content} The theoretical framework establishes that all core constraints must be rigorously maintained, ensuring system invariants and structural integrity across all state transitions.`;
       if (language === 'Kannada') {
         breakdown = `ಸೈದ್ಧಾಂತಿಕ ವಿಶ್ಲೇಷಣೆ (${sec.title}): ${sec.content}. ಮೂಲ ಅಧ್ಯಯನದಲ್ಲಿ ನಿಗದಿಪಡಿಸಲಾದ ಗಣಿತ ನಿಯಮಗಳು ಮತ್ತು ಸೀಮಾ ಷರತ್ತುಗಳು ಸಿಸ್ಟಮ್‌ನ ಸಂಪೂರ್ಣ ನಿಖರತೆ ಹಾಗೂ ಸ್ಥಿರತೆಯನ್ನು ಖಾತರಿಪಡಿಸುತ್ತವೆ.`;
       } else if (language === 'Hindi') {
@@ -354,15 +412,29 @@ export class AiGeneratorService {
 
       const sentences = sec.content.split(/[.?!]\s+/).filter(s => s.trim().length > 15);
 
+      // Section-level definitions box
+      const definitions = (sec.definitions && sec.definitions.length > 0)
+        ? sec.definitions
+        : [
+            {
+              term: sec.title,
+              definition: sentences[0] || 'Core theoretical concept established in this section.',
+              conditions: sec.conditions?.[0] || 'Parameters must satisfy boundary constraints.'
+            }
+          ];
+
       return {
         heading: sec.title,
         pageOrSlide: sec.pageNumber || sec.slideNumber || idx + 1,
         overview: sentences.slice(0, 2).join('. ') + '.',
         rigorousBreakdown: breakdown,
-        definitions: sec.definitions || [],
+        definitions,
         explanations: sentences.slice(0, 4),
         equations: sec.equations || [],
         conditions: sec.conditions || [],
+        examples: [
+          `Concrete implementation of ${sec.title} demonstrating verified parameter behavior under nominal load.`
+        ],
         keyPoints: [
           `Grounded in ${sec.slideNumber ? `Slide ${sec.slideNumber}` : `Page ${sec.pageNumber || 1}`}: ${sec.title}`,
           sec.conditions?.[0] ? `Boundary Condition: ${sec.conditions[0]}` : 'Mathematical consistency and non-negative bounds must be maintained.',
@@ -373,13 +445,17 @@ export class AiGeneratorService {
       };
     });
 
+    const topRigorousBreakdown = noteSections[0]?.rigorousBreakdown ||
+      `Comprehensive academic study notes synthesized across ${sections.length} extracted section(s) for ${docTitle}.`;
+
     return {
       formatType: 'notes',
       language,
       difficultyLevel: difficulty,
       content: {
         title: docTitle,
-        overview: `Comprehensive academic study notes synthesized across ${sections.length} extracted section(s) for ${docTitle}.`,
+        overview: `Structured study notes synthesized across ${sections.length} extracted section(s) for ${docTitle}.`,
+        rigorousBreakdown: topRigorousBreakdown,
         sections: noteSections,
         overallSummary: noteSections.map(s => s.keyPoints).flat().slice(0, 5).join(' ')
       },
@@ -387,7 +463,7 @@ export class AiGeneratorService {
     };
   }
 
-  // --- 4. Worked Examples ---
+  // --- 4. Worked Examples: Complete Step-by-Step with "Why Each Step is Performed" ---
   private static generateWorkedExamples(
     documentId: string,
     docTitle: string,
@@ -395,15 +471,7 @@ export class AiGeneratorService {
     language: AppLanguage,
     difficulty: DifficultyLevel
   ): GeneratedFormatResult {
-    // Find section with equations or most substantive content
-    const eqSec = sections.find(s => s.equations && s.equations.length > 0) || sections[0] || {
-      pageNumber: 1,
-      title: docTitle,
-      content: 'Analytical calculation and invariant verification.',
-      equations: [{ latex: 'Y = f(X) + C', label: 'Invariant Model', meaning: 'Linear state model' }],
-      conditions: ['All input states must be non-negative.']
-    };
-
+    const eqSec = sections.find(s => s.equations && s.equations.length > 0) || sections[0];
     const firstEq = eqSec.equations?.[0]?.latex || 'Y = f(X) + C';
     const condition = eqSec.conditions?.[0] || 'Parameters must be real and bounded.';
 
@@ -427,7 +495,7 @@ export class AiGeneratorService {
         ? `ನೀಡಲಾದ ಕೀ ಆಯಾಮ d_k = 64 ಮತ್ತು ಡಾಟ್ ಪ್ರಾಡಕ್ಟ್ QK^T = 32.0. ಸ್ಕೇಲ್ ಫ್ಯಾಕ್ಟರ್ 1/√d_k ಅನ್ನು ಲೆಕ್ಕಹಾಕಿ, ಸಾಫ್ಟ್‌ಮ್ಯಾಕ್ಸ್ ಇನ್‌ಪುಟ್ ಮೌಲ್ಯವನ್ನು ನಿರ್ಧರಿಸಿ ಮತ್ತು ಗ್ರೇಡಿಯಂಟ್ ಕಣ್ಮರೆಯಾಗುವುದನ್ನು ತಡೆಯುವ ವಿಧಾನವನ್ನು ತೋರಿಸಿ.`
         : language === 'Hindi'
         ? `दिए गए पैरामीटर: की डायमेंशन d_k = 64 और डॉट प्रोडक्ट QK^T = 32.0। स्केल फैक्टर 1/√d_k की गणना करें, सॉफ्टमैक्स इनपुट मान निर्धारित करें और स्पष्ट करें कि प्रसरण स्थिर रखने से ग्रेडिएंट वैनिशिंग कैसे रुकती है।`
-        : `Given key vector dimension d_k = 64 and an unscaled query-key dot product QK^T = 32.0. Calculate the exact scaling factor 1/√d_k, evaluate the scaled logit argument for the softmax operator, and verify that the variance is normalized to prevent gradient vanishing.`;
+        : `Given key vector dimension d_k = 64 and an unscaled query-key dot product QK^T = 32.0. Calculate the exact scaling factor 1/√d_k, evaluate the scaled logit argument for the softmax operator, and verify that variance is normalized to prevent gradient vanishing.`;
 
       givenParameters = [
         'Key dimension: d_k = 64',
@@ -437,11 +505,11 @@ export class AiGeneratorService {
       ];
 
       steps = [
-        'Step 1: Verify Preconditions — Check that key dimension d_k = 64 is strictly positive (d_k > 0) so the inverse square root is well-defined.',
-        'Step 2: Calculate Scale Factor — Compute the square root of dimension: √64 = 8. Thus, the scale factor is 1 / √d_k = 1 / 8 = 0.125.',
-        'Step 3: Apply Dot-Product Scaling — Multiply raw dot product by the scale factor: Scaled Logit = (32.0) * (0.125) = 4.0.',
-        'Step 4: Softmax Input Evaluation — The argument passed into the exponential softmax operator is exactly 4.0 instead of 32.0. This prevents exponential overflow (e^32 ≈ 7.89 × 10^13) and keeps the softmax derivative out of saturation regions.',
-        'Step 5: Theoretical Invariant Verification — Confirmed: The variance of the dot products is scaled by 1/d_k back to 1.0, preserving stable backpropagation gradients as proven in Equation (1).'
+        'Step 1: Check Preconditions — [Why performed]: Verify that key dimension d_k = 64 is strictly positive (d_k > 0) so the inverse square root is physically and mathematically defined without division-by-zero errors.',
+        'Step 2: Calculate Scale Factor — [Why performed]: Compute √64 = 8.0, yielding scaling factor 1/√d_k = 1/8 = 0.125. This dampens large inner products before passing into the exponential softmax function.',
+        'Step 3: Scale the Raw Dot Product — [Why performed]: Multiply QK^T by the scale factor: Scaled Logit = (32.0) * (0.125) = 4.0. This prevents exponential overflow where e^32 would cause numerical overflow and zero gradients.',
+        'Step 4: Softmax Argument Verification — [Why performed]: Evaluate the softmax operator on the normalized logit 4.0. The softmax derivative remains non-zero, allowing neural backpropagation to learn smoothly without vanishing gradients.',
+        'Step 5: Verify Governing Invariant — [Why performed]: Confirm that the scaled dot product variance is normalized to 1.0, preserving mathematical integrity as proven in Equation (1).'
       ];
     } else if (isByzantine) {
       problemTitle = language === 'Kannada'
@@ -450,11 +518,7 @@ export class AiGeneratorService {
         ? `हल उदाहरण: PBFT सर्वसम्मति हेतु आवश्यक न्यूनतम नोड्स का निर्धारण`
         : `Worked Problem: Computing Minimum Fault-Tolerant Replicas for PBFT Consensus`;
 
-      problemStatement = language === 'Kannada'
-        ? `ಒಂದು ಅಸಮಕಾಲಿಕ ವಿತರಿತ ನೆಟ್‌ವರ್ಕ್ f = 2 ಬೈಜಾಂಟೈನ್ (ದುರುದ್ದೇಶಪೂರಿತ) ನೋಡ್‌ಗಳನ್ನು ಸಹಿಸಿಕೊಳ್ಳಬೇಕು. ಸುರಕ್ಷತೆ ಮತ್ತು ಒಪ್ಪಂದವನ್ನು ಖಚಿತಪಡಿಸಿಕೊಳ್ಳಲು ಅಗತ್ಯವಿರುವ ಕನಿಷ್ಠ ಒಟ್ಟು ರೆಪ್ಲಿಕಾಗಳ (n) ಸಂಖ್ಯೆಯನ್ನು ಲೆಕ್ಕಹಾಕಿ.`
-        : language === 'Hindi'
-        ? `एक अतुल्यकालिक वितरित नेटवर्क में f = 2 दुर्भावनापूर्ण (Byzantine) नोड्स की विफलता को सहन करना है। सुरक्षा और आम सहमति बनाए रखने के लिए कुल आवश्यक सर्वर नोड्स (n) की न्यूनतम संख्या ज्ञात करें।`
-        : `An asynchronous distributed ledger network must tolerate up to f = 2 arbitrary Byzantine (malicious or crashed) nodes. Calculate the minimum total replicas n required, and prove that any two valid quorums intersect in at least one non-faulty replica.`;
+      problemStatement = `An asynchronous distributed ledger network must tolerate up to f = 2 arbitrary Byzantine (malicious or crashed) nodes. Calculate the minimum total replicas n required, and prove that any two valid quorums intersect in at least one non-faulty replica.`;
 
       givenParameters = [
         'Tolerable Byzantine faults: f = 2',
@@ -463,36 +527,13 @@ export class AiGeneratorService {
       ];
 
       steps = [
-        'Step 1: Check Invariant Condition — The PBFT safety theorem requires n >= 3f + 1 total server nodes to guarantee agreement in asynchronous channels.',
-        'Step 2: Calculate Minimum Replicas — Substitute f = 2 into the formula: n_min = 3(2) + 1 = 6 + 1 = 7 replicas.',
-        'Step 3: Determine Quorum Threshold — Each quorum must contain at least Q = 2f + 1 = 2(2) + 1 = 5 distinct replicas.',
-        'Step 4: Quorum Intersection Proof — In any network of n = 7 nodes, the overlap between any two quorums of size 5 is: Overlap = Q_1 + Q_2 - n = 5 + 5 - 7 = 3 nodes.',
-        'Step 5: Fault-Freedom Invariant Verification — Since at most f = 2 nodes can be Byzantine, at least 3 - 2 = 1 node in the quorum intersection is guaranteed to be honest and non-faulty, proving consensus safety.'
-      ];
-    } else if (isQuantum) {
-      problemTitle = language === 'Kannada'
-        ? `ಉದಾಹರಣೆ ಲೆಕ್ಕಾಚಾರ: ಕ್ವಾಂಟಮ್ ಟೆಲಿಪೋರ್ಟೇಶನ್ ಮತ್ತು ಬೆಲ್ ಸ್ಥಿತಿಯ ವಿಶ್ಲೇಷಣೆ`
-        : language === 'Hindi'
-        ? `हल उदाहरण: क्वांटम टेलीपोर्टेशन और बेल स्टेट माप विश्लेषण`
-        : `Worked Problem: Quantum State Teleportation via Entangled EPR Channel`;
-
-      problemStatement = `Given an unknown qubit |psi> = alpha |0> + beta |1> and a pre-shared EPR Bell pair |Phi+> = (|00> + |11>) / √2, demonstrate how Alice's joint Bell measurement deterministically teleports the state to Bob without violating the no-cloning theorem.`;
-
-      givenParameters = [
-        'Unknown State: |psi> = alpha |0> + beta |1> with |alpha|^2 + |beta|^2 = 1',
-        'Shared Entangled Pair: |Phi+> = (|00> + |11>) / √2',
-        'No-Cloning Invariant: The original state is destroyed upon measurement'
-      ];
-
-      steps = [
-        'Step 1: Form Combined 3-Qubit System — |Psi_123> = |psi>_1 ⊗ |Phi+>_23 = (alpha|0> + beta|1>) ⊗ (|00> + |11>) / √2.',
-        'Step 2: Expand into Bell Measurement Basis — Rewrite the 3-qubit state using Alice\'s 4 orthogonal Bell states: |Psi> = 1/2 [ |Phi+>(alpha|0> + beta|1>) + |Phi->(alpha|0> - beta|1>) + |Psi+>(alpha|1> + beta|0>) + |Psi->(alpha|1> - beta|0>) ].',
-        'Step 3: Alice Performs Joint Measurement — Alice measures qubits 1 and 2, obtaining one of four 2-bit outcomes: 00, 01, 10, or 11 with equal probability (1/4).',
-        'Step 4: Classical Transmission — Alice transmits the 2 classical bits across the classical channel to Bob.',
-        'Step 5: Unitary Reconstruction — Bob applies the corresponding Pauli gate (I, Z, X, or ZX) to his qubit 3, reconstructing the exact original state |psi> with 100% fidelity.'
+        'Step 1: Inspect Safety Condition — [Why performed]: In asynchronous networks, delayed messages are indistinguishable from crashed nodes, requiring the resilience bound n >= 3f + 1.',
+        'Step 2: Substitute Fault Parameters — [Why performed]: Compute n_min = 3(2) + 1 = 6 + 1 = 7 replicas to establish the minimal cluster size.',
+        'Step 3: Determine Quorum Threshold — [Why performed]: Calculate Q = 2f + 1 = 2(2) + 1 = 5 replicas. Any valid state transition requires confirmation from at least 5 nodes.',
+        'Step 4: Quorum Intersection Calculation — [Why performed]: Calculate overlap = Q_1 + Q_2 - n = 5 + 5 - 7 = 3 nodes. Any two independent quorums must share at least 3 nodes.',
+        'Step 5: Prove Fault-Freedom — [Why performed]: Since at most f = 2 nodes can be faulty, 3 - 2 = 1 shared node is mathematically guaranteed to be honest and truthful, preventing split-brain states.'
       ];
     } else {
-      // General academic derivation using extracted formula
       problemStatement = `Given the operational parameters defined in Section ${eqSec.pageNumber || 1} ("${eqSec.title}"), apply formulation ${firstEq} to compute the equilibrium state and verify that boundary constraint "${condition}" is strictly satisfied.`;
 
       givenParameters = [
@@ -502,11 +543,11 @@ export class AiGeneratorService {
       ];
 
       steps = [
-        `Step 1: Precondition Inspection — Confirm that the system parameters satisfy the boundary invariant: ${condition}.`,
-        `Step 2: Parameter Formulation — Apply the verified relation ${firstEq} to establish the dependent variable response.`,
-        'Step 3: Algebraic Evaluation — Substitute the primary variables and evaluate all intermediate matrix/scalar transformations.',
-        'Step 4: Normalization & Bounds Check — Verify that the calculated result stays strictly within valid physical and numerical ranges.',
-        'Step 5: Invariant Verification — Confirmed that the output adheres to the theoretical invariants with zero altered parameters.'
+        `Step 1: Check Preconditions — [Why performed]: Confirm that system parameters satisfy the boundary invariant "${condition}" before performing algebraic transformations.`,
+        `Step 2: Apply Governing Formulation — [Why performed]: Substitute variables into ${firstEq} to establish the dependent variable response curve.`,
+        `Step 3: Algebraic Evaluation — [Why performed]: Compute intermediate expressions step by step to preserve full arithmetic transparency.`,
+        `Step 4: Bounds & Normalization Check — [Why performed]: Verify that computed output values fall within strictly bounded theoretical ranges.`,
+        `Step 5: Invariant Verification — [Why performed]: Confirm that all mathematical boundary conditions hold true with zero altered constants.`
       ];
     }
 
@@ -537,7 +578,7 @@ export class AiGeneratorService {
     };
   }
 
-  // --- 5. Flashcards (Section 16.2: Questions, answers, source references, review status) ---
+  // --- 5. Flashcards: One Simple Question & One Short Answer Per Card ---
   private static generateFlashcards(
     documentId: string,
     sections: ExtractedSectionRecord[],
@@ -548,13 +589,17 @@ export class AiGeneratorService {
     const citations: SourceCitationRecord[] = [];
 
     sections.forEach((sec, idx) => {
-      let front = `What is the core premise introduced in "${sec.title}"?`;
+      // Create one concise, clear question and a crisp, understandable answer
+      let front = `What is the core role of ${sec.title}?`;
       let back = sec.content.split(/[.?!]\s+/)[0] + '.';
+      if (back.length > 130) {
+        back = back.slice(0, 127) + '...';
+      }
 
       if (language === 'Kannada') {
-        front = `"${sec.title}" ವಿಭಾಗದಲ್ಲಿ ವಿವರಿಸಲಾದ ಮುಖ್ಯ ತತ್ವ ಯಾವುದು?`;
+        front = `"${sec.title}" ವಿಭಾಗದ ಮುಖ್ಯ ಉದ್ದೇಶವೇನು?`;
       } else if (language === 'Hindi') {
-        front = `"${sec.title}" में प्रस्तुत मुख्य सिद्धांत क्या है?`;
+        front = `"${sec.title}" का मुख्य उद्देश्य क्या है?`;
       }
 
       const citation: SourceCitationRecord = {
@@ -581,13 +626,14 @@ export class AiGeneratorService {
         sourceCitation: citation,
         explanation: `Sourced from Page ${sec.pageNumber || 1}: ${sec.title}`,
         practiceOptions: [
-          { text: back, isCorrect: true, explanation: 'Directly stated in original source text.' },
-          { text: 'Contradicts the invariant parameter bounds.', isCorrect: false, explanation: 'False claim.' },
-          { text: 'Legacy approximation without rigorous verification.', isCorrect: false, explanation: 'Inaccurate.' }
+          { text: back, isCorrect: true, explanation: 'Directly stated in the source document.' },
+          { text: 'Contradicts the invariant parameter bounds.', isCorrect: false, explanation: 'Incorrect: contradicts verified invariants.' },
+          { text: 'Unverified approximation without proof.', isCorrect: false, explanation: 'Incorrect: not supported by source.' },
+          { text: 'Legacy assumption omitted in modern models.', isCorrect: false, explanation: 'Incorrect: not applicable.' }
         ]
       });
 
-      // If section has equations, add a dedicated equation card
+      // If section has equations, add a dedicated, clean equation flashcard
       if (sec.equations && sec.equations.length > 0) {
         const eq = sec.equations[0];
         const eqCitation: SourceCitationRecord = {
@@ -603,8 +649,8 @@ export class AiGeneratorService {
 
         flashcards.push({
           id: `fc-${documentId}-eq-${idx + 1}`,
-          front: `State the mathematical formulation for ${eq.label || sec.title}:`,
-          back: `${eq.latex} — ${eq.meaning}`,
+          front: `What is the equation for ${eq.label || sec.title}?`,
+          back: `${eq.latex} — ${eq.meaning || 'Core theoretical model'}`,
           pageOrSlide: sec.pageNumber || sec.slideNumber || idx + 1,
           sectionTitle: sec.title,
           category: 'equation',
@@ -614,8 +660,10 @@ export class AiGeneratorService {
           sourceCitation: eqCitation,
           explanation: `Equation verified from Page ${sec.pageNumber || 1}.`,
           practiceOptions: [
-            { text: eq.latex, isCorrect: true, explanation: 'Verified equation.' },
-            { text: 'Missing normalization constant', isCorrect: false, explanation: 'Incorrect formula.' }
+            { text: eq.latex, isCorrect: true, explanation: 'Verified mathematical formulation.' },
+            { text: 'Formula missing normalization constant', isCorrect: false, explanation: 'Incorrect: normalization is mandatory.' },
+            { text: 'Linear regression without boundary limits', isCorrect: false, explanation: 'Incorrect model.' },
+            { text: 'Heuristic estimate with empirical noise', isCorrect: false, explanation: 'Incorrect.' }
           ]
         });
       }
@@ -630,7 +678,7 @@ export class AiGeneratorService {
     };
   }
 
-  // --- 6. Audio Lessons ---
+  // --- 6. Audio Lessons: Conversational Teaching Narration with Topic Pauses ---
   private static generateAudioLesson(
     documentId: string,
     docTitle: string,
@@ -640,33 +688,29 @@ export class AiGeneratorService {
   ): GeneratedFormatResult {
     const citations: SourceCitationRecord[] = [];
 
-    // Construct 4 natural lesson parts:
-    // 1. Orientation & Introduction
-    // 2. Core Concepts
-    // 3. Relatable Analogy & Numerical Case
-    // 4. Invariant Rules & Recap
     const audioSections = sections.slice(0, 4).map((sec, idx) => {
       let script = '';
       if (idx === 0) {
-        script = `Welcome to LEARNOVA Audio Lesson for ${docTitle}. In this lesson, we break down Section 1: ${sec.title}. The author establishes that: ${sec.content.slice(0, 240)}.`;
+        script = `Welcome to your LEARNOVA Audio Lesson on "${docTitle}". [PAUSE: 1s] Let's begin with Section 1: ${sec.title}. In this chapter, the author introduces a critical foundation: ${sec.content.slice(0, 220)}. [PAUSE: 2s] Notice why this matters: it establishes predictable parameters and prevents confusing edge-case failures.`;
         if (language === 'Kannada') {
-          script = `ಸ್ವಾಗತ. ಇದು LEARNOVA ${docTitle} ಕುರಿತ ಧ್ವನಿ ಪಾಠ. ಅಧ್ಯಾಯ 1: ${sec.title}. ಲೇಖಕರು ವಿವರಿಸುತ್ತಾರೆ: ${sec.content.slice(0, 200)}.`;
+          script = `ಸ್ವಾಗತ. ಇದು LEARNOVA ${docTitle} ಕುರಿತ ಧ್ವನಿ ಪಾಠ. [PAUSE: 1s] ಮೊದಲನೆಯದಾಗಿ, ಅಧ್ಯಾಯ 1: ${sec.title}. ಲೇಖಕರು ಇಲ್ಲಿ ಮುಖ್ಯ ಅಡಿಪಾಯವನ್ನು ವಿವರಿಸುತ್ತಾರೆ: ${sec.content.slice(0, 180)}. [PAUSE: 2s] ಇದು ಸಿಸ್ಟಮ್‌ನ ನಿಖರತೆಯನ್ನು ಕಾಪಾಡುತ್ತದೆ.`;
         } else if (language === 'Hindi') {
-          script = `नमस्ते, LEARNOVA ऑडियो पाठ में आपका स्वागत है। विषय है ${docTitle}। अध्याय 1: ${sec.title}। लेखक बताते हैं: ${sec.content.slice(0, 200)}।`;
+          script = `नमस्ते, LEARNOVA ऑडियो पाठ में आपका स्वागत है। विषय है "${docTitle}"। [PAUSE: 1s] अध्याय 1: ${sec.title}। लेखक बताते हैं: ${sec.content.slice(0, 180)}। [PAUSE: 2s] यह अवधारणा पूरी प्रणाली की स्थिरता सुनिश्चित करती है।`;
         }
       } else {
-        script = `Moving to Section ${idx + 1}: ${sec.title}. Here we explore the technical mechanism: ${sec.content.slice(0, 260)}. Remember that boundary conditions must remain strictly non-negative.`;
+        script = `Moving forward to Section ${idx + 1}: ${sec.title}. [TRANSITION] [PAUSE: 1s] Here we examine the technical mechanism: ${sec.content.slice(0, 220)}. [PAUSE: 2s] An important point to remember: all governing boundary conditions must remain strictly non-negative throughout each transformation.`;
         if (language === 'Kannada') {
-          script = `ಮುಂದಿನ ಅಧ್ಯಾಯ ${idx + 1}: ${sec.title}. ಇಲ್ಲಿ ಮುಖ್ಯ ಸೂತ್ರಗಳು ಮತ್ತು ನಿಯಮಗಳನ್ನು ಗಮನಿಸಿ: ${sec.content.slice(0, 220)}.`;
+          script = `ಮುಂದಿನ ಅಧ್ಯಾಯ ${idx + 1}: ${sec.title}. [TRANSITION] [PAUSE: 1s] ಇಲ್ಲಿ ಮುಖ್ಯ ಸೂತ್ರಗಳು ಮತ್ತು ನಿಯಮಗಳನ್ನು ಗಮನಿಸಿ: ${sec.content.slice(0, 180)}. [PAUSE: 2s] ಎಲ್ಲ ಷರತ್ತುಗಳು ಕಟ್ಟುನಿಟ್ಟಾಗಿ ಪಾಲನೆಯಾಗಬೇಕು.`;
         } else if (language === 'Hindi') {
-          script = `अगला अध्याय ${idx + 1}: ${sec.title}। यहाँ हम मुख्य अवधारणा का अध्ययन करेंगे: ${sec.content.slice(0, 220)}।`;
+          script = `अगला अध्याय ${idx + 1}: ${sec.title}। [TRANSITION] [PAUSE: 1s] यहाँ मुख्य सिद्धांत है: ${sec.content.slice(0, 180)}। [PAUSE: 2s] सभी सीमा शर्तों का कड़ाई से पालन होना अनिवार्य है।`;
         }
       }
 
       const citation: SourceCitationRecord = {
         id: `acite-${idx + 1}`,
         documentId,
-        pageNumber: sec.pageNumber,
+        pageNumber: sec.pageNumber || 1,
+        slideNumber: sec.slideNumber,
         sectionTitle: sec.title,
         exactQuote: sec.content.slice(0, 140) + '...',
         contextSnippet: sec.content.slice(0, 220)
@@ -696,7 +740,7 @@ export class AiGeneratorService {
     };
   }
 
-  // --- 7. Practice Quizzes ---
+  // --- 7. Practice Quizzes: Clear Questions & Explanations for All Options ---
   private static generatePracticeQuiz(
     documentId: string,
     sections: ExtractedSectionRecord[],
@@ -707,17 +751,18 @@ export class AiGeneratorService {
 
     const questions = sections.slice(0, 4).map((sec, idx) => {
       const sentence = sec.content.split(/[.?!]\s+/)[0] + '.';
-      let question = `Which statement is mathematically and conceptually verified for ${sec.title}?`;
+      let question = `What does Section ${idx + 1} ("${sec.title}") verify regarding system operations?`;
       if (language === 'Kannada') {
-        question = `${sec.title} ಕುರಿತು ಯಾವ ಹೇಳಿಕೆಯು ಸರಿಯಾಗಿದೆ?`;
+        question = `ವಿಭಾಗ ${idx + 1} ("${sec.title}") ರ ಪ್ರಕಾರ ಕೆಳಗಿನ ಯಾವ ಹೇಳಿಕೆಯು ಸರಿಯಾಗಿದೆ?`;
       } else if (language === 'Hindi') {
-        question = `${sec.title} के संदर्भ में कौन सा कथन सत्यापित है?`;
+        question = `अध्याय ${idx + 1} ("${sec.title}") के संदर्भ में कौन सा कथन सही और सत्यापित है?`;
       }
 
       const citation: SourceCitationRecord = {
         id: `q-cite-${idx + 1}`,
         documentId,
-        pageNumber: sec.pageNumber,
+        pageNumber: sec.pageNumber || 1,
+        slideNumber: sec.slideNumber,
         sectionTitle: sec.title,
         exactQuote: sentence,
         contextSnippet: sec.content.slice(0, 200)
@@ -730,9 +775,26 @@ export class AiGeneratorService {
         category: sec.equations && sec.equations.length > 0 ? 'equation' : 'definition',
         difficulty,
         options: [
-          { text: sentence, isCorrect: true, explanation: 'Directly stated in original source text.' },
-          { text: 'The parameter is empirical and may be omitted.', isCorrect: false, explanation: 'Incorrect: condition is an invariant.' },
-          { text: 'Applicable only under unconstrained environments.', isCorrect: false, explanation: 'Incorrect: specific boundaries apply.' }
+          {
+            text: sentence,
+            isCorrect: true,
+            explanation: `Correct: Directly verified from Page/Slide ${sec.pageNumber || 1} in Section "${sec.title}".`
+          },
+          {
+            text: 'System parameters are purely empirical and boundary conditions may be omitted.',
+            isCorrect: false,
+            explanation: 'Incorrect: Academic invariants must strictly hold true under all operational conditions.'
+          },
+          {
+            text: 'Applicable only under unconstrained, zero-latency environments.',
+            isCorrect: false,
+            explanation: 'Incorrect: The theoretical framework explicitly establishes concrete boundary limits.'
+          },
+          {
+            text: 'Equations require heuristic approximations without normalization constants.',
+            isCorrect: false,
+            explanation: 'Incorrect: Normalization constants (such as 1/√d_k) are mathematically mandatory.'
+          }
         ],
         sourceCitation: citation
       };

@@ -4,6 +4,7 @@ import { Database } from '../db/database';
 import { AiGeneratorService, DifficultyLevel } from '../services/aiGeneratorService';
 import { MeaningPreservationEngine } from '../services/meaningPreservationEngine';
 import { AiGeneratorTestSuite } from '../services/aiGeneratorTestSuite';
+import { ExplainThisService } from '../services/explainThisService';
 import { AppLanguage } from '../db/schema';
 
 export class LearningController {
@@ -128,6 +129,91 @@ export class LearningController {
     } catch (e: any) {
       console.error('Generator test suite error:', e);
       res.status(500).json({ error: 'Test suite error: ' + e.message });
+    }
+  }
+
+  /**
+   * Step 3: Explain This Feature
+   * Explains any confusing sentence, paragraph, or concept in simpler language
+   * while preserving mathematical and theoretical invariants.
+   */
+  static async explainThis(req: AuthenticatedRequest, res: Response) {
+    try {
+      const { documentId, selectionText, contextSnippet, difficulty = 'beginner', language = 'English' } = req.body;
+      if (!documentId || !selectionText) {
+        return res.status(400).json({ error: 'documentId and selectionText are required.' });
+      }
+
+      const doc = Database.getDocumentById(documentId);
+      if (!doc) {
+        return res.status(404).json({ error: 'Document not found.' });
+      }
+
+      const userId = req.user?.id;
+      const role = req.user?.role;
+      const isOwner = doc.ownerId === userId;
+      const isCourseLecturer = role === 'lecturer' && Database.isDocumentInLecturerCourses(doc.id, userId!);
+      const isShared = Database.isDocumentSharedWithStudents(doc.id);
+      const isAdmin = role === 'admin';
+
+      if (!isOwner && !isCourseLecturer && !isShared && !isAdmin) {
+        return res.status(403).json({ error: 'Access denied: You cannot access explanations for another user\'s document.' });
+      }
+
+      const result = await ExplainThisService.explainSelection(
+        documentId,
+        selectionText,
+        contextSnippet || '',
+        difficulty as DifficultyLevel,
+        language as AppLanguage
+      );
+
+      res.json({ explanation: result });
+    } catch (e: any) {
+      console.error('ExplainThis error:', e);
+      res.status(500).json({ error: 'Explain error: ' + e.message });
+    }
+  }
+
+  /**
+   * Step 7: Ask Follow-up Question
+   * Allows students to ask clarifying questions about a document or section.
+   */
+  static async askQuestion(req: AuthenticatedRequest, res: Response) {
+    try {
+      const { documentId, question, currentSectionTitle, difficulty = 'intermediate', language = 'English' } = req.body;
+      if (!documentId || !question) {
+        return res.status(400).json({ error: 'documentId and question are required.' });
+      }
+
+      const doc = Database.getDocumentById(documentId);
+      if (!doc) {
+        return res.status(404).json({ error: 'Document not found.' });
+      }
+
+      const userId = req.user?.id;
+      const role = req.user?.role;
+      const isOwner = doc.ownerId === userId;
+      const isCourseLecturer = role === 'lecturer' && Database.isDocumentInLecturerCourses(doc.id, userId!);
+      const isShared = Database.isDocumentSharedWithStudents(doc.id);
+      const isAdmin = role === 'admin';
+
+      if (!isOwner && !isCourseLecturer && !isShared && !isAdmin) {
+        return res.status(403).json({ error: 'Access denied: You cannot ask questions about another user\'s document.' });
+      }
+
+      const result = await ExplainThisService.answerFollowUp(
+        documentId,
+        question,
+        currentSectionTitle,
+        difficulty as DifficultyLevel,
+        language as AppLanguage
+      );
+
+      res.json({ response: result });
+    } catch (e: any) {
+      console.error('AskQuestion error:', e);
+      res.status(500).json({ error: 'Question answering error: ' + e.message });
     }
   }
 }

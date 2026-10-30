@@ -41,6 +41,8 @@ apiRouter.post('/documents/:id/generate', authMiddleware, aiRequestRateLimiter, 
 apiRouter.get('/documents/:id/materials', authMiddleware, (req, res) => LearningController.getMaterials(req, res));
 apiRouter.get('/documents/:id/test-generator', authMiddleware, (req, res) => LearningController.testGenerator(req, res));
 apiRouter.post('/documents/:id/test-generator', authMiddleware, (req, res) => LearningController.testGenerator(req, res));
+apiRouter.post('/learning/explain-this', authMiddleware, aiRequestRateLimiter, (req, res) => LearningController.explainThis(req, res));
+apiRouter.post('/learning/ask-question', authMiddleware, aiRequestRateLimiter, (req, res) => LearningController.askQuestion(req, res));
 
 // 4. Source Verification & Meaning Preservation Engine (Phase 6)
 apiRouter.get('/documents/:id/verification', authMiddleware, (req, res) => VerificationController.getVerification(req, res));

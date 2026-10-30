@@ -32,6 +32,7 @@ import { FlashcardView } from '../Workspace/FlashcardView';
 import { AudioLessonView } from '../Workspace/AudioLessonView';
 import { PracticeQuizView } from '../Workspace/PracticeQuizView';
 import { GeneratorControlBar } from '../Workspace/GeneratorControlBar';
+import { ExplainThisModal } from '../Workspace/ExplainThisModal';
 import { AiGeneratorTestModal } from '../AiGeneratorTestModal';
 import { ExportModal } from '../ExportModal';
 import { ApiClient } from '../../services/apiClient';
@@ -64,6 +65,9 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
   const [verificationResult, setVerificationResult] = useState<FormatVerificationResult | null>(null);
   const [isTestModalOpen, setIsTestModalOpen] = useState<boolean>(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
+  const [isExplainModalOpen, setIsExplainModalOpen] = useState<boolean>(false);
+  const [explainSelectionText, setExplainSelectionText] = useState<string>('');
+  const [explainContextSnippet, setExplainContextSnippet] = useState<string>('');
 
   // Dynamic overrides per format when student regenerates or switches language
   const [dynamicOverrides, setDynamicOverrides] = useState<Record<string, any>>({});
@@ -98,6 +102,42 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
       savedAt: new Date().toISOString().replace('T', ' ').slice(0, 16),
       citation: cite
     });
+  };
+
+  const handleOpenExplain = (text: string, context?: string) => {
+    setExplainSelectionText(text);
+    setExplainContextSnippet(context || '');
+    setIsExplainModalOpen(true);
+  };
+
+  const handleDownloadNotes = () => {
+    let md = `# LEARNOVA Study Notes: ${document.title}\n\n`;
+    md += `**Difficulty:** ${difficulty} | **Language:** ${currentLanguage}\n\n`;
+    md += `---\n\n## 1. Simplified Overview\n\n`;
+    md += `${currentExpl.intuitiveAnalogy || currentExpl.summary || ''}\n\n`;
+    if (currentExpl.realWorldExamples) {
+      md += `### Real-World Examples\n`;
+      md += `- **Everyday Analogy:** ${currentExpl.realWorldExamples.everydayAnalogy || 'N/A'}\n`;
+      md += `- **Practical Example:** ${currentExpl.realWorldExamples.practicalExample || 'N/A'}\n`;
+      md += `- **Industry Application:** ${currentExpl.realWorldExamples.industryApplication || 'N/A'}\n\n`;
+    }
+    if (currentExpl.sections) {
+      md += `## 2. Topic-by-Topic Walkthrough\n\n`;
+      currentExpl.sections.forEach((s: any, idx: number) => {
+        md += `### ${idx + 1}. ${s.sectionTitle} (Page ${s.pageNumber || 1})\n\n`;
+        md += `${s.simplifiedConcept || s.whatIsIt || ''}\n\n`;
+        if (s.whyItMatters) md += `**Why It Matters:** ${s.whyItMatters}\n\n`;
+        if (s.howItWorks) md += `**How It Works:** ${s.howItWorks}\n\n`;
+        if (s.formulaExplanation) md += `**Formula Breakdown:** \`${s.formulaExplanation}\`\n\n`;
+      });
+    }
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = window.document.createElement('a');
+    a.href = url;
+    a.download = `${document.title.replace(/\s+/g, '_')}_Simplified_Notes_${currentLanguage}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   // Section 5.2 & 5.5: Generate or Regenerate material with verification
@@ -356,6 +396,7 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
               document={document}
               highlightedCitation={highlightedCitation}
               onClearHighlight={() => setHighlightedCitation(null)}
+              onExplainSelection={handleOpenExplain}
             />
           </div>
         )}
@@ -380,13 +421,29 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
                       <Lightbulb className="w-4 h-4" />
                       <span>03. Simplified & Intuitive Explanation ({currentLanguage})</span>
                     </span>
-                    <button
-                      onClick={() => handleSaveSnippet('Simplified: ' + currentExpl.title, currentExpl.intuitiveAnalogy, currentExpl.citations?.[0])}
-                      className="text-xs text-brand-600 hover:underline flex items-center gap-1 font-semibold"
-                    >
-                      <Bookmark className="w-3.5 h-3.5" />
-                      <span>Save Explanation</span>
-                    </button>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={handleDownloadNotes}
+                        className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-1 font-medium"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Download Notes (.md)</span>
+                      </button>
+                      <button
+                        onClick={() => handleOpenExplain(currentExpl.title + ': ' + (currentExpl.summary || ''))}
+                        className="px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 text-xs flex items-center gap-1 font-medium"
+                      >
+                        <Lightbulb className="w-3.5 h-3.5" />
+                        <span>Explain Any Concept</span>
+                      </button>
+                      <button
+                        onClick={() => handleSaveSnippet('Simplified: ' + currentExpl.title, currentExpl.intuitiveAnalogy, currentExpl.citations?.[0])}
+                        className="text-xs text-brand-600 hover:underline flex items-center gap-1 font-semibold ml-1"
+                      >
+                        <Bookmark className="w-3.5 h-3.5" />
+                        <span>Save</span>
+                      </button>
+                    </div>
                   </div>
                   <h2 className="text-2xl font-black text-slate-900 dark:text-white">
                     {currentExpl.title}
@@ -403,6 +460,54 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
                     </span>
                   </div>
                 </div>
+
+                {/* Technical Terms Explained First (Step 1) */}
+                {currentExpl.definedTerms && currentExpl.definedTerms.length > 0 && (
+                  <div className="p-5 rounded-2xl bg-brand-50/70 dark:bg-brand-950/40 border border-brand-200 dark:border-brand-800 space-y-3">
+                    <span className="text-xs font-bold uppercase tracking-wider text-brand-800 dark:text-brand-300 flex items-center gap-1.5">
+                      <BookOpen className="w-4 h-4" />
+                      Technical Terms Explained First
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      {currentExpl.definedTerms.map((t: any, idx: number) => (
+                        <div key={idx} className="p-3 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-brand-200/60 dark:border-brand-900/40 text-xs">
+                          <strong className="text-slate-900 dark:text-white block mb-0.5">{t.term}</strong>
+                          <span className="text-slate-600 dark:text-slate-300">{t.definition}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Real-World Examples Box (Step 4) */}
+                {currentExpl.realWorldExamples && (
+                  <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-3">
+                    <span className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
+                      <Lightbulb className="w-4 h-4 text-amber-500" />
+                      Relevant Real-World Grounding
+                    </span>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                      {currentExpl.realWorldExamples.everydayAnalogy && (
+                        <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-amber-200/60 dark:border-amber-900/40 space-y-1">
+                          <strong className="text-amber-700 dark:text-amber-400 block font-bold">1. Everyday Analogy:</strong>
+                          <span className="text-slate-700 dark:text-slate-300">{currentExpl.realWorldExamples.everydayAnalogy}</span>
+                        </div>
+                      )}
+                      {currentExpl.realWorldExamples.practicalExample && (
+                        <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-amber-200/60 dark:border-amber-900/40 space-y-1">
+                          <strong className="text-amber-700 dark:text-amber-400 block font-bold">2. Practical Example:</strong>
+                          <span className="text-slate-700 dark:text-slate-300">{currentExpl.realWorldExamples.practicalExample}</span>
+                        </div>
+                      )}
+                      {currentExpl.realWorldExamples.industryApplication && (
+                        <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-amber-200/60 dark:border-amber-900/40 space-y-1">
+                          <strong className="text-amber-700 dark:text-amber-400 block font-bold">3. Industry Application:</strong>
+                          <span className="text-slate-700 dark:text-slate-300">{currentExpl.realWorldExamples.industryApplication}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Overarching Mental Model */}
                 <div className="p-6 rounded-3xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 space-y-4">
@@ -455,12 +560,41 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
                             </button>
                           )}
                         </div>
-                        <p className="text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed">
-                          {secItem.simplifiedConcept}
+                        <p className="text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed font-medium">
+                          {secItem.whatIsIt || secItem.simplifiedConcept}
                         </p>
+
+                        {secItem.whyItMatters && (
+                          <div className="text-xs text-slate-700 dark:text-slate-300">
+                            <strong className="text-amber-800 dark:text-amber-300">Why It Matters: </strong>
+                            {secItem.whyItMatters}
+                          </div>
+                        )}
+
+                        {secItem.howItWorks && (
+                          <div className="text-xs text-slate-700 dark:text-slate-300">
+                            <strong className="text-blue-800 dark:text-blue-300">How It Works: </strong>
+                            {secItem.howItWorks}
+                          </div>
+                        )}
+
+                        {secItem.stepByStep && secItem.stepByStep.length > 0 && (
+                          <div className="p-3 rounded-xl bg-white/60 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800/60 space-y-1 text-xs">
+                            <strong className="text-slate-900 dark:text-white block font-semibold text-[11px] uppercase tracking-wider">
+                              Step-by-Step Breakdown:
+                            </strong>
+                            {secItem.stepByStep.map((st: string, idx: number) => (
+                              <div key={idx} className="flex items-start gap-1.5 text-slate-700 dark:text-slate-300">
+                                <span className="font-bold text-emerald-600 dark:text-emerald-400">{idx + 1}.</span>
+                                <span>{st}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
                         {secItem.realWorldIntuition && (
                           <div className="p-3 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-amber-200/60 dark:border-amber-900/40 text-xs text-amber-900 dark:text-amber-200">
-                            <span className="font-bold">Mental Model: </span>{secItem.realWorldIntuition}
+                            <span className="font-bold">Everyday Model: </span>{secItem.realWorldIntuition}
                           </div>
                         )}
                         {secItem.formulaExplanation && (
@@ -714,6 +848,18 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
           </div>
         )}
       </div>
+
+      {/* Step 3: Explain This Feature Modal */}
+      <ExplainThisModal
+        isOpen={isExplainModalOpen}
+        onClose={() => setIsExplainModalOpen(false)}
+        documentId={document.id}
+        selectionText={explainSelectionText}
+        contextSnippet={explainContextSnippet}
+        currentLanguage={currentLanguage}
+        initialDifficulty={difficulty}
+        onSaveSnippet={handleSaveSnippet}
+      />
 
       {/* 9-Point AI Generator Testing Suite Modal (Section 5.6) */}
       <AiGeneratorTestModal

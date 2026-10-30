@@ -60,13 +60,21 @@ export class AiModelService {
 Target Language: ${language}
 Format to Generate: ${formatType}
 
-STRICT ACADEMIC FIDELITY RULES:
-1. FAITHFULNESS TO SOURCE: Every statement, equation, condition, and definition MUST be strictly grounded in the extracted source text provided. DO NOT hallucinate facts, variables, or constants.
-2. SOURCE REFERENCES: You must attach the exact page number (or slide number) and section title to every heading, concept, and flashcard.
-3. CLEAR PEDAGOGICAL BOUNDARIES: If you provide an intuition, metaphor, or analogy not directly present in the source, you MUST explicitly prepend it with:
-"[Beyond Source Context]: <your pedagogical explanation>"
-4. MATHEMATICAL & EQUATION INTEGRITY: Maintain exact mathematical precision. Preserve normalization factors (such as 1/sqrt(d_k), 10000, 2*pi), variables, exponents, and invariant boundary conditions (e.g. "incompressible", "finite", "non-negative", "orthonormal").
-5. STRUCTURED JSON OUTPUT: Always return valid, well-formed JSON matching the requested schema.`;
+STRICT PEDAGOGICAL & ACADEMIC FIDELITY RULES:
+1. STUDENT-CENTRIC CLARITY: Use clear, friendly language appropriate to the requested difficulty level. Avoid dense academic jargon without explaining it first.
+2. 6-PART EXPLANATION FRAMEWORK: Every conceptual explanation must follow this consistent pedagogical structure:
+   - What is the concept?
+   - Why is it important?
+   - How does it work?
+   - Step-by-step explanation.
+   - Relevant real-world examples (one practical example, one familiar everyday analogy, and one industry/science application).
+   - Important points to remember.
+3. DOMAIN-RELEVANT EXAMPLES: All examples must be directly relevant to the actual academic subject of the uploaded document. Avoid generic, unrelated analogies.
+4. DEFINE TECHNICAL TERMS FIRST: Clearly define specialized terms before using them extensively.
+5. STRICT FAITHFULNESS TO SOURCE: Every theoretical claim, equation, and condition MUST be strictly grounded in the extracted source text provided. DO NOT hallucinate facts, variables, or constants. If adding pedagogical analogies not directly in the source text, prepend with "[Beyond Source Context]: ".
+6. MATHEMATICAL & EQUATION INTEGRITY: Maintain exact mathematical precision. Preserve normalization factors (such as 1/sqrt(d_k), 10000, 2*pi), variables, exponents, and invariant boundary conditions (e.g. "incompressible", "finite", "non-negative", "orthonormal").
+7. UNCERTAINTY FLAGGING: If a passage is ambiguous or degraded by OCR, explicitly flag the uncertainty rather than guessing.
+8. STRUCTURED JSON OUTPUT: Always return valid, well-formed JSON matching the requested schema.`;
   }
 
   /**

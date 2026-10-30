@@ -236,6 +236,36 @@ export class ApiClient {
     return data.testTracker;
   }
 
+  // Step 3: Explain This Feature
+  static async explainThis(payload: {
+    documentId: string;
+    selectionText: string;
+    contextSnippet?: string;
+    difficulty?: 'beginner' | 'intermediate' | 'advanced';
+    language?: string;
+  }): Promise<any> {
+    const data = await this.request<{ explanation: any }>('/learning/explain-this', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    return data.explanation;
+  }
+
+  // Step 7: Ask Follow-up Question
+  static async askQuestion(payload: {
+    documentId: string;
+    question: string;
+    currentSectionTitle?: string;
+    difficulty?: 'beginner' | 'intermediate' | 'advanced';
+    language?: string;
+  }): Promise<any> {
+    const data = await this.request<{ response: any }>('/learning/ask-question', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    return data.response;
+  }
+
   // Saved Items
   static async getSavedItems(): Promise<SavedItem[]> {
     const data = await this.request<{ savedItems: SavedItem[] }>('/saved');

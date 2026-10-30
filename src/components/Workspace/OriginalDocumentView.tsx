@@ -18,21 +18,45 @@ import {
   EyeOff
 } from 'lucide-react';
 import { AcademicDocument, SourceCitation, ExtractionDiagnosticWarning } from '../../types';
+import { Lightbulb } from 'lucide-react';
 
 interface OriginalDocumentViewProps {
   document: AcademicDocument;
   highlightedCitation?: SourceCitation | null;
   onClearHighlight?: () => void;
+  onExplainSelection?: (text: string, context?: string) => void;
 }
 
 export const OriginalDocumentView: React.FC<OriginalDocumentViewProps> = ({
   document,
   highlightedCitation,
-  onClearHighlight
+  onClearHighlight,
+  onExplainSelection
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const activeHighlightRef = useRef<HTMLDivElement>(null);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [selectedText, setSelectedText] = useState<string>('');
+  const [selectionPosition, setSelectionPosition] = useState<{ x: number; y: number } | null>(null);
+
+  const handleMouseUp = () => {
+    const selection = window.getSelection();
+    const text = selection?.toString().trim();
+    if (text && text.length > 3) {
+      try {
+        const range = selection?.getRangeAt(0);
+        const rect = range?.getBoundingClientRect();
+        if (rect && rect.top > 0) {
+          setSelectionPosition({ x: rect.left + rect.width / 2, y: rect.top - 8 });
+          setSelectedText(text);
+          return;
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+    setSelectionPosition(null);
+  };
 
   useEffect(() => {
     if (highlightedCitation && activeHighlightRef.current) {
@@ -46,7 +70,24 @@ export const OriginalDocumentView: React.FC<OriginalDocumentViewProps> = ({
   const quality = document.extractionQuality;
 
   return (
-    <div className="h-full flex flex-col bg-slate-50 dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 transition-colors select-none">
+    <div
+      onMouseUp={handleMouseUp}
+      className="h-full flex flex-col bg-slate-50 dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 transition-colors select-text relative"
+    >
+      {/* Floating Explain This Tooltip */}
+      {selectionPosition && (
+        <button
+          onClick={() => {
+            if (onExplainSelection) onExplainSelection(selectedText);
+            setSelectionPosition(null);
+          }}
+          className="fixed z-50 px-3 py-1.5 rounded-full bg-brand-600 hover:bg-brand-700 text-white shadow-xl text-xs font-semibold flex items-center space-x-1.5 -translate-x-1/2 -translate-y-full transition-all cursor-pointer border border-white/20 active:scale-95"
+          style={{ left: selectionPosition.x, top: selectionPosition.y }}
+        >
+          <Lightbulb className="w-3.5 h-3.5 text-amber-300" />
+          <span>Explain This</span>
+        </button>
+      )}
       {/* Top Banner: Quality Status Bar (Section 4.3) */}
       <div className="p-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 space-y-3">
         <div className="flex items-center justify-between">
