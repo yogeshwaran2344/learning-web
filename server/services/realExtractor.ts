@@ -319,7 +319,11 @@ export class RealExtractor {
         throw new Error(`Multilingual OCR verification failed: Language model "${lang}.traineddata" is not provisioned in ${tessDir}.`);
       }
     }
-    return await createWorker(['eng', 'kan', 'hin'], 1, { cachePath: tessDir });
+    return await createWorker(['eng', 'kan', 'hin'], 1, {
+      langPath: tessDir,
+      cachePath: tessDir,
+      gzip: false
+    });
   }
 
   /**
@@ -452,8 +456,8 @@ export class RealExtractor {
     let confidenceCount = 0;
     let isMultilingual = false;
 
-    // Process every rendered page preserving exact page numbers (supports up to 100 pages, not capped at 10)
-    const pagesToProcess = renderedPages.slice(0, 100);
+    // Process every rendered page preserving exact page numbers without artificial page caps
+    const pagesToProcess = renderedPages;
     const tempDir = path.resolve(process.cwd(), 'server', 'uploads');
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 

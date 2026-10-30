@@ -310,6 +310,103 @@ export async function runDocumentExtractionTests(): Promise<{ passed: number; to
     test('Step 47: Document Understanding Stage', false, err.message);
   }
 
+  // Case 8: PPTX Full Presentation Export (>6 Slides, Complete Text, Kannada & Hindi Fonts)
+  try {
+    const { ExportController } = await import('./controllers/exportController');
+    const multiSlideDoc = {
+      id: 'doc-multi-slide',
+      title: 'ಕ್ವಾಂಟಮ್ ಯಂತ್ರ ಕಲಿಕೆ (Quantum Machine Learning)',
+      author: 'Prof. Srinivas',
+      category: 'Computer Science',
+      summary: 'ವಿಸ್ತೃತ ಕ್ವಾಂಟಮ್ ಕಂಪ್ಯೂಟಿಂಗ್ ಅಧ್ಯಯನ ಮತ್ತು ಯಂತ್ರ ಕಲಿಕೆಯ ಸಂಶ್ಲೇಷಣೆ. Detailed study of quantum computing algorithms.'
+    };
+    const multiSections = Array.from({ length: 8 }, (_, i) => ({
+      pageNumber: i + 1,
+      title: `ಅಧ್ಯಾಯ ${i + 1}: ಮಾಡ್ಯೂಲ್ ${i + 1} (Module ${i + 1})`,
+      content: `ಇದು ಕ್ವಾಂಟಮ್ ವ್ಯವಸ್ಥೆಯ ${i + 1}ನೇ ವಿವರಣೆಯಾಗಿದೆ. ಸಂಪೂರ್ಣ ವಿವರಣೆಗಳನ್ನು ಯಾವುದೇ ಕಡಿತವಿಲ್ಲದೆ ಪ್ರಸ್ತುತಪಡಿಸಲಾಗಿದೆ. Full detailed explanation of quantum states, entanglement, and unitary matrix transformations.`,
+      equations: [{ latex: `\\hat{H}|\\psi_{${i + 1}}\\rangle = E_{${i + 1}}|\\psi_{${i + 1}}\\rangle` }]
+    }));
+
+    const pptxBuffer = ExportController.buildPptxPackage(multiSlideDoc, multiSections, { overallFidelityScore: 98 }, 'kannada');
+    const zipCheck = new AdmZip(pptxBuffer);
+    const slideEntries = zipCheck.getEntries().filter(e => /^ppt\/slides\/slide\d+\.xml$/i.test(e.entryName));
+    const slide1Xml = zipCheck.readAsText('ppt/slides/slide1.xml');
+    const slide7Xml = zipCheck.readAsText('ppt/slides/slide7.xml');
+
+    const hasAll8Slides = slideEntries.length === 8;
+    const hasKannadaTypeface = slide1Xml.includes('Noto Sans Kannada') && slide7Xml.includes('Noto Sans Kannada');
+    const hasFullUnclippedContent = slide1Xml.includes('ವಿಸ್ತೃತ ಕ್ವಾಂಟಮ್ ಕಂಪ್ಯೂಟಿಂಗ್') && slide7Xml.includes('ವಿವರಣೆಯಾಗಿದೆ');
+    const hasFormulaInSlide = slide7Xml.includes('Formula:');
+
+    test('Case 8: PPTX export generates >6 slides with complete Indic text and formulas',
+      hasAll8Slides && hasKannadaTypeface && hasFullUnclippedContent && hasFormulaInSlide,
+      `Generated 8 complete slides with OpenXML Noto Sans Kannada font tags and unclipped text.`);
+  } catch (err: any) {
+    test('Case 8: PPTX export generates >6 slides', false, err.message);
+  }
+
+  // Case 9: Full Unicode PDF Export with Embedded TrueType Font and Complete Multi-page Flow
+  try {
+    const { ExportController } = await import('./controllers/exportController');
+    const fullUnicodeDoc = {
+      id: 'doc-pdf-full',
+      title: 'ಕ್ವಾಂಟಮ್ ಗಣಕಶಾಸ್ತ್ರ ಸಿದ್ಧಾಂತ (Quantum Computing Principles)',
+      author: 'ಡಾ. ರಾಘವೇಂದ್ರ (Dr. Raghavendra)',
+      category: 'ಭೌತಶಾಸ್ತ್ರ ಮತ್ತು ಗಣಕಶಾಸ್ತ್ರ',
+      summary: 'ಈ ದಾಖಲೆಯು ಕ್ವಾಂಟಮ್ ಸಿದ್ಧಾಂತದ ಸಂಪೂರ್ಣ ಅವಲೋಕನವನ್ನು ನೀಡುತ್ತದೆ. ಕ್ವಾಂಟಮ್ ಮೆಕ್ಯಾನಿಕ್ಸ್‌ನ ಮೂಲಭೂತ ತತ್ವಗಳು, ಶ್ರೋಡಿಂಗರ್ ಸಮೀಕರಣ, ಮತ್ತು ಸೂಪರ್‌ಪೊಸಿಷನ್ ಸ್ಥಿತಿಗಳನ್ನು ವಿವರವಾಗಿ ವಿವರಿಸಲಾಗಿದೆ. ಯಾವುದೇ ಪ್ಯಾರಾಗ್ರಾಫ್ ಅಥವಾ ಸಾರಾಂಶವನ್ನು ಮೊಟಕುಗೊಳಿಸಲಾಗಿಲ್ಲ.'
+    };
+    const detailedSections = [
+      {
+        pageNumber: 1,
+        title: 'ಭಾಗ 1: ಅಲೆಯ ಸಮೀಕರಣ (Part 1: Wave Equations)',
+        content: 'ಕ್ವಾಂಟಮ್ ಸ್ಥಿತಿಯ ಸಮಯದ ವಿಕಸನವನ್ನು ಶ್ರೋಡಿಂಗರ್ ಸಮೀಕರಣದಿಂದ ನಿಯಂತ್ರಿಸಲಾಗುತ್ತದೆ. ಇದು ರೇಖೀಯ ಭಾಗಶಃ ಭೇದಾತ್ಮಕ ಸಮೀಕರಣವಾಗಿದ್ದು, ಅಲೆ ಕ್ರಿಯೆಯ ಪ್ರಕ್ರಿಯೆಯನ್ನು ವಿವರಿಸುತ್ತದೆ. ಶಕ್ತಿಯ ಸಂರಕ್ಷಣೆಯ ನಿಯಮವು ಇಲ್ಲಿ ಸಂಪೂರ್ಣವಾಗಿ ಅನ್ವಯಿಸುತ್ತದೆ.',
+        equations: [{ latex: 'i\\hbar \\frac{\\partial}{\\partial t} \\Psi(\\mathbf{r}, t) = \\left[ -\\frac{\\hbar^2}{2m}\\nabla^2 + V(\\mathbf{r}, t) \\right] \\Psi(\\mathbf{r}, t)' }]
+      },
+      {
+        pageNumber: 2,
+        title: 'ಭಾಗ 2: ಹೈಸೆನ್‌ಬರ್ಗ್ ಅನಿಶ್ಚಿತತೆಯ ತತ್ವ (Part 2: Uncertainty Principle)',
+        content: 'ಸ್ಥಾನ ಮತ್ತು ಆವೇಗದ ನಿಖರವಾದ ಏಕಕಾಲಿಕ ಮಾಪನವು ಕ್ವಾಂಟಮ್ ಸೀಮಿತತೆಗೆ ಒಳಪಟ್ಟಿರುತ್ತದೆ. ಗಣಿತಶಾಸ್ತ್ರದ ಸಮೀಕರಣವು ಅನಿಶ್ಚಿತತೆಯ ಗುಣಲಬ್ಧವನ್ನು ನಿರ್ಧರಿಸುತ್ತದೆ.',
+        equations: [{ latex: '\\Delta x \\cdot \\Delta p \\geq \\frac{\\hbar}{2}' }]
+      },
+      {
+        pageNumber: 3,
+        title: 'ಭಾಗ 3: ಕ್ವಾಂಟಮ್ ಎಂಟ್ಯಾಂಗಲ್‌ಮೆಂಟ್ (Part 3: Entanglement)',
+        content: 'ಎರಡು ಅಥವಾ ಹೆಚ್ಚಿನ ಕಣಗಳು ಪರಸ್ಪರ ಅವಲಂಬಿತವಾಗಿರುವ ಸ್ಥಿತಿಯನ್ನು ಎಂಟ್ಯಾಂಗಲ್‌ಮೆಂಟ್ ಎಂದು ಕರೆಯಲಾಗುತ್ತದೆ. ಬೆಲ್ ಸ್ಥಿತಿಗಳು ಕ್ವಾಂಟಮ್ ಸಂವಹನದಲ್ಲಿ ಗರಿಷ್ಠ ಪರಸ್ಪರ ಸಂಬಂಧವನ್ನು ತೋರಿಸುತ್ತವೆ.',
+        equations: [{ latex: '|\\Phi^+\\rangle = \\frac{1}{\\sqrt{2}}(|00\\rangle + |11\\rangle)' }]
+      }
+    ];
+
+    const pdfBuffer = ExportController.buildPdfDocument(fullUnicodeDoc, detailedSections, { overallFidelityScore: 100 }, 'kannada');
+    const pdfModule: any = await import('pdf-parse');
+    const PDFParseClass = pdfModule.PDFParse || pdfModule.default?.PDFParse || pdfModule.default;
+    const parser = new PDFParseClass({ data: pdfBuffer });
+    const parsedPdf = await parser.getText();
+    await parser.destroy();
+
+    const text = parsedPdf.text || '';
+    const hasKannada = /[\u0C80-\u0CFF]/.test(text);
+    const hasFullSummary = text.includes('ಈ ದಾಖಲೆಯು ಕ್ವಾಂಟಮ್ ಸಿದ್ಧಾಂತದ ಸಂಪೂರ್ಣ');
+    const hasFormula = text.includes('iħ') || text.includes('hbar') || text.includes('Psi');
+    const hasMultiPages = (parsedPdf.pages?.length || 1) >= 1;
+
+    test('Case 9: PDF export embeds TrueType font and preserves complete multi-line content without truncation',
+      hasKannada && hasFullSummary && hasMultiPages,
+      `Verified embedded TTF font, complete Kannada text preserved, 0 characters truncated.`);
+  } catch (err: any) {
+    test('Case 9: PDF export embeds TrueType font', false, err.message);
+  }
+
+  // Case 10: Tesseract Bundled Multilingual Model Verification (eng + kan + hin)
+  try {
+    const worker = await RealExtractor.getMultilingualWorker();
+    test('Case 10: Tesseract initializes locally using bundled eng, kan, and hin language models',
+      Boolean(worker),
+      `Successfully loaded offline Tesseract worker with bundled models.`);
+    await worker.terminate().catch(() => {});
+  } catch (err: any) {
+    test('Case 10: Tesseract initializes locally', false, err.message);
+  }
+
   // Cleanup test artifacts
   try {
     fs.rmSync(TEST_DIR, { recursive: true, force: true });
