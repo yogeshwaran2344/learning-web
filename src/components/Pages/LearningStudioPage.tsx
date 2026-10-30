@@ -51,6 +51,7 @@ interface LearningStudioPageProps {
   allDocuments?: AcademicDocument[];
   onSelectDocument?: (doc: AcademicDocument) => void;
   initialTab?: StudioTab;
+  activeCitation?: SourceCitation | null;
   onNavigateToCitation: (citation: SourceCitation) => void;
   onUpdateFlashcardMastery: (docId: string, cardId: string, level: number) => void;
   onSaveItem: (item: SavedItem) => void;
@@ -62,6 +63,7 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
   allDocuments,
   onSelectDocument,
   initialTab = 'map',
+  activeCitation,
   onNavigateToCitation,
   onUpdateFlashcardMastery,
   onSaveItem,
@@ -69,9 +71,17 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<StudioTab>(initialTab);
   const [isSplitView, setIsSplitView] = useState<boolean>(true);
-  const [highlightedCitation, setHighlightedCitation] = useState<SourceCitation | null>(null);
+  const [highlightedCitation, setHighlightedCitation] = useState<SourceCitation | null>(activeCitation || null);
   const [rightPanelMode, setRightPanelMode] = useState<'chat' | 'formats'>('chat');
   const [fullContextEnabled, setFullContextEnabled] = useState<boolean>(true);
+
+  // Synchronize incoming activeCitation from ContextPanel / App
+  useEffect(() => {
+    if (activeCitation) {
+      setHighlightedCitation(activeCitation);
+      setIsSplitView(true);
+    }
+  }, [activeCitation]);
 
   // Phase 5 Generation States
   const [currentLanguage, setCurrentLanguage] = useState<AppLanguage>('English');

@@ -128,8 +128,20 @@ export const OriginalDocumentView: React.FC<OriginalDocumentViewProps> = ({
   };
 
   useEffect(() => {
-    if (highlightedCitation && activeHighlightRef.current) {
-      activeHighlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (highlightedCitation) {
+      if (highlightedCitation.pageNumber) {
+        setCurrentPage(highlightedCitation.pageNumber);
+      }
+      setTimeout(() => {
+        if (activeHighlightRef.current) {
+          activeHighlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+          const targetEl = containerRef.current?.querySelector(`[data-section-page="${highlightedCitation.pageNumber}"]`);
+          if (targetEl) {
+            targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }
+      }, 50);
     }
   }, [highlightedCitation]);
 

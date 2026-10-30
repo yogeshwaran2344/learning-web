@@ -282,6 +282,9 @@ export function App() {
   const handleNavigateToCitation = (citation: SourceCitation) => {
     setActiveCitation(citation);
     setIsContextPanelOpen(true);
+    if (currentPage !== 'studio') {
+      setCurrentPage('studio');
+    }
   };
 
   return (
@@ -359,6 +362,7 @@ export function App() {
                 allDocuments={documents}
                 onSelectDocument={(doc) => setActiveDocument(doc)}
                 initialTab={studioTab}
+                activeCitation={activeCitation}
                 onNavigateToCitation={handleNavigateToCitation}
                 onUpdateFlashcardMastery={handleUpdateFlashcardMastery}
                 onSaveItem={handleSaveItem}

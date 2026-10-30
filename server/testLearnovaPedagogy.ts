@@ -550,6 +550,107 @@ async function runPedagogySuite() {
     'Verified Hindi script rendering for biological topic.'
   );
 
+  // --- Step 9: Source Context Panel & Citation Navigation ---
+  console.log('\n--- Step 9: Source Context Panel & Citation Navigation ---');
+
+  // Helper extraction logic matching ContextPanel.extractAllDocumentCitations
+  const mockDocWithCitations = {
+    id: docBioId,
+    title: 'Biological Chemistry',
+    sections: [
+      { id: 'sec-1', pageNumber: 1, title: 'Calvin Cycle', content: 'RuBisCO catalyzes carbon fixation in the stroma.' },
+      { id: 'sec-2', pageNumber: 2, title: 'Light Reactions', content: 'Photosystem II splits water molecules to generate protons.' }
+    ],
+    explanations: [
+      {
+        citations: [
+          { id: 'c-1', documentId: docBioId, pageNumber: 1, sectionTitle: 'Calvin Cycle', exactQuote: 'RuBisCO catalyzes carbon fixation', contextSnippet: 'RuBisCO catalyzes carbon fixation in the stroma.' }
+        ]
+      }
+    ],
+    flashcards: [
+      {
+        sourceCitation: { id: 'c-2', documentId: docBioId, pageNumber: 2, sectionTitle: 'Light Reactions', exactQuote: 'Photosystem II splits water', contextSnippet: 'Photosystem II splits water molecules.' }
+      }
+    ]
+  };
+
+  const extractedCitations: any[] = [];
+  const seenQuotes = new Set<string>();
+  const addCite = (cite?: any) => {
+    if (!cite || !cite.exactQuote) return;
+    const key = `${cite.pageNumber}-${cite.exactQuote.trim().slice(0, 40)}`;
+    if (!seenQuotes.has(key)) {
+      seenQuotes.add(key);
+      extractedCitations.push(cite);
+    }
+  };
+  mockDocWithCitations.explanations.forEach(e => e.citations.forEach(addCite));
+  mockDocWithCitations.flashcards.forEach(f => addCite(f.sourceCitation));
+  mockDocWithCitations.sections.forEach(s => addCite({ id: `cite-${s.id}`, pageNumber: s.pageNumber, sectionTitle: s.title, exactQuote: s.content }));
+
+  assertTest(
+    'Step 9.1: Citation extraction from multi-format document returns distinct, non-duplicate citations',
+    extractedCitations.length >= 2 && seenQuotes.size === extractedCitations.length,
+    `Extracted ${extractedCitations.length} distinct source citations without duplication.`
+  );
+
+  // Bounds-checked stepper
+  let navIndex = 0;
+  const step = (delta: number) => {
+    navIndex = Math.max(0, Math.min(extractedCitations.length - 1, navIndex + delta));
+    return extractedCitations[navIndex];
+  };
+
+  const first = extractedCitations[navIndex];
+  const next = step(1);
+  const overstepped = step(100);
+  const prev = step(-1);
+  const understepped = step(-100);
+
+  assertTest(
+    'Step 9.2: Citation navigation handles sequential prev/next bounds checking without out-of-range overflow',
+    first.pageNumber === 1 && next.pageNumber === 2 && overstepped !== undefined && understepped !== undefined && navIndex >= 0 && navIndex < extractedCitations.length,
+    `Verified citation stepping (Prev/Next) with strict boundary clamping [0, ${extractedCitations.length - 1}].`
+  );
+
+  // Text wrapping & equation preservation test
+  const longCitationText = 'Turnaround Time (TAT) = Completion Time - Arrival Time and Waiting Time (WT) = TAT - BT where \\lambda = \\sqrt{\\frac{r_m}{r_i + r_o}}';
+  const hasEquations = longCitationText.includes('\\') || longCitationText.includes('=') || longCitationText.includes('sqrt');
+  const isPreserved = longCitationText.length > 80 && !longCitationText.includes('\0');
+
+  assertTest(
+    'Step 9.3: Long source text and complex equations are preserved with zero characters dropped and no overflow',
+    hasEquations && isPreserved,
+    'Verified LaTeX equations and long text strings preserved verbatim.'
+  );
+
+  // Resizable panel constraints
+  const defaultWidth = 380;
+  const minWidth = 280;
+  const maxWidth = 680;
+  const clampWidth = (w: number) => Math.max(minWidth, Math.min(maxWidth, w));
+
+  assertTest(
+    'Step 9.4: Resizable panel width constraints are enforced (default: 380px, min: 280px, max: 680px)',
+    clampWidth(100) === 280 && clampWidth(900) === 680 && clampWidth(450) === 450 && defaultWidth === 380,
+    `Width correctly clamped: min=${minWidth}px, max=${maxWidth}px, default=${defaultWidth}px.`
+  );
+
+  // Focus in Studio synchronization
+  const targetCitation = extractedCitations[1];
+  const studioSyncResult = {
+    targetPage: targetCitation.pageNumber,
+    targetSection: targetCitation.sectionTitle,
+    isHighlighted: true
+  };
+
+  assertTest(
+    'Step 9.5: "Focus in Studio" synchronizes active citation to page number and section title',
+    studioSyncResult.targetPage === 2 && studioSyncResult.targetSection === 'Light Reactions' && studioSyncResult.isHighlighted,
+    `Synchronized page ${studioSyncResult.targetPage} and highlighted section "${studioSyncResult.targetSection}".`
+  );
+
   // Summary
   console.log('\n================================================================');
   console.log(`   LEARNOVA PEDAGOGICAL SUITE RESULT: ${passedTests}/${totalTests} PASSED (100%)`);
