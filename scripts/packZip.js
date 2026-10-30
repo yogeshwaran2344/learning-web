@@ -22,7 +22,7 @@ function shouldExclude(relPath) {
     }
   }
   // Exclude database binary files and backups
-  if (normalized.startsWith('server/data/') && (normalized.endsWith('.db') || normalized.endsWith('.db-wal') || normalized.endsWith('.db-shm'))) {
+  if (normalized.startsWith('server/data/') && (normalized.endsWith('.db') || normalized.endsWith('.db-wal') || normalized.endsWith('.db-shm') || normalized.includes('/.'))) {
     return true;
   }
   if (normalized.startsWith('server/data/backups/')) {

@@ -115,9 +115,9 @@ process.on('unhandledRejection', (reason) => {
   console.error('[Fatal Error] Unhandled Promise Rejection:', reason);
 });
 
-const server = app.listen(PORT, () => {
-  console.log(`[LearnLens Backend] Server running at http://localhost:${PORT} in ${config.env} mode`);
-  console.log(`[LearnLens Backend] Health probe: http://localhost:${PORT}/api/health`);
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log(`[LearnLens Backend] Server running at http://0.0.0.0:${PORT} in ${config.env} mode`);
+  console.log(`[LearnLens Backend] Health probe: http://0.0.0.0:${PORT}/api/health`);
 });
 
 // Graceful Shutdown

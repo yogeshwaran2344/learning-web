@@ -1,5 +1,6 @@
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 
 export interface AppConfig {
   env: 'development' | 'production' | 'test';
@@ -38,17 +39,66 @@ const backupsDir = path.resolve(dataDir, 'backups');
   }
 });
 
+/**
+ * Safely retrieves or automatically generates a persistent high-entropy cryptographic secret.
+ * In production or cloud deployments (Render/Railway), if the user hasn't explicitly supplied
+ * an environment variable, this prevents startup crashes by generating a secure, non-predictable
+ * 256-bit CSPRNG secret and storing it in server/data/.
+ */
+function getOrGeneratePersistentSecret(envKey: string, secretFilename: string, byteLength: number = 32): string {
+  const envVal = process.env[envKey];
+  if (envVal && envVal.trim().length >= 32) {
+    return envVal.trim();
+  }
+
+  // In non-production without envVal, use development fallback
+  if (!isProd && !envVal) {
+    return envKey === 'JWT_SECRET' ? 'learnlens_dev_jwt_secret_2026' : 'DEV_FACULTY_SECRET_ONLY_2026';
+  }
+
+  // In production (or when envVal is empty/invalid), auto-generate high-entropy random secret and persist
+  const secretPath = path.resolve(dataDir, secretFilename);
+  try {
+    if (fs.existsSync(secretPath)) {
+      const stored = fs.readFileSync(secretPath, 'utf8').trim();
+      if (stored.length >= 32) {
+        return stored;
+      }
+    }
+    const generated = crypto.randomBytes(byteLength).toString('hex');
+    fs.writeFileSync(secretPath, generated, { encoding: 'utf8' });
+    console.info(`[Security Auto-Config]: Generated persistent high-entropy ${envKey} (${generated.length} chars) stored at ${secretFilename}`);
+    return generated;
+  } catch (e) {
+    return crypto.randomBytes(byteLength).toString('hex');
+  }
+}
+
 // Configure allowed frontend origins
-const rawCorsOrigin = process.env.CORS_ORIGIN || process.env.FRONTEND_URL || process.env.RENDER_EXTERNAL_URL || '';
+const defaultProdOrigins = [
+  'http://localhost:5001',
+  'https://localhost:5001',
+  'http://localhost:5173',
+  'https://localhost:5173',
+  'https://learning-web-w71q.onrender.com'
+];
+if (process.env.RENDER_EXTERNAL_URL) {
+  defaultProdOrigins.push(process.env.RENDER_EXTERNAL_URL);
+}
+if (process.env.RENDER_EXTERNAL_HOSTNAME) {
+  defaultProdOrigins.push(`https://${process.env.RENDER_EXTERNAL_HOSTNAME}`);
+}
+
+const rawCorsOrigin = process.env.CORS_ORIGIN || process.env.FRONTEND_URL || '';
 const corsOrigins = isProd
-  ? (rawCorsOrigin ? rawCorsOrigin.split(',').map(s => s.trim()).filter(Boolean) : [])
+  ? (rawCorsOrigin ? rawCorsOrigin.split(',').map(s => s.trim()).filter(Boolean) : defaultProdOrigins)
   : (rawCorsOrigin ? rawCorsOrigin.split(',').map(s => s.trim()).filter(Boolean) : '*');
 
 export const config: AppConfig = {
   env: (process.env.NODE_ENV as any) || 'development',
   port: Number(process.env.PORT) || 5001,
   corsOrigins,
-  jwtSecret: process.env.JWT_SECRET || (isProd ? '' : 'learnlens_dev_jwt_secret_2026'),
+  jwtSecret: getOrGeneratePersistentSecret('JWT_SECRET', '.jwt_secret', 32),
   maxUploadSizeMb: 25,
   maxUploadSizeBytes: 25 * 1024 * 1024, // 25 MB limit
   rateLimitWindowMs: 15 * 60 * 1000,     // 15 minutes
@@ -57,7 +107,7 @@ export const config: AppConfig = {
   maxAiRequestsPerMinute: 20,            // Max 20 AI generation requests per minute
   geminiApiKey: process.env.GEMINI_API_KEY || process.env.API_KEY || '',
   openaiApiKey: process.env.OPENAI_API_KEY || '',
-  facultyInviteKey: process.env.LECTURER_INVITE_KEY || (isProd ? '' : 'DEV_FACULTY_SECRET_ONLY_2026'),
+  facultyInviteKey: getOrGeneratePersistentSecret('LECTURER_INVITE_KEY', '.faculty_key', 32),
   dbPath: process.env.DATABASE_PATH || path.resolve(dataDir, 'learnlens.db'),
   uploadsDir,
   backupsDir
