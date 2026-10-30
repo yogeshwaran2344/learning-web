@@ -89,8 +89,6 @@ export class DocumentController {
       let originalFileName = 'pasted_text.txt';
       let fileType: DocumentFileType = 'pdf';
       let fileSizeMb = 1.0;
-      let realExtractedSections: any[] = [];
-      let extractionWarnings: string[] = [];
 
       if (file) {
         originalFileName = file.originalname;
@@ -99,49 +97,16 @@ export class DocumentController {
 
         if (ext.endsWith('.pptx') || ext.endsWith('.ppt')) {
           fileType = 'pptx';
-          try {
-            const pptxRes = RealExtractor.extractPptx(file.path, file.originalname);
-            realExtractedSections = pptxRes.sections;
-            extractionWarnings.push(...pptxRes.warnings);
-            textContent = pptxRes.sections.map(s => `Slide ${s.pageNumber}: ${s.title}\n${s.content}`).join('\n\n');
-          } catch (err: any) {
-            return res.status(400).json({
-              error: `PowerPoint Extraction Failed: ${err.message}`,
-              processingStatus: 'failed'
-            });
-          }
         } else if (file.mimetype.startsWith('image/') || ext.endsWith('.png') || ext.endsWith('.jpg') || ext.endsWith('.jpeg')) {
           fileType = 'scanned_notes';
-          try {
-            const ocrRes = await RealExtractor.extractImageOcr(file.path, file.originalname);
-            realExtractedSections = ocrRes.sections;
-            extractionWarnings.push(...ocrRes.warnings);
-            textContent = ocrRes.sections.map(s => s.content).join('\n\n');
-          } catch (err: any) {
-            return res.status(400).json({
-              error: `OCR Extraction Failed: ${err.message}`,
-              processingStatus: 'failed'
-            });
-          }
         } else if (ext.endsWith('.pdf')) {
           fileType = 'pdf';
-          try {
-            const pdfRes = await RealExtractor.extractPdf(file.path, file.originalname);
-            realExtractedSections = pdfRes.sections;
-            extractionWarnings.push(...pdfRes.warnings);
-            textContent = pdfRes.sections.map(s => `Page ${s.pageNumber}: ${s.title}\n${s.content}`).join('\n\n');
-          } catch (err: any) {
-            return res.status(400).json({
-              error: `PDF Extraction Failed: ${err.message}`,
-              processingStatus: 'failed'
-            });
-          }
         } else if (file.mimetype.includes('text') || ext.endsWith('.txt') || ext.endsWith('.md')) {
           textContent = fs.readFileSync(file.path, 'utf-8');
         }
       }
 
-      if (!textContent.trim() && realExtractedSections.length === 0) {
+      if (!textContent.trim() && !file) {
         return res.status(400).json({
           error: 'No readable text content found in the uploaded file or input. Please provide a document with extractable text or legible scan.',
           processingStatus: 'failed'
@@ -150,70 +115,21 @@ export class DocumentController {
 
       const docId = 'doc-' + Date.now();
 
-      // Step 2: Extraction Service
-      const extraction = ExtractionService.processDocumentContent(
-        docId,
-        textContent,
-        fileType,
-        originalFileName
-      );
-
-      // If RealExtractor parsed exact pages, slides, or scanned notes with formulas & warnings,
-      // preserve real section records directly with page, slide, and section identifiers
-      if (realExtractedSections.length > 0) {
-        extraction.sections = realExtractedSections.map((s, idx) => {
-          // Extract definitions and conditions from text
-          const sentences = s.content.split(/(?<=[.?!])\s+/);
-          const defs: any[] = [];
-          sentences.forEach((sent: string) => {
-            if (/is defined as|refers to|denotes|is the|is a mechanism|means/i.test(sent)) {
-              const match = sent.split(/is defined as|refers to|denotes|is a mechanism|is a|means/i);
-              if (match[0] && match[1]) {
-                defs.push({ term: match[0].trim(), definition: match[1].trim() });
-              }
-            }
-          });
-          const conds: string[] = Array.isArray(s.conditions) ? [...s.conditions] : [];
-          sentences.forEach((sent: string) => {
-            if (/must|requires|strictly|condition|assuming|provided that|invariant|guarantee/i.test(sent) && sent.length < 240) {
-              if (!conds.includes(sent.trim())) conds.push(sent.trim());
-            }
-          });
-
-          return {
-            id: `sec-${s.sourceType || 'gen'}-${docId}-${idx + 1}`,
-            documentId: docId,
-            pageNumber: s.pageNumber || idx + 1,
-            slideNumber: s.slideNumber,
-            chapterTitle: s.sectionIdentifier || `Section ${idx + 1}`,
-            title: s.title,
-            content: s.content,
-            speakerNotes: s.speakerNotes,
-            equations: (s.equations || []).map((e: any, eqIdx: number) => ({
-              latex: e.latex,
-              label: e.label || `Formula (${eqIdx + 1})`,
-              meaning: e.meaning || `Extracted formula from ${s.title}`
-            })),
-            definitions: defs,
-            conditions: conds,
-            examples: [],
-            uncertainSymbols: s.uncertainSymbols
-          };
-        });
-
-        extraction.pageCount = Math.max(...extraction.sections.map(sec => sec.pageNumber || sec.slideNumber || 1));
-        extraction.wordCount = extraction.sections.reduce((acc, sec) => acc + sec.content.split(/\s+/).filter(Boolean).length, 0);
-
-        extraction.warnings.push(...extractionWarnings);
-        extraction.qualityReport.diagnostics.push(
-          ...extractionWarnings.map((w, idx) => ({
-            id: `diag-real-${idx}`,
-            severity: 'warning' as const,
-            type: 'ocr_uncertainty' as const,
-            message: w,
-            recommendation: 'Verify extracted slide or scanned content.'
-          }))
+      // Step 2: Execute real format-specific extraction & Step 47 understanding pipeline
+      let extraction: any;
+      try {
+        extraction = await ExtractionService.extractRealDocument(
+          docId,
+          fileType,
+          originalFileName,
+          file?.path,
+          textContent
         );
+      } catch (extractErr: any) {
+        return res.status(400).json({
+          error: extractErr.message || 'Document extraction failed.',
+          processingStatus: 'failed'
+        });
       }
 
       const hasWarning = extraction.qualityReport.diagnostics.length > 0;
@@ -230,7 +146,7 @@ export class DocumentController {
         uploadDate: new Date().toISOString().split('T')[0],
         processingStatus: hasWarning ? 'warning' : 'completed',
         extractionStatus: extraction.qualityReport.userStatus,
-        extractionWarnings: extraction.qualityReport.diagnostics.map(d => d.message),
+        extractionWarnings: extraction.qualityReport.diagnostics.map((d: any) => d.message),
         extractionQuality: extraction.qualityReport,
         pageCount: extraction.pageCount,
         wordCount: extraction.wordCount,

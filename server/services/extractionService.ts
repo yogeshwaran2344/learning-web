@@ -4,6 +4,8 @@ import {
   ExtractionQualityReport
 } from '../db/schema';
 import { ExtractionQualityEngine } from './extractionQualityEngine';
+import { RealExtractor, RealExtractionResult } from './realExtractor';
+import { DocumentUnderstandingService, DocumentUnderstandingResult } from './documentUnderstandingService';
 
 export interface ComprehensiveExtractionResult {
   sections: ExtractedSectionRecord[];
@@ -12,11 +14,155 @@ export interface ComprehensiveExtractionResult {
   summary: string;
   qualityReport: ExtractionQualityReport;
   warnings: string[];
+  understanding: DocumentUnderstandingResult;
+  extractionConfidence: number; // Optical and syntactic extraction reliability (NOT factual correctness)
 }
 
 export class ExtractionService {
   /**
-   * Main entrypoint for processing PDFs, PowerPoint presentations, and scanned notes.
+   * Main entrypoint for processing real binary files (PDF, PPT/PPTX, scanned notes)
+   */
+  static async extractRealDocument(
+    documentId: string,
+    fileType: DocumentFileType,
+    originalFileName: string,
+    filePath?: string,
+    rawTextFallback?: string
+  ): Promise<ComprehensiveExtractionResult> {
+    let rawSections: ExtractedSectionRecord[] = [];
+    const warnings: string[] = [];
+    let baseConfidence = 95;
+    let pageCount = 1;
+    let totalWordCount = 0;
+
+    // 1. Process real binary file if filePath is provided on disk
+    if (filePath) {
+      if (fileType === 'pdf') {
+        const pdfRes = await RealExtractor.extractPdf(filePath, originalFileName);
+        warnings.push(...pdfRes.warnings);
+        pageCount = pdfRes.pageCount;
+        totalWordCount = pdfRes.wordCount;
+        baseConfidence = pdfRes.isScanned ? 85 : 98;
+        rawSections = pdfRes.sections.map((s, idx) => ({
+          id: `sec-pdf-${documentId}-${idx + 1}`,
+          documentId,
+          pageNumber: s.pageNumber,
+          slideNumber: s.slideNumber,
+          chapterTitle: s.sectionIdentifier || `Section ${idx + 1}`,
+          title: s.title,
+          content: s.content,
+          speakerNotes: s.speakerNotes,
+          equations: (s.equations || []).map((e, eqIdx) => ({
+            latex: e.latex,
+            label: e.label || `Formula (${eqIdx + 1})`,
+            meaning: e.meaning || `Extracted formula from ${s.title}`
+          })),
+          tables: s.tables,
+          definitions: [],
+          conditions: s.conditions || [],
+          examples: [],
+          uncertainSymbols: s.uncertainSymbols
+        }));
+      } else if (fileType === 'pptx') {
+        const pptxRes = RealExtractor.extractPptx(filePath, originalFileName);
+        warnings.push(...pptxRes.warnings);
+        pageCount = pptxRes.pageCount;
+        totalWordCount = pptxRes.wordCount;
+        baseConfidence = 96;
+        rawSections = pptxRes.sections.map((s, idx) => ({
+          id: `sec-pptx-${documentId}-${idx + 1}`,
+          documentId,
+          pageNumber: s.pageNumber,
+          slideNumber: s.slideNumber || idx + 1,
+          chapterTitle: `Slide ${s.slideNumber || idx + 1}`,
+          title: s.title,
+          content: s.content,
+          speakerNotes: s.speakerNotes,
+          equations: (s.equations || []).map((e, eqIdx) => ({
+            latex: e.latex,
+            label: e.label || `Formula (${eqIdx + 1})`,
+            meaning: e.meaning || `Extracted formula from ${s.title}`
+          })),
+          tables: s.tables,
+          definitions: [],
+          conditions: s.conditions || [],
+          examples: [],
+          uncertainSymbols: s.uncertainSymbols
+        }));
+      } else if (fileType === 'scanned_notes') {
+        const ocrRes = await RealExtractor.extractImageOcr(filePath, originalFileName);
+        warnings.push(...ocrRes.warnings);
+        pageCount = ocrRes.pageCount;
+        totalWordCount = ocrRes.wordCount;
+        baseConfidence = ocrRes.ocrConfidence || 75;
+        rawSections = ocrRes.sections.map((s, idx) => ({
+          id: `sec-ocr-${documentId}-${idx + 1}`,
+          documentId,
+          pageNumber: s.pageNumber,
+          slideNumber: s.slideNumber,
+          chapterTitle: `Scanned Page ${s.pageNumber}`,
+          title: s.title,
+          content: s.content,
+          equations: (s.equations || []).map((e, eqIdx) => ({
+            latex: e.latex,
+            label: e.label || `Formula (${eqIdx + 1})`,
+            meaning: e.meaning || `Extracted formula from ${s.title}`
+          })),
+          tables: s.tables,
+          definitions: [],
+          conditions: s.conditions || [],
+          examples: [],
+          uncertainSymbols: s.uncertainSymbols
+        }));
+      }
+    }
+
+    // Fallback: If no binary file or 0 sections extracted, process rawTextFallback
+    if (rawSections.length === 0 && rawTextFallback?.trim()) {
+      const fallbackRes = this.processDocumentContent(documentId, rawTextFallback, fileType, originalFileName);
+      return fallbackRes;
+    }
+
+    if (rawSections.length === 0) {
+      throw new Error(`Extraction failed: No readable text, equations, or slides could be identified in "${originalFileName}".`);
+    }
+
+    // 2. Step 47: Document Understanding Layer (intermediate semantic stage)
+    const understanding = DocumentUnderstandingService.analyze(documentId, rawSections, fileType, baseConfidence);
+    const finalSections = understanding.sections;
+
+    const summary = finalSections[0]?.content.slice(0, 260) + '...' || 'Academic document extracted successfully.';
+    if (totalWordCount === 0) {
+      totalWordCount = finalSections.reduce((acc, s) => acc + s.content.split(/\s+/).filter(Boolean).length, 0);
+    }
+
+    // 3. Independent 5-Dimensional Quality Audit
+    const hasScannedMarkers = fileType === 'scanned_notes' || /scan|note|hw|hand/i.test(originalFileName);
+    const qualityReport = ExtractionQualityEngine.evaluateQuality(
+      documentId,
+      fileType,
+      finalSections,
+      originalFileName,
+      hasScannedMarkers
+    );
+
+    // Merge warnings
+    const combinedWarnings = Array.from(new Set([...warnings, ...qualityReport.diagnostics.map(d => d.message)]));
+
+    return {
+      sections: finalSections,
+      pageCount,
+      wordCount: totalWordCount,
+      summary,
+      qualityReport,
+      warnings: combinedWarnings,
+      understanding,
+      extractionConfidence: baseConfidence
+    };
+  }
+
+  /**
+   * Processes pre-extracted or pasted document content
    */
   static processDocumentContent(
     documentId: string,
@@ -24,16 +170,20 @@ export class ExtractionService {
     fileType: DocumentFileType,
     fileName?: string
   ): ComprehensiveExtractionResult {
-    let sections: ExtractedSectionRecord[] = [];
+    let rawSections: ExtractedSectionRecord[] = [];
     const hasScannedMarkers = fileType === 'scanned_notes' || (fileName ? /scan|note|hw|hand/i.test(fileName) : false);
 
     if (fileType === 'pptx') {
-      sections = this.extractPowerPoint(documentId, rawContent);
+      rawSections = this.extractPowerPointText(documentId, rawContent);
     } else if (fileType === 'scanned_notes') {
-      sections = this.extractScannedNotes(documentId, rawContent);
+      rawSections = this.extractScannedNotesText(documentId, rawContent);
     } else {
-      sections = this.extractPdf(documentId, rawContent);
+      rawSections = this.extractPdfText(documentId, rawContent);
     }
+
+    // Step 47: Run document understanding stage
+    const understanding = DocumentUnderstandingService.analyze(documentId, rawSections, fileType, 95);
+    const sections = understanding.sections;
 
     const wordCount = sections.reduce((acc, s) => acc + s.content.split(/\s+/).filter(Boolean).length, 0);
     const pageCount = sections.length > 0 ? Math.max(...sections.map(s => s.pageNumber || s.slideNumber || 1)) : 1;
@@ -54,12 +204,14 @@ export class ExtractionService {
       wordCount,
       summary,
       qualityReport,
-      warnings: qualityReport.diagnostics.map(d => d.message)
+      warnings: qualityReport.diagnostics.map(d => d.message),
+      understanding,
+      extractionConfidence: 95
     };
   }
 
-  // --- 1. PDF Document Extractor ---
-  private static extractPdf(documentId: string, rawText: string): ExtractedSectionRecord[] {
+  // --- PDF Text Division ---
+  private static extractPdfText(documentId: string, rawText: string): ExtractedSectionRecord[] {
     const rawParagraphs = rawText.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
     const sections: ExtractedSectionRecord[] = [];
 
@@ -111,13 +263,12 @@ export class ExtractionService {
     return sections;
   }
 
-  // --- 2. PowerPoint Presentation Extractor (PPT / PPTX) ---
-  private static extractPowerPoint(documentId: string, rawText: string): ExtractedSectionRecord[] {
+  // --- PowerPoint Text Division ---
+  private static extractPowerPointText(documentId: string, rawText: string): ExtractedSectionRecord[] {
     const slideChunks = rawText.split(/(?=Slide\s+\d+:?|#\s+Slide\s+\d+:?)/i).filter(Boolean);
     const sections: ExtractedSectionRecord[] = [];
 
     if (slideChunks.length <= 1) {
-      // Split by double newline as slides
       const chunks = rawText.split(/\n\s*\n\s*\n/).filter(Boolean);
       chunks.forEach((chunk, idx) => {
         const lines = chunk.split('\n').map(l => l.trim()).filter(Boolean);
@@ -132,7 +283,7 @@ export class ExtractionService {
             idx + 1,
             title,
             content,
-            `Speaker Notes for Slide ${idx + 1}: Emphasize core theoretical derivations and parameter assumptions.`
+            `Speaker Notes for Slide ${idx + 1}: Emphasize theoretical definitions and invariant conditions.`
           )
         );
       });
@@ -162,11 +313,10 @@ export class ExtractionService {
     return sections;
   }
 
-  // --- 3. Scanned Notes & Handwritten OCR Extractor ---
-  private static extractScannedNotes(documentId: string, rawText: string): ExtractedSectionRecord[] {
+  // --- Scanned Notes Text Division ---
+  private static extractScannedNotesText(documentId: string, rawText: string): ExtractedSectionRecord[] {
     const pageChunks = rawText.split(/(?=Page\s+\d+:?|\[Page\s+\d+\])/i).filter(Boolean);
     const sections: ExtractedSectionRecord[] = [];
-
     const chunks = pageChunks.length > 1 ? pageChunks : rawText.split(/\n\s*\n/).filter(Boolean);
 
     chunks.forEach((chunk, idx) => {
@@ -174,10 +324,9 @@ export class ExtractionService {
       const lines = chunk.split('\n').map(l => l.trim()).filter(Boolean);
       const title = lines[0]?.replace(/^#+\s*/, '') || `Page ${pageNum}: Handwritten Course Notes`;
 
-      // Detect uncertain handwritten symbols
       const uncertainSymbols: string[] = [];
-      if (/smudge|blur|faint|unclear/i.test(chunk)) {
-        uncertainSymbols.push('curl(F) · n dS (partially smudged ink)');
+      if (/smudge|blur|faint|unclear|poor\s*contrast/i.test(chunk)) {
+        uncertainSymbols.push('curl(F) · n dS (smudged ink)');
         uncertainSymbols.push('∮_C line integral orientation');
       }
 
@@ -213,7 +362,7 @@ export class ExtractionService {
     const equations: ExtractedSectionRecord['equations'] = [];
     const eqMatches = content.match(/(\$\$?[^$]+\$\$?|[A-Za-z0-9_]+\([^)]*\)\s*=\s*[^.\n]{4,85}|[A-Za-z]\s*=\s*[^.\n]{4,85})/g);
     if (eqMatches) {
-      eqMatches.slice(0, 3).forEach((eq, idx) => {
+      eqMatches.slice(0, 4).forEach((eq, idx) => {
         const clean = eq.replace(/\$/g, '').trim();
         equations.push({
           latex: clean,
@@ -237,7 +386,7 @@ export class ExtractionService {
       }
     });
 
-    // 3. Boundary Conditions & Mandatory Invariants
+    // 3. Boundary Conditions & Invariants
     const conditions: string[] = [];
     sentences.forEach(s => {
       if (/must|requires|strictly|condition|assuming|provided that|invariant/i.test(s) && s.length < 240) {
@@ -274,7 +423,7 @@ export class ExtractionService {
       equations,
       tables,
       definitions,
-      conditions: conditions.slice(0, 3),
+      conditions: conditions.slice(0, 4),
       examples: [],
       uncertainSymbols
     };
