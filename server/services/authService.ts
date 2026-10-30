@@ -101,14 +101,6 @@ export class AuthService {
       return Database.findUserById(session.userId) || null;
     }
 
-    // Explicit test tokens for seeded academic accounts in test mode
-    if (token === 'token-usr-student-1') {
-      return Database.findUserById('usr-student-1') || null;
-    }
-    if (token === 'token-usr-lecturer-1') {
-      return Database.findUserById('usr-lecturer-1') || null;
-    }
-
     return null;
   }
 

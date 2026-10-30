@@ -54,7 +54,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           email.trim(),
           password,
           role,
-          role === 'lecturer' ? (inviteKey.trim() || 'FACULTY_VERIFIED_KEY_2026') : undefined
+          role === 'lecturer' ? inviteKey.trim() : undefined
         );
         onSuccess(res.user);
       }
@@ -62,18 +62,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setErrorMessage(err.message || 'Authentication failed. Please check your credentials.');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const fillQuickDemo = (demoType: 'student' | 'lecturer') => {
-    setErrorMessage('');
-    setMode('login');
-    if (demoType === 'student') {
-      setEmail('alex.rivera@university.edu');
-      setPassword('student123');
-    } else {
-      setEmail('prof.ramesh@iisc.ac.in');
-      setPassword('lecturer123');
     }
   };
 
@@ -247,35 +235,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </button>
         </form>
 
-        {/* Quick Demo Sign-In Buttons */}
-        <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800 space-y-2.5 text-xs">
-          <div className="text-[11px] font-semibold text-slate-400 text-center uppercase tracking-wider">
-            Quick 1-Click Demo Profiles
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => fillQuickDemo('student')}
-              className="p-2.5 rounded-xl bg-slate-50 hover:bg-brand-50/60 dark:bg-slate-800/60 dark:hover:bg-brand-950/40 border border-slate-200 dark:border-slate-700/60 text-left transition-all group"
-            >
-              <div className="font-bold text-slate-800 dark:text-slate-200 group-hover:text-brand-600 text-[11px]">
-                Student Demo
-              </div>
-              <div className="text-[10px] text-slate-400 truncate">Alex Rivera</div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => fillQuickDemo('lecturer')}
-              className="p-2.5 rounded-xl bg-slate-50 hover:bg-accent-50/60 dark:bg-slate-800/60 dark:hover:bg-accent-950/40 border border-slate-200 dark:border-slate-700/60 text-left transition-all group"
-            >
-              <div className="font-bold text-slate-800 dark:text-slate-200 group-hover:text-accent-600 text-[11px]">
-                Faculty Demo
-              </div>
-              <div className="text-[10px] text-slate-400 truncate">Prof. Ramesh K.</div>
-            </button>
-          </div>
+        <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400 text-center flex items-center justify-center gap-1.5">
+          <ShieldCheck className="w-4 h-4 text-emerald-500" />
+          <span>Encrypted Password Authentication & Account Isolation</span>
         </div>
 
         {canDismiss && onClose && (

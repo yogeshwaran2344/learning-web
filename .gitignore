@@ -36,4 +36,5 @@ server/data/backups/
 server/data/step27_tests/
 server/data/uploads/*
 !server/data/uploads/.gitkeep
+*.zip
 
