@@ -18,6 +18,7 @@ import {
   BookOpen
 } from 'lucide-react';
 import { SourceCitation, AcademicDocument, SavedItem } from '../../types';
+import { MathFormulaView } from '../Workspace/StructuredContentRenderer';
 
 export interface ContextPanelProps {
   isOpen: boolean;
@@ -378,7 +379,10 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({
                     <span className="text-slate-400">0 Altered Formulas</span>
                   </div>
                   <div className="text-blue-200 py-0.5 text-xs font-semibold break-words">
-                    {activeCitation.exactQuote.match(/([A-Za-z0-9_\\^+\-*\/=()\s]{4,})/)?.[0] || activeCitation.exactQuote}
+                    <MathFormulaView
+                      formula={activeCitation.exactQuote.match(/([A-Za-z0-9_\\^+\-*\/=()\s]{4,})/)?.[0] || activeCitation.exactQuote}
+                      isBlock={false}
+                    />
                   </div>
                 </div>
               )}

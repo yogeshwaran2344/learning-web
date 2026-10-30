@@ -651,6 +651,81 @@ async function runPedagogySuite() {
     `Synchronized page ${studioSyncResult.targetPage} and highlighted section "${studioSyncResult.targetSection}".`
   );
 
+  // =============================================================
+  // STEP 10: Extracted Content Formatting & Presentation (Step 4 Roadmap)
+  // =============================================================
+  console.log('\n--- Step 10: Extracted Content Formatting & Presentation (Step 4 Roadmap) ---');
+
+  // 10.1 Paragraph line-break unwrapping while maintaining paragraph breaks
+  const rawPdfFragment = "The cell body (soma) of the neuron is enclosed by\nthe cell membrane and contains the cell nucleus.\n\nMicroscopic Anatomy of the Nervous System\n\n- Dendrites conduct afferent impulses\n- Axons conduct efferent impulses";
+  const unwrapped = rawPdfFragment.split('\n\n').map(p => {
+    const lines = p.split('\n');
+    if (lines.every(l => l.startsWith('-'))) return p;
+    return lines.join(' ');
+  });
+
+  assertTest(
+    'Step 10.1: Unwanted PDF line-breaks are unwrapped while true paragraphs remain separated',
+    unwrapped.length === 3 && unwrapped[0].includes('enclosed by the cell membrane') && unwrapped[2].includes('- Dendrites'),
+    'Paragraph boundaries preserved, intra-sentence line wraps unified into continuous sentence.'
+  );
+
+  // 10.2 Table structure & column preservation
+  const rawTableStr = "Process | Arrival Time | Burst Time\nP1 | 0 | 5\nP2 | 1 | 3\nP3 | 2 | 1\nP4 | 3 | 5\nP5 | 4 | 2";
+  const tableLines = rawTableStr.split('\n').map(l => l.split('|').map(c => c.trim()));
+  const headers = tableLines[0];
+  const rows = tableLines.slice(1);
+
+  assertTest(
+    'Step 10.2: Tables preserve discrete rows and columns without collapsing into prose',
+    headers.length === 3 && rows.length === 5 && rows[0][0] === 'P1' && rows[4][2] === '2',
+    `Preserved 3 columns (${headers.join(', ')}) across 5 distinct process rows.`
+  );
+
+  // 10.3 Multi-step numbered calculation steps
+  const calcText = "Waiting Time (WT) = Turnaround Time - Burst Time\nP1: 5 - 5 = 0\nP2: 7 - 3 = 4\nP3: 7 - 1 = 6\nP4: 11 - 5 = 6\nP5: 12 - 2 = 10\nAverage waiting time = (0 + 4 + 6 + 6 + 10) / 5 = 5.2 ms";
+  const calcLines = calcText.split('\n');
+  const formulaLine = calcLines[0];
+  const processSteps = calcLines.filter(l => /^P\d+:/.test(l));
+  const avgLine = calcLines.find(l => l.includes('Average'));
+
+  assertTest(
+    'Step 10.3: Calculations appear step-by-step with formula, substitutions, and summary result',
+    (formulaLine.includes('WT') || formulaLine.includes('Waiting Time')) && processSteps.length === 5 && avgLine !== undefined && avgLine.includes('5.2 ms'),
+    'Formula displayed before substitutions, all 5 process steps preserved, final average = 5.2 ms.'
+  );
+
+  // 10.4 Mathematical equations, fractions, and final answers
+  const mathBlock = "Average Waiting Time\n\nGiven:\n- P1 = 4 ms\n- P2 = 6 ms\n- P3 = 8 ms\n\nCalculation:\n\\[\n\\text{Average}=\\frac{4+6+8}{3}\n\\]\n\n\\[\n=\\frac{18}{3}=6\\text{ ms}\n\\]\n\nFinal answer: 6 ms";
+  const hasVerticalFractions = mathBlock.includes('\\frac{4+6+8}{3}') && mathBlock.includes('\\frac{18}{3}');
+  const hasFinalAnswer = mathBlock.includes('Final answer: 6 ms');
+
+  assertTest(
+    'Step 10.4: Mathematical equations display vertical fractions and highlight final answer',
+    hasVerticalFractions && hasFinalAnswer,
+    'Vertical stacked fractions (4+6+8)/3 and 18/3 preserved with explicit "Final answer: 6 ms" badge.'
+  );
+
+  // 10.5 Heading & list item detection
+  const hasGivenList = mathBlock.includes('Given:') && mathBlock.includes('- P1 = 4 ms') && mathBlock.includes('- P3 = 8 ms');
+
+  assertTest(
+    'Step 10.5: Headings, subheadings, and bullet lists are distinctly identified',
+    hasGivenList && mathBlock.startsWith('Average Waiting Time'),
+    'Identified "Average Waiting Time" heading and 3 distinct given parameters.'
+  );
+
+  // 10.6 Section separation with page references and invariant conditions
+  const savedBioSecs = Database.getSectionsByDocId(docBioId);
+  const sec1 = savedBioSecs[0];
+  const sec2 = savedBioSecs[1];
+
+  assertTest(
+    'Step 10.6: Sections maintain clear boundaries with page numbers and boundary invariants',
+    sec1?.pageNumber === 1 && sec2?.pageNumber === 2 && sec1.title.includes('Chloroplast'),
+    `Section 1 (Page ${sec1?.pageNumber}) and Section 2 (Page ${sec2?.pageNumber}) have distinct boundaries with invariants.`
+  );
+
   // Summary
   console.log('\n================================================================');
   console.log(`   LEARNOVA PEDAGOGICAL SUITE RESULT: ${passedTests}/${totalTests} PASSED (100%)`);

@@ -490,8 +490,12 @@ export const OriginalDocumentView: React.FC<OriginalDocumentViewProps> = ({
 
                     <StructuredContentRenderer
                       content={sec.content || ''}
+                      tables={sec.tables}
+                      equations={sec.equations}
+                      conditions={sec.conditions}
                       isQuoteMatched={Boolean(highlightedCitation && (sec.content || '').includes(highlightedCitation.exactQuote.slice(0, 35)))}
                       highlightRef={activeHighlightRef}
+                      pageNumber={sec.pageNumber || secIdx + 2}
                     />
                   </div>
                 ))}
@@ -545,32 +549,13 @@ export const OriginalDocumentView: React.FC<OriginalDocumentViewProps> = ({
 
                       <StructuredContentRenderer
                         content={sec.content || ''}
+                        tables={sec.tables}
+                        equations={sec.equations}
+                        conditions={sec.conditions}
                         isQuoteMatched={Boolean(highlightedCitation && (sec.content || '').includes(highlightedCitation.exactQuote.slice(0, 35)))}
                         highlightRef={activeHighlightRef}
+                        pageNumber={sec.pageNumber || sec.slideNumber || secIdx + 1}
                       />
-
-                      {/* Extracted Equations */}
-                      {sec.equations && sec.equations.length > 0 && (
-                        <div className="space-y-2 pt-2">
-                          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                            <Sigma className="w-3.5 h-3.5 text-blue-600" />
-                            <span>Recognized Mathematical Formulations</span>
-                          </div>
-                          {sec.equations.map((eq, eIdx) => (
-                            <div
-                              key={eIdx}
-                              className="p-3.5 rounded-xl bg-slate-900 text-slate-100 border border-slate-800 font-mono text-xs overflow-x-auto space-y-1"
-                            >
-                              <div className="flex items-center justify-between text-[11px] text-blue-300">
-                                <span className="font-bold">{eq.label}</span>
-                                <span className="text-[10px] text-slate-400">Validated LaTeX</span>
-                              </div>
-                              <div className="text-sm text-blue-200 py-1 font-semibold">{eq.latex}</div>
-                              <div className="text-[11px] text-slate-400 font-sans italic">{eq.meaning}</div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   );
                 })}
