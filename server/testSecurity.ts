@@ -337,6 +337,7 @@ if (process.argv[1]?.includes('testSecurity')) {
     if (results.passed !== results.total) {
       process.exit(1);
     }
+    process.exit(0);
   }).catch(err => {
     console.error('Test suite failure:', err);
     process.exit(1);
