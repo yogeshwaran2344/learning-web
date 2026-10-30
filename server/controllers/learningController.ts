@@ -19,7 +19,11 @@ export class LearningController {
         return res.status(404).json({ error: 'Document not found.' });
       }
 
-      if (doc.ownerId !== userId && role !== 'lecturer') {
+      const isOwner = doc.ownerId === userId;
+      const isLecturer = role === 'lecturer';
+      const isShared = Database.isDocumentSharedWithStudents(doc.id);
+
+      if (!isOwner && !isLecturer && !isShared) {
         return res.status(403).json({ error: 'Access denied: You cannot generate learning materials for another user\'s document.' });
       }
 
@@ -83,7 +87,10 @@ export class LearningController {
     }
     const userId = req.user?.id;
     const role = req.user?.role;
-    if (doc.ownerId !== userId && role !== 'lecturer') {
+    const isOwner = doc.ownerId === userId;
+    const isLecturer = role === 'lecturer';
+    const isShared = Database.isDocumentSharedWithStudents(doc.id);
+    if (!isOwner && !isLecturer && !isShared) {
       return res.status(403).json({ error: 'Access denied: You cannot view materials for another user\'s document.' });
     }
     const materials = Database.getMaterialsByDocId(req.params.id);
@@ -96,6 +103,12 @@ export class LearningController {
       const doc = Database.getDocumentById(id);
       if (!doc) {
         return res.status(404).json({ error: 'Document not found.' });
+      }
+
+      const userId = req.user?.id;
+      const role = req.user?.role;
+      if (doc.ownerId !== userId && role !== 'lecturer') {
+        return res.status(403).json({ error: 'Access denied: You cannot run generator tests for another user\'s document.' });
       }
 
       const sections = Database.getSectionsByDocId(id);

@@ -9,8 +9,12 @@ export class AuthController {
       if (!email || !name) {
         return res.status(400).json({ error: 'Name and email are required.' });
       }
+      if (!password || typeof password !== 'string' || password.trim().length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
+      }
       const result = AuthService.register(name, email, password, role, lecturerInviteKey);
-      res.status(201).json(result);
+      const { passwordHash, ...safeUser } = result.user;
+      res.status(201).json({ user: safeUser, token: result.token });
     } catch (e: any) {
       res.status(400).json({ error: e.message });
     }
@@ -19,17 +23,22 @@ export class AuthController {
   static login(req: AuthenticatedRequest, res: Response) {
     try {
       const { email, password } = req.body;
-      if (!email) {
-        return res.status(400).json({ error: 'Email is required.' });
+      if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password are required.' });
       }
       const result = AuthService.login(email, password);
-      res.json(result);
+      const { passwordHash, ...safeUser } = result.user;
+      res.json({ user: safeUser, token: result.token });
     } catch (e: any) {
       res.status(401).json({ error: e.message });
     }
   }
 
   static me(req: AuthenticatedRequest, res: Response) {
-    res.json({ user: req.user });
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required.' });
+    }
+    const { passwordHash, ...safeUser } = req.user;
+    res.json({ user: safeUser });
   }
 }

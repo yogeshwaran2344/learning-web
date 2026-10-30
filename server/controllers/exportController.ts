@@ -17,6 +17,16 @@ export class ExportController {
         return res.status(404).json({ error: 'Document not found.' });
       }
 
+      const userId = req.user?.id;
+      const role = req.user?.role;
+      const isOwner = doc.ownerId === userId;
+      const isLecturer = role === 'lecturer';
+      const isShared = Database.isDocumentSharedWithStudents(doc.id);
+
+      if (!isOwner && !isLecturer && !isShared) {
+        return res.status(403).json({ error: 'Access denied: You do not have permission to export this document.' });
+      }
+
       const sections = Database.getSectionsByDocId(id);
       const verification = Database.getVerification(id);
       const materials = Database.getMaterialsByDocId(id);

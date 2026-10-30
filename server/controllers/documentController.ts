@@ -293,7 +293,10 @@ export class DocumentController {
     }
     const userId = req.user?.id;
     const role = req.user?.role;
-    if (doc.ownerId !== userId && role !== 'lecturer') {
+    const isOwner = doc.ownerId === userId;
+    const isLecturer = role === 'lecturer';
+    const isShared = Database.isDocumentSharedWithStudents(doc.id);
+    if (!isOwner && !isLecturer && !isShared) {
       return res.status(403).json({ error: 'Access denied: You do not have permission to view this document.' });
     }
     const enriched = enrichDocumentWithMaterials(doc);
@@ -307,7 +310,10 @@ export class DocumentController {
     }
     const userId = req.user?.id;
     const role = req.user?.role;
-    if (doc.ownerId !== userId && role !== 'lecturer') {
+    const isOwner = doc.ownerId === userId;
+    const isLecturer = role === 'lecturer';
+    const isShared = Database.isDocumentSharedWithStudents(doc.id);
+    if (!isOwner && !isLecturer && !isShared) {
       return res.status(403).json({ error: 'Access denied: You do not have permission to check this document.' });
     }
     res.json({
@@ -326,7 +332,10 @@ export class DocumentController {
     }
     const userId = req.user?.id;
     const role = req.user?.role;
-    if (doc.ownerId !== userId && role !== 'lecturer') {
+    const isOwner = doc.ownerId === userId;
+    const isLecturer = role === 'lecturer';
+    const isShared = Database.isDocumentSharedWithStudents(doc.id);
+    if (!isOwner && !isLecturer && !isShared) {
       return res.status(403).json({ error: 'Access denied: You do not have permission to inspect this extraction.' });
     }
     const sections = Database.getSectionsByDocId(doc.id);

@@ -16,7 +16,10 @@ export class VerificationController {
       return res.status(404).json({ error: 'Document not found.' });
     }
 
-    if (doc.ownerId !== userId && role !== 'lecturer') {
+    const isOwner = doc.ownerId === userId;
+    const isLecturer = role === 'lecturer';
+    const isShared = Database.isDocumentSharedWithStudents(doc.id);
+    if (!isOwner && !isLecturer && !isShared) {
       return res.status(403).json({ error: 'Access denied: You do not have permission to view verification results for this document.' });
     }
 

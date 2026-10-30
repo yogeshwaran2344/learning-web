@@ -446,6 +446,15 @@ export class Database {
     return user;
   }
 
+  static deleteUser(id: string): boolean {
+    this.init();
+    if (this.db) {
+      const info = this.db.prepare('DELETE FROM users WHERE id = ?').run(id);
+      return info.changes > 0;
+    }
+    return false;
+  }
+
   // --- Documents ---
   static createDocument(doc: DocumentRecord): DocumentRecord {
     this.init();
@@ -748,6 +757,13 @@ export class Database {
       this.db.prepare('UPDATE courses SET documentIds = ? WHERE id = ?').run(JSON.stringify(docIds), courseId);
     }
     return true;
+  }
+
+  static isDocumentSharedWithStudents(docId: string): boolean {
+    this.init();
+    if (!this.db) return false;
+    const courses = this.getCourses();
+    return courses.some(c => c.isPublished && c.documentIds.includes(docId));
   }
 
   static removeDocumentFromCourse(courseId: string, documentId: string): boolean {

@@ -101,6 +101,15 @@ export class QuizController {
 
   static getAnalytics(req: AuthenticatedRequest, res: Response) {
     const { docId } = req.params;
+    const doc = Database.getDocumentById(docId);
+    if (!doc) {
+      return res.status(404).json({ error: 'Document not found.' });
+    }
+    const userId = req.user?.id;
+    const role = req.user?.role;
+    if (doc.ownerId !== userId && role !== 'lecturer') {
+      return res.status(403).json({ error: 'Access denied: You do not have permission to view quiz analytics for this document.' });
+    }
     const analytics = Database.getDocumentQuizAnalytics(docId);
     res.json({ analytics });
   }
