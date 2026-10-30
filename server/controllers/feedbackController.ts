@@ -54,11 +54,28 @@ export class FeedbackController {
 
   static list(req: AuthenticatedRequest, res: Response) {
     try {
+      const userId = req.user?.id;
+      const role = req.user?.role;
+      if (!userId) {
+        return res.status(401).json({ error: 'Authentication credentials required.' });
+      }
+
       const { documentId, status } = req.query;
-      const reports = Database.getFeedbackReports(
+      let reports = Database.getFeedbackReports(
         documentId as string | undefined,
         status as string | undefined
       );
+
+      if (role === 'student') {
+        // Privacy Enforcement: Students are restricted to their own submitted feedback reports
+        reports = reports.filter(r => r.userId === userId);
+      } else if (role === 'lecturer') {
+        // Privacy Enforcement: Lecturers only see reports regarding documents they own or courses they teach
+        const lecturerCourses = Database.getCourses(userId);
+        const managedDocIds = new Set(lecturerCourses.flatMap(c => c.documentIds || []));
+        const ownedDocs = new Set(Database.getDocuments(userId, 'lecturer').map(d => d.id));
+        reports = reports.filter(r => ownedDocs.has(r.documentId) || managedDocIds.has(r.documentId) || r.userId === userId);
+      }
 
       res.json({ reports });
     } catch (e: any) {

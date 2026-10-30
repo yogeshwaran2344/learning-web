@@ -130,6 +130,10 @@ export class RealExtractor {
       // Extract invariant boundary conditions
       const conditions = this.detectConditions(p.text);
 
+      // Dynamically compute optical extraction confidence based on text density and character coherence
+      const nonAlphanumericRatio = (p.text.match(/[^a-zA-Z0-9\s.,;?!'"\-()=\/]/g) || []).length / Math.max(1, p.text.length);
+      const dynamicConfidence = Math.max(70, Math.min(99, Math.round(98 - (nonAlphanumericRatio * 35))));
+
       sections.push({
         pageNumber: p.pageNum,
         sectionIdentifier: `p${p.pageNum}-sec${idx + 1}`,
@@ -140,12 +144,16 @@ export class RealExtractor {
         tables: tables.length > 0 ? tables : undefined,
         conditions: conditions.length > 0 ? conditions : undefined,
         sourceType: 'pdf',
-        confidence: 98 // High reliability for text-based PDF
+        confidence: dynamicConfidence
       });
     });
 
     if (sections.length === 0) {
-      throw new Error(`The uploaded PDF "${originalFileName}" contains no selectable text. It may be a scanned image document without an OCR layer.`);
+      const isScanned = dataBuffer.includes(Buffer.from('/Image')) || dataBuffer.includes(Buffer.from('/DCTDecode'));
+      if (isScanned) {
+        throw new Error(`The uploaded PDF "${originalFileName}" is a scanned image document without an embedded text layer. Please use the Scanned Notes upload option or provide an OCR-processed PDF.`);
+      }
+      throw new Error(`The uploaded PDF "${originalFileName}" contains no selectable text or content.`);
     }
 
     const totalWords = sections.reduce((acc, s) => acc + s.content.split(/\s+/).filter(Boolean).length, 0);
@@ -261,6 +269,9 @@ export class RealExtractor {
       if (equations.length > 0) hasEquations = true;
       const conditions = this.detectConditions(slideBody);
 
+      // Calculate dynamic extraction confidence based on slide text structure and notes completeness
+      const dynamicSlideConfidence = Math.max(80, Math.min(99, Math.round(92 + (slideBody.length > 50 ? 4 : 0) + (tables.length > 0 ? 2 : 0))));
+
       sections.push({
         pageNumber: slideNum,
         slideNumber: slideNum,
@@ -273,7 +284,7 @@ export class RealExtractor {
         conditions: conditions.length > 0 ? conditions : undefined,
         speakerNotes: speakerNotes || undefined,
         sourceType: 'pptx',
-        confidence: 96
+        confidence: dynamicSlideConfidence
       });
     });
 

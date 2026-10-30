@@ -18,12 +18,18 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-  const allowedExtensions = ['.pdf', '.pptx', '.ppt', '.png', '.jpg', '.jpeg', '.txt', '.md', '.tex'];
   const ext = path.extname(file.originalname).toLowerCase();
+
+  // Explicitly reject legacy binary .ppt files as required by LearnLens modern specification
+  if (ext === '.ppt') {
+    return cb(new Error('Legacy binary .ppt files are not supported. Please upload modern .pptx or export as PDF.'));
+  }
+
+  const allowedExtensions = ['.pdf', '.pptx', '.png', '.jpg', '.jpeg', '.txt', '.md', '.tex'];
 
   // 1. Verify extension
   if (!allowedExtensions.includes(ext)) {
-    return cb(new Error(`Unsupported file format: ${ext}. Only PDFs, PPT/PPTX presentations, and scanned note images are supported.`));
+    return cb(new Error(`Unsupported file format: ${ext}. Only modern PDFs, PPTX presentations, and scanned note images are supported.`));
   }
 
   // 2. Validate MIME type consistency

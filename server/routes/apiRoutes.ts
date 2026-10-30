@@ -81,13 +81,21 @@ apiRouter.post('/feedback', authMiddleware, (req, res) => FeedbackController.sub
 apiRouter.get('/feedback', authMiddleware, (req, res) => FeedbackController.list(req, res));
 apiRouter.patch('/feedback/:id', authMiddleware, requireLecturerRole, (req, res) => FeedbackController.update(req, res));
 
+// Development-friendly system test middleware: open in development, lecturer-guarded in production
+const devOrLecturerMiddleware = (req: any, res: any, next: any) => {
+  if (process.env.NODE_ENV !== 'production') {
+    return next();
+  }
+  return authMiddleware(req, res, () => requireLecturerRole(req, res, next));
+};
+
 // 10. Integration & 20-Point System Test Suite
-apiRouter.get('/system/integration-test', (req, res) => {
+apiRouter.get('/system/integration-test', devOrLecturerMiddleware, (req, res) => {
   const result = IntegrationTestSuite.runSuite();
   res.json({ integrationSuite: result });
 });
 
-apiRouter.get('/system/test-tracker', (req, res) => {
+apiRouter.get('/system/test-tracker', devOrLecturerMiddleware, (req, res) => {
   const result = SystemTestTracker.runFullTracker();
   res.json({ testTracker: result });
 });
@@ -97,7 +105,7 @@ apiRouter.get('/system/ai-status', (req, res) => {
   res.json({ status: AiModelService.getProviderStatus() });
 });
 
-apiRouter.post('/system/ai-config', authMiddleware, (req, res) => {
+apiRouter.post('/system/ai-config', authMiddleware, requireLecturerRole, (req, res) => {
   const { provider, apiKey } = req.body;
   if (!provider || (provider !== 'gemini' && provider !== 'openai')) {
     return res.status(400).json({ error: 'Provider must be "gemini" or "openai"' });

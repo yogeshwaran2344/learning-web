@@ -65,6 +65,15 @@ export class Database {
         role TEXT NOT NULL,
         createdAt TEXT NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY,
+        userId TEXT NOT NULL,
+        token TEXT UNIQUE NOT NULL,
+        expiresAt INTEGER NOT NULL,
+        createdAt TEXT NOT NULL,
+        FOREIGN KEY (userId) REFERENCES users (id) ON DELETE CASCADE
+      );
     `);
 
     // Migration helper: add passwordHash column if users table was created previously without it
@@ -407,9 +416,17 @@ export class Database {
 
   private static seedDefaultUsers(): void {
     if (!this.db) return;
+
+    // In production, NEVER seed predictable default accounts to ensure zero unauthorized access
+    const isProduction = process.env.NODE_ENV === 'production';
+    const allowDemoSeed = process.env.ALLOW_DEMO_SEED === 'true';
+    if (isProduction || !allowDemoSeed) {
+      return;
+    }
+
     const stmt = this.db.prepare('INSERT OR IGNORE INTO users (id, email, name, passwordHash, role, createdAt) VALUES (?, ?, ?, ?, ?, ?)');
-    stmt.run('usr-student-1', 'alex.rivera@university.edu', 'Alex Rivera', 'sha256:student123', 'student', '2026-10-01T10:00:00Z');
-    stmt.run('usr-lecturer-1', 'prof.ramesh@iisc.ac.in', 'Prof. Ramesh K.', 'sha256:lecturer123', 'lecturer', '2026-09-15T09:00:00Z');
+    stmt.run('usr-student-1', 'alex.rivera@university.edu', 'Alex Rivera', 'scrypt:demo:student123', 'student', '2026-10-01T10:00:00Z');
+    stmt.run('usr-lecturer-1', 'prof.ramesh@iisc.ac.in', 'Prof. Ramesh K.', 'scrypt:demo:lecturer123', 'lecturer', '2026-09-15T09:00:00Z');
 
     // Seed default courses if empty
     const courseCount = (this.db.prepare('SELECT count(*) as count FROM courses').get() as any)?.count || 0;
@@ -421,6 +438,44 @@ export class Database {
       stmtCourse.run('course-1', 'usr-lecturer-1', 'CS-401', 'Distributed Systems & Byzantine Fault Tolerance', 42, JSON.stringify(['doc-pbft-demo', 'doc-1']), 1, 84.5);
       stmtCourse.run('course-2', 'usr-lecturer-1', 'PH-202', 'Quantum Mechanics & Wave Equations', 38, JSON.stringify(['doc-quantum-demo', 'doc-2']), 1, 79.0);
       stmtCourse.run('course-3', 'usr-lecturer-1', 'DS-301', 'Cloud Computing & Microservices Architecture', 29, JSON.stringify([]), 0, 0);
+    }
+  }
+
+  // --- Sessions (Persistent session storage) ---
+  static saveSession(token: string, userId: string, expiresAt: number): void {
+    this.init();
+    if (this.db) {
+      this.deleteExpiredSessions();
+      const stmt = this.db.prepare('INSERT OR REPLACE INTO sessions (id, userId, token, expiresAt, createdAt) VALUES (?, ?, ?, ?, ?)');
+      stmt.run('sess-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), userId, token, expiresAt, new Date().toISOString());
+    }
+  }
+
+  static getSession(token: string): { userId: string; expiresAt: number } | null {
+    this.init();
+    if (!this.db) return null;
+    const row = this.db.prepare('SELECT userId, expiresAt FROM sessions WHERE token = ?').get(token) as any;
+    if (!row) return null;
+    if (row.expiresAt < Date.now()) {
+      this.deleteSession(token);
+      return null;
+    }
+    return row;
+  }
+
+  static deleteSession(token: string): boolean {
+    this.init();
+    if (this.db) {
+      const info = this.db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+      return info.changes > 0;
+    }
+    return false;
+  }
+
+  static deleteExpiredSessions(): void {
+    this.init();
+    if (this.db) {
+      this.db.prepare('DELETE FROM sessions WHERE expiresAt < ?').run(Date.now());
     }
   }
 
@@ -481,10 +536,37 @@ export class Database {
     this.init();
     if (!this.db) return [];
     let rows: any[];
-    if (role === 'lecturer') {
-      rows = this.db.prepare('SELECT * FROM documents ORDER BY uploadDate DESC').all();
+
+    if (role === 'lecturer' && ownerId) {
+      // Security Enforcement: Lecturer sees documents they own OR assigned to courses they teach
+      const lecturerCourses = this.getCourses(ownerId);
+      const courseDocIds = Array.from(new Set(lecturerCourses.flatMap(c => c.documentIds || [])));
+      
+      if (courseDocIds.length > 0) {
+        const placeholders = courseDocIds.map(() => '?').join(',');
+        rows = this.db.prepare(`
+          SELECT * FROM documents 
+          WHERE ownerId = ? OR id IN (${placeholders})
+          ORDER BY uploadDate DESC
+        `).all(ownerId, ...courseDocIds);
+      } else {
+        rows = this.db.prepare('SELECT * FROM documents WHERE ownerId = ? ORDER BY uploadDate DESC').all(ownerId);
+      }
     } else if (ownerId) {
-      rows = this.db.prepare('SELECT * FROM documents WHERE ownerId = ? ORDER BY uploadDate DESC').all(ownerId);
+      // Security Enforcement: Student sees documents they own OR assigned to published courses
+      const publishedCourses = this.getCourses().filter(c => c.isPublished);
+      const sharedDocIds = Array.from(new Set(publishedCourses.flatMap(c => c.documentIds || [])));
+
+      if (sharedDocIds.length > 0) {
+        const placeholders = sharedDocIds.map(() => '?').join(',');
+        rows = this.db.prepare(`
+          SELECT * FROM documents 
+          WHERE ownerId = ? OR id IN (${placeholders})
+          ORDER BY uploadDate DESC
+        `).all(ownerId, ...sharedDocIds);
+      } else {
+        rows = this.db.prepare('SELECT * FROM documents WHERE ownerId = ? ORDER BY uploadDate DESC').all(ownerId);
+      }
     } else {
       rows = this.db.prepare('SELECT * FROM documents ORDER BY uploadDate DESC').all();
     }

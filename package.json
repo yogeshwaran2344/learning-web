@@ -10,6 +10,7 @@
     "start": "tsx server/index.ts",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "pack:zip": "node scripts/packZip.js",
     "test": "tsx server/testSecurity.ts && tsx server/testDocumentExtraction.ts && tsx server/runSystemTracker.ts && tsx server/runRoadmapAudit.ts"
   },
   "dependencies": {

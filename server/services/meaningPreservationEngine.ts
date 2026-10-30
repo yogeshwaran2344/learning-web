@@ -345,7 +345,23 @@ export class MeaningPreservationEngine {
       });
     }
 
-    const totalElements = itemizedChecks.length || 1;
+    const totalElements = itemizedChecks.length;
+    if (totalElements === 0) {
+      return {
+        formatType: generated.formatType,
+        language: generated.language,
+        status: 'unable_to_verify',
+        overallScore: 0,
+        totalElementsChecked: 0,
+        verifiedElementsCount: 0,
+        unsupportedClaimsCount: 0,
+        alteredEquationsCount: 0,
+        omittedConditionsCount: 0,
+        itemizedChecks: [],
+        auditTimestamp: new Date().toISOString()
+      };
+    }
+
     const overallScore = Math.round((verifiedCount / totalElements) * 100);
 
     let status: 'verified' | 'needs_review' | 'unable_to_verify' = 'verified';
@@ -433,8 +449,26 @@ export class MeaningPreservationEngine {
     // Validate equations using EquationValidatorService
     const eqValidation = EquationValidatorService.validateEquations(allEquations, sections.map(s => s.content));
 
+    // If no verifiable academic facts or sentences exist, do not return unearned 100% scores
+    if (totalFacts === 0) {
+      return {
+        documentId,
+        overallFidelityScore: 0,
+        factRetentionRate: 0,
+        equationIntegrityRate: 0,
+        conditionAccuracyRate: 0,
+        terminologyConsistencyRate: 0,
+        unsupportedClaimsDetected: 0,
+        alteredEquationsDetected: 0,
+        missingConditionsDetected: 0,
+        lastAuditDate: new Date().toISOString().replace('T', ' ').slice(0, 16) + ' UTC',
+        verifiedByEngine: false,
+        factChecks: []
+      };
+    }
+
     // Dynamic metric calculations (never hardcoded constants)
-    const factRetentionRate = totalFacts > 0 ? Math.round((preservedFacts / totalFacts) * 100) : 100;
+    const factRetentionRate = Math.round((preservedFacts / totalFacts) * 100);
     const equationIntegrityRate = eqValidation.isValid ? 100 : eqValidation.score;
 
     let conditionAccuracyRate = 100;

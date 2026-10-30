@@ -608,30 +608,90 @@ Generated on: ${new Date().toLocaleDateString()}
   }
 
   static buildWavAudio(title: string): Buffer {
-    const sampleRate = 44100;
-    const numSamples = sampleRate * 3; // 3 seconds academic tone
+    const sampleRate = 22050;
+    const durationSeconds = 6;
+    const numSamples = sampleRate * durationSeconds;
     const buffer = Buffer.alloc(44 + numSamples * 2);
-    // RIFF header
+
+    // RIFF WAV Header
     buffer.write('RIFF', 0);
     buffer.writeUInt32LE(36 + numSamples * 2, 4);
     buffer.write('WAVE', 8);
     buffer.write('fmt ', 12);
-    buffer.writeUInt32LE(16, 16); // subchunk1 size
-    buffer.writeUInt16LE(1, 20); // PCM
-    buffer.writeUInt16LE(1, 22); // mono
-    buffer.writeUInt32LE(sampleRate, 24);
-    buffer.writeUInt32LE(sampleRate * 2, 28);
-    buffer.writeUInt16LE(2, 32); // block align
-    buffer.writeUInt16LE(16, 34); // bits per sample
+    buffer.writeUInt32LE(16, 16); // PCM subchunk size
+    buffer.writeUInt16LE(1, 20); // AudioFormat 1 = PCM
+    buffer.writeUInt16LE(1, 22); // NumChannels = 1 (Mono)
+    buffer.writeUInt32LE(sampleRate, 24); // SampleRate
+    buffer.writeUInt32LE(sampleRate * 2, 28); // ByteRate (SampleRate * NumChannels * BitsPerSample/8)
+    buffer.writeUInt16LE(2, 32); // BlockAlign
+    buffer.writeUInt16LE(16, 34); // BitsPerSample
     buffer.write('data', 36);
     buffer.writeUInt32LE(numSamples * 2, 40);
-    // synthesize pleasant chord sequence (440Hz -> 554.37Hz -> 659.25Hz A major triad)
+
+    // Phonetic syllables simulating spoken narration: "Learn-Lens A-ca-de-mic Les-son"
+    const syllables = [
+      { start: 0.9, end: 1.25, f0: 145, f1: 450, f2: 1200, f3: 2600, consonant: 0.15 }, // "Learn"
+      { start: 1.3, end: 1.65, f0: 152, f1: 520, f2: 1750, f3: 2700, consonant: 0.2 },  // "Lens"
+      { start: 1.8, end: 2.1,  f0: 140, f1: 700, f2: 1300, f3: 2500, consonant: 0.05 }, // "A"
+      { start: 2.15, end: 2.45, f0: 148, f1: 350, f2: 1900, f3: 2800, consonant: 0.25 }, // "ca"
+      { start: 2.5, end: 2.8,  f0: 142, f1: 400, f2: 1800, f3: 2650, consonant: 0.1 },  // "de"
+      { start: 2.85, end: 3.2, f0: 136, f1: 300, f2: 2100, f3: 2900, consonant: 0.3 },  // "mic"
+      { start: 3.4, end: 3.8,  f0: 132, f1: 450, f2: 1200, f3: 2550, consonant: 0.1 },  // "Les"
+      { start: 3.85, end: 4.3, f0: 124, f1: 500, f2: 1100, f3: 2450, consonant: 0.2 }   // "son"
+    ];
+
     for (let i = 0; i < numSamples; i++) {
       const t = i / sampleRate;
-      const freq = t < 1 ? 440 : t < 2 ? 554.37 : 659.25;
-      const sample = Math.sin(2 * Math.PI * freq * t) * 0.25 * (1 - t / 3.2);
-      buffer.writeInt16LE(Math.floor(sample * 32767), 44 + i * 2);
+      let sample = 0;
+
+      // 1. Intro chime (0.0s - 0.8s): Academic tri-tone harmonic bell
+      if (t < 0.8) {
+        const env = Math.exp(-t * 4);
+        sample = (
+          0.15 * Math.sin(2 * Math.PI * 523.25 * t) +
+          0.12 * Math.sin(2 * Math.PI * 659.25 * t) +
+          0.09 * Math.sin(2 * Math.PI * 783.99 * t)
+        ) * env;
+      }
+      // 2. Outro chime (4.8s - 5.8s): Calm resolution bell
+      else if (t > 4.8 && t < 5.8) {
+        const relT = t - 4.8;
+        const env = Math.exp(-relT * 3);
+        sample = (
+          0.12 * Math.sin(2 * Math.PI * 523.25 * relT) +
+          0.10 * Math.sin(2 * Math.PI * 659.25 * relT) +
+          0.15 * Math.sin(2 * Math.PI * 1046.50 * relT)
+        ) * env;
+      }
+      // 3. Acoustic Formant Speech Simulation (0.8s - 4.8s)
+      else {
+        const syl = syllables.find(s => t >= s.start && t < s.end);
+        if (syl) {
+          const sylProg = (t - syl.start) / (syl.end - syl.start);
+          // Bell-shaped vocal envelope for natural phoneme rise and fall
+          const sylEnv = Math.sin(Math.PI * Math.sin(Math.PI * sylProg * 0.5));
+
+          // Fundamental vocal cord vibration (F0) with glottal pulse shaping
+          const pitch = syl.f0 * (1 - 0.08 * sylProg); // Natural phrase cadence decline
+          const glottal = (Math.sin(2 * Math.PI * pitch * t) + 0.35 * Math.sin(4 * Math.PI * pitch * t));
+
+          // Vocal tract resonant formants (F1, F2, F3)
+          const f1Wave = Math.sin(2 * Math.PI * syl.f1 * t) * 0.45;
+          const f2Wave = Math.sin(2 * Math.PI * syl.f2 * t) * 0.30;
+          const f3Wave = Math.sin(2 * Math.PI * syl.f3 * t) * 0.15;
+
+          // Consonant noise burst at onset
+          const noise = (Math.random() * 2 - 1) * syl.consonant * Math.exp(-sylProg * 8);
+
+          sample = sylEnv * (glottal * (f1Wave + f2Wave + f3Wave) * 0.35 + noise * 0.1);
+        }
+      }
+
+      // 16-bit signed PCM clamp
+      const clamped = Math.max(-1, Math.min(1, sample));
+      buffer.writeInt16LE(Math.floor(clamped * 32767), 44 + i * 2);
     }
+
     return buffer;
   }
 }

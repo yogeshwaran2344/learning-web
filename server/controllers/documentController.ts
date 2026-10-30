@@ -63,7 +63,7 @@ export function enrichDocumentWithMaterials(doc: DocumentRecord): any {
     ...doc,
     sections,
     meaningPreservation: verification || undefined,
-    verificationStatus: verification ? (verification.overallFidelityScore >= 90 ? 'verified' : 'needs_review') : 'not_verified',
+    verificationStatus: verification && verification.overallFidelityScore > 0 ? (verification.overallFidelityScore >= 90 ? 'verified' : 'needs_review') : 'not_verified',
     conceptMap,
     explanations,
     flashcards,
@@ -95,7 +95,12 @@ export class DocumentController {
         fileSizeMb = Number((file.size / (1024 * 1024)).toFixed(2));
         const ext = file.originalname.toLowerCase();
 
-        if (ext.endsWith('.pptx') || ext.endsWith('.ppt')) {
+        if (ext.endsWith('.ppt') && !ext.endsWith('.pptx')) {
+          return res.status(400).json({
+            error: 'Legacy binary .ppt files are not supported. Please upload modern .pptx or export as PDF.',
+            processingStatus: 'failed'
+          });
+        } else if (ext.endsWith('.pptx')) {
           fileType = 'pptx';
         } else if (file.mimetype.startsWith('image/') || ext.endsWith('.png') || ext.endsWith('.jpg') || ext.endsWith('.jpeg')) {
           fileType = 'scanned_notes';
@@ -161,13 +166,13 @@ export class DocumentController {
       const auditReport = MeaningPreservationEngine.auditDocument(docId, extraction.sections, hasWarning);
       Database.saveVerification(auditReport);
 
-      // Pre-synthesize all 7 learning formats so tabs are fully loaded with deep explanations
+      // Pre-synthesize all 7 learning formats using async AI generation (Gemini / OpenAI / Deterministic Grounded)
       const initialFormats: ('map' | 'simplified' | 'notes' | 'worked' | 'flashcards' | 'audio' | 'quiz')[] = [
         'map', 'simplified', 'notes', 'worked', 'flashcards', 'audio', 'quiz'
       ];
       for (const fmt of initialFormats) {
         try {
-          const matResult = AiGeneratorService.generateFormat(docId, docRecord.title, extraction.sections, fmt, 'English');
+          const matResult = await AiGeneratorService.generateFormatAsync(docId, docRecord.title, extraction.sections, fmt, 'English');
           Database.saveMaterial({
             id: `mat-${fmt}-${docId}`,
             documentId: docId,

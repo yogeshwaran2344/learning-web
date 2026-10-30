@@ -9,11 +9,11 @@ export interface AuthenticatedRequest extends Request {
 export function authMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   let token: string | undefined;
 
+  // Strict token extraction: Bearer token in Authorization header ONLY.
+  // Query-string tokens are rejected to prevent leakage in proxy/browser logs and referrer headers.
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
     token = authHeader.slice(7).trim();
-  } else if (req.query && typeof req.query.token === 'string') {
-    token = req.query.token.trim();
   }
 
   if (token) {
