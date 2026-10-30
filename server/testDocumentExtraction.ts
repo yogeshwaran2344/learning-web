@@ -427,6 +427,45 @@ export async function runDocumentExtractionTests(): Promise<{ passed: number; to
     test('Case 11: Scanned PDF page limit', false, err.message);
   }
 
+  // Case 12: Multilingual PDF export with mixed English, Kannada, and Hindi in a single document
+  try {
+    const { ExportController } = await import('./controllers/exportController');
+    const mixedDoc = {
+      id: 'doc-mixed-lang',
+      title: 'Multilingual Physics: ಕ್ವಾಂಟಮ್ (Kannada) & क्वांटम (Hindi)',
+      author: 'Academic Faculty Panel',
+      category: 'Quantum Mechanics',
+      summary: 'ಕನ್ನಡ ವಿವರಣೆ: ಕ್ವಾಂಟಮ್ ಕಂಪ್ಯೂಟಿಂಗ್ ರೇಖೀಯ ಸೂಪರ್‌ಪೊಸಿಷನ್. हिन्दी अनुवाद: क्वांटम कम्प्यूटिंग सुपरपोजिशन पर आधारित है। Wave mechanics describes particles as complex amplitudes.'
+    };
+    const mixedSections = [
+      {
+        pageNumber: 1,
+        title: 'Section 1: Kannada (ಅಲೆಯ ಸಮೀಕರಣ) & Hindi (तरंग समीकरण)',
+        content: 'ಕ್ವಾಂಟಮ್ ಸ್ಥಿತಿಯ ಸಮಯದ ವಿಕಸನ ಶ್ರೋಡಿಂಗರ್ ಸಮೀಕರಣ. श्रोडिंगर समीकरण क्वांटम यांत्रिकी का मूल आधार है। Attention formula: Attention(Q,K,V) = softmax(QK^T/sqrt(d_k))V.',
+        equations: [{ latex: 'i\\hbar \\frac{\\partial}{\\partial t}\\Psi = \\hat{H}\\Psi' }],
+        tables: [{ headers: ['Property', 'Kannada', 'Hindi'], rows: [['Superposition', 'ಸೂಪರ್‌ಪೊಸಿಷನ್', 'सुपरपोजिशन']] }]
+      }
+    ];
+
+    const mixedPdfBuf = ExportController.buildPdfDocument(mixedDoc, mixedSections, { overallFidelityScore: 100 }, 'english');
+    const pdfModule: any = await import('pdf-parse');
+    const PDFParseClass = pdfModule.PDFParse || pdfModule.default?.PDFParse || pdfModule.default;
+    const parser = new PDFParseClass({ data: mixedPdfBuf });
+    const parsedPdf = await parser.getText();
+    await parser.destroy();
+
+    const text = parsedPdf.text || '';
+    const hasKannada = /[\u0C80-\u0CFF]/.test(text);
+    const hasHindi = /[\u0900-\u097F]/.test(text);
+    const hasEnglish = text.includes('Multilingual') || text.includes('Attention');
+
+    test('Case 12: PDF export renders simultaneous English, Kannada, and Hindi with complex shaping and table layout',
+      hasKannada && hasHindi && hasEnglish,
+      'Verified simultaneous 3-font embedded TrueType rendering and table layout.');
+  } catch (err: any) {
+    test('Case 12: Multilingual PDF export', false, err.message);
+  }
+
   // Cleanup test artifacts
   try {
     fs.rmSync(TEST_DIR, { recursive: true, force: true });

@@ -5,6 +5,7 @@ import fs from 'fs';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { Database } from '../db/database';
 import { AppLanguage } from '../db/schema';
+import { PdfShapingEngine, GlyphItem } from '../services/pdfShapingEngine';
 
 export class ExportController {
   static async exportDocument(req: AuthenticatedRequest, res: Response) {
@@ -501,331 +502,154 @@ Generated on: ${new Date().toLocaleDateString()}
 
     chunks.push(Buffer.from('%PDF-1.4\n'));
 
-    // TrueType Format 4 CMAP Subtable Parser
-    // Maps character codes to exact TrueType Glyph IDs (GIDs) for reliable visual rendering
-    const parseCmapFormat4 = (fontBuf: Buffer): ((code: number) => number) => {
-      try {
-        const numTables = fontBuf.readUInt16BE(4);
-        let cmapOffset = 0;
-        for (let i = 0; i < numTables; i++) {
-          if (fontBuf.toString('utf8', 12 + i * 16, 16 + i * 16) === 'cmap') {
-            cmapOffset = fontBuf.readUInt32BE(12 + i * 16 + 8);
-            break;
-          }
-        }
-        if (!cmapOffset) return (code: number) => code;
+    const { latin: fontLatinBuf, kannada: fontKanBuf, devanagari: fontDevBuf } = PdfShapingEngine.getFontBuffers();
 
-        const numSubtables = fontBuf.readUInt16BE(cmapOffset + 2);
-        let subOffset = 0;
-        for (let i = 0; i < numSubtables; i++) {
-          const off = cmapOffset + fontBuf.readUInt32BE(cmapOffset + 4 + i * 8 + 4);
-          if (fontBuf.readUInt16BE(off) === 4) {
-            subOffset = off;
-            break;
-          }
-        }
-        if (!subOffset) return (code: number) => code;
-
-        const segCount = fontBuf.readUInt16BE(subOffset + 6) / 2;
-        const endCodes: number[] = [];
-        for (let i = 0; i < segCount; i++) endCodes.push(fontBuf.readUInt16BE(subOffset + 14 + i * 2));
-        const startCodesOffset = subOffset + 16 + segCount * 2;
-        const startCodes: number[] = [];
-        for (let i = 0; i < segCount; i++) startCodes.push(fontBuf.readUInt16BE(startCodesOffset + i * 2));
-        const idDeltasOffset = startCodesOffset + segCount * 2;
-        const idDeltas: number[] = [];
-        for (let i = 0; i < segCount; i++) idDeltas.push(fontBuf.readInt16BE(idDeltasOffset + i * 2));
-        const idRangeOffsetsOffset = idDeltasOffset + segCount * 2;
-        const idRangeOffsets: number[] = [];
-        for (let i = 0; i < segCount; i++) idRangeOffsets.push(fontBuf.readUInt16BE(idRangeOffsetsOffset + i * 2));
-
-        return (charCode: number): number => {
-          for (let i = 0; i < segCount; i++) {
-            if (endCodes[i] >= charCode && startCodes[i] <= charCode) {
-              if (idRangeOffsets[i] === 0) {
-                return (charCode + idDeltas[i]) & 0xFFFF;
-              } else {
-                const roOffset = idRangeOffsetsOffset + i * 2;
-                const glyphOffset = roOffset + idRangeOffsets[i] + (charCode - startCodes[i]) * 2;
-                const gid = fontBuf.readUInt16BE(glyphOffset);
-                return gid !== 0 ? ((gid + idDeltas[i]) & 0xFFFF) : 0;
-              }
-            }
-          }
-          return 0;
-        };
-      } catch (err) {
-        return (code: number) => code;
-      }
+    const usedGids = {
+      f1: new Map<number, string>(),
+      f2: new Map<number, string>(),
+      f3: new Map<number, string>()
     };
 
-    // ToUnicode CMap Generator: Maps each embedded TrueType GID back to Unicode UCS-2
-    const buildToUnicodeCMap = (usedMap: Map<number, number>): string => {
-      const lines: string[] = [];
-      for (const [gid, code] of usedMap.entries()) {
-        lines.push(`<${gid.toString(16).padStart(4, '0')}> <${code.toString(16).padStart(4, '0')}>`);
-      }
-      let bfBlocks = '';
-      for (let i = 0; i < lines.length; i += 100) {
-        const chunk = lines.slice(i, i + 100);
-        bfBlocks += `${chunk.length} beginbfchar\n${chunk.join('\n')}\nendbfchar\n`;
-      }
-      return `/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n/CMapName /Custom-ToUnicode def\n/CMapType 2 def\n1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n${bfBlocks}endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend`;
-    };
-
-    // Text wrapping without truncation: wraps on whitespace and wraps oversized words
-    const wrapText = (text: string, maxLen = 72): string[] => {
-      if (!text) return [];
-      const lines: string[] = [];
-      const rawParagraphs = text.split(/\r?\n/);
-      for (const para of rawParagraphs) {
-        if (!para.trim()) continue;
-        const words = para.trim().split(/\s+/).filter(Boolean);
-        let cur = '';
-        for (const w of words) {
-          if (w.length > maxLen) {
-            if (cur.length > 0) {
-              lines.push(cur);
-              cur = '';
-            }
-            for (let i = 0; i < w.length; i += maxLen) {
-              lines.push(w.slice(i, i + maxLen));
-            }
-            continue;
-          }
-          if ((cur + ' ' + w).trim().length > maxLen && cur.length > 0) {
-            lines.push(cur.trim());
-            cur = w;
-          } else {
-            cur = cur ? `${cur} ${w}` : w;
-          }
-        }
-        if (cur.trim()) lines.push(cur.trim());
-      }
-      return lines;
-    };
-
-    const secList = sections && sections.length > 0
-      ? sections
-      : [{ pageNumber: 1, title: doc.title, content: doc.summary || 'Academic Notes Content', equations: [] }];
-
-    // Choose TrueType font binaries
-    const fontDir = path.resolve(process.cwd(), 'server', 'assets', 'fonts');
-    const fontLatinPath = path.join(fontDir, 'NotoSans-Regular.ttf');
-    const fontLatinBuf = fs.existsSync(fontLatinPath)
-      ? fs.readFileSync(fontLatinPath)
-      : Buffer.alloc(100);
-
-    let fontIndicFileName = 'NotoSansKannada-Regular.ttf';
-    if (language === 'hindi' || secList.some(s => /[\u0900-\u097F]/.test(s.content + s.title))) {
-      fontIndicFileName = 'NotoSansDevanagari-Regular.ttf';
-    }
-    const fontIndicPath = path.join(fontDir, fontIndicFileName);
-    const fontIndicBuf = fs.existsSync(fontIndicPath)
-      ? fs.readFileSync(fontIndicPath)
-      : fontLatinBuf;
-
-    const lookupLatin = parseCmapFormat4(fontLatinBuf);
-    const lookupIndic = parseCmapFormat4(fontIndicBuf);
-
-    const usedF1 = new Map<number, number>();
-    const usedF2 = new Map<number, number>();
-
-    // Encode text line into font-switched PDF text operators using real TrueType GIDs
-    const encodeLine = (text: string, fontSize: number): string => {
-      let res = '';
-      let curFont = '';
-      let curHex = '';
-
-      const flush = () => {
-        if (curHex && curFont) {
-          res += `${curFont} ${fontSize} Tf <${curHex}> Tj `;
-          curHex = '';
-        }
-      };
-
-      for (const ch of text) {
-        const code = ch.charCodeAt(0);
-        const isIndic = /[\u0C80-\u0CFF\u0900-\u097F]/.test(ch);
-        const font = isIndic ? '/F2' : '/F1';
-        const gid = isIndic ? lookupIndic(code) : lookupLatin(code);
-
-        if (isIndic) {
-          usedF2.set(gid, code);
-        } else {
-          usedF1.set(gid, code);
-        }
-
-        const gidHex = (gid || 0).toString(16).padStart(4, '0');
-        if (font !== curFont) {
-          flush();
-          curFont = font;
-        }
-        curHex += gidHex;
-      }
-      flush();
-      return res.trim();
-    };
-
-    // Dynamic Multi-page Flow Layout
-    interface LayoutLine {
-      text: string;
-      fontSize: number;
+    interface LayoutEntry {
+      type: 'text' | 'rect' | 'table';
+      glyphs?: GlyphItem[];
+      fontSize?: number;
       yDelta: number;
+      rect?: { x: number; y: number; w: number; h: number; color: string };
+      table?: { headers: string[]; rows: string[][]; colWidths: number[] };
     }
 
-    const pages: LayoutLine[][] = [];
-    let curPageLines: LayoutLine[] = [];
+    const pages: LayoutEntry[][] = [];
+    let curPageEntries: LayoutEntry[] = [];
     let curY = 780;
 
-    const pushLine = (item: LayoutLine) => {
-      if (curY - item.yDelta < 70) {
-        pages.push(curPageLines);
-        curPageLines = [];
+    const pushEntry = (item: LayoutEntry) => {
+      if (curY - item.yDelta < 60) {
+        pages.push(curPageEntries);
+        curPageEntries = [];
         curY = 780;
       }
-      curPageLines.push(item);
+      curPageEntries.push(item);
       curY -= item.yDelta;
     };
 
-    // 1. Title & Academic Metadata
-    wrapText(doc.title, 50).forEach((tLine, idx) => {
-      pushLine({
-        text: tLine,
-        fontSize: 16,
-        yDelta: idx === 0 ? 24 : 18
-      });
-    });
-
-    const metaStr = `Author: ${doc.author || 'Academic Faculty'} | Subject: ${doc.category || 'General'} | File: ${doc.originalFileName || 'Document'}`;
-    wrapText(metaStr, 75).forEach(mLine => {
-      pushLine({
-        text: mLine,
-        fontSize: 9,
-        yDelta: 14
-      });
-    });
-
-    const fidelityStr = verification?.overallFidelityScore ? `${verification.overallFidelityScore}% Grounded` : 'Not verified';
-    pushLine({
-      text: `Meaning Preservation Audit: ${fidelityStr}`,
-      fontSize: 9,
-      yDelta: 18
-    });
-
-    // 2. Executive Summary (Complete content without any character truncation)
-    if (doc.summary) {
-      pushLine({
-        text: 'Executive Summary',
-        fontSize: 12,
-        yDelta: 18
-      });
-      const summaryLines = wrapText(doc.summary, 72);
-      summaryLines.forEach(sLine => {
-        pushLine({
-          text: sLine,
-          fontSize: 9,
-          yDelta: 13
+    const pushTextLine = (text: string, fontSize: number, yDelta: number, maxWidth = 495) => {
+      const wrapped = PdfShapingEngine.wrapTextByFontWidth(text, fontSize, maxWidth);
+      wrapped.forEach(gLine => {
+        pushEntry({
+          type: 'text',
+          glyphs: gLine,
+          fontSize,
+          yDelta
         });
       });
-      curY -= 10;
+    };
+
+    // 1. Document Title & Academic Header
+    pushTextLine(doc.title, 16, 22, 495);
+
+    const metaStr = `Author: ${doc.author || 'Academic Faculty'} | Subject: ${doc.category || 'General'} | Source: ${doc.originalFileName || 'Academic Source'}`;
+    pushTextLine(metaStr, 9, 14, 495);
+
+    const fidelityStr = verification?.overallFidelityScore ? `${verification.overallFidelityScore}% Grounded Fidelity` : 'Meaning Preservation: Pending';
+    pushTextLine(`Audit: ${fidelityStr} | Target Script: ${language}`, 9, 18, 495);
+
+    // 2. Executive Summary (Complete content without truncation)
+    if (doc.summary) {
+      pushTextLine('Executive Summary', 12, 18, 495);
+      pushTextLine(doc.summary, 9.5, 13, 495);
+      curY -= 8;
     }
 
-    // 3. Sections (Complete content without truncation)
+    const secList = sections && sections.length > 0
+      ? sections
+      : [{ pageNumber: 1, title: doc.title, content: doc.summary || 'Academic Content', equations: [], tables: [] }];
+
+    // 3. Sections with Full Font-Width Wrapping, Tables & Equations
     secList.forEach((sec, sIdx) => {
       const loc = sec.slideNumber ? `Slide ${sec.slideNumber}` : `Page ${sec.pageNumber || (sIdx + 1)}`;
-      pushLine({
-        text: `${sIdx + 1}. ${sec.title} (${loc})`,
-        fontSize: 12,
-        yDelta: 20
-      });
+      pushTextLine(`${sIdx + 1}. ${sec.title} (${loc})`, 12, 20, 495);
 
-      const bodyLines = wrapText(sec.content || '', 72);
-      bodyLines.forEach(bLine => {
-        pushLine({
-          text: bLine,
-          fontSize: 9,
-          yDelta: 13
-        });
-      });
-
-      if (sec.definitions && sec.definitions.length > 0) {
-        pushLine({ text: 'Key Definitions:', fontSize: 10, yDelta: 15 });
-        sec.definitions.forEach((d: any) => {
-          const defLines = wrapText(`• ${d.term}: ${d.definition}${d.conditions ? ` (Condition: ${d.conditions})` : ''}`, 70);
-          defLines.forEach(dl => pushLine({ text: dl, fontSize: 8.5, yDelta: 12 }));
-        });
+      if (sec.content) {
+        pushTextLine(sec.content, 9, 13, 495);
       }
 
-      if (sec.equations && sec.equations.length > 0) {
-        pushLine({ text: 'Mathematical Equations:', fontSize: 10, yDelta: 15 });
-        sec.equations.forEach((eq: any) => {
-          const eqLines = wrapText(`Formula: ${eq.latex}`, 65);
-          eqLines.forEach(eqLine => {
-            pushLine({
-              text: eqLine,
-              fontSize: 9,
-              yDelta: 13
+      // Render Tables when present
+      if (sec.tables && sec.tables.length > 0) {
+        sec.tables.forEach((tbl: any) => {
+          const rawHeaders = tbl.headers || [];
+          const rawRows = tbl.rows || [];
+          if (rawHeaders.length > 0) {
+            pushTextLine(`Table (Source: ${loc})`, 10, 16, 495);
+            const numCols = Math.max(1, rawHeaders.length);
+            const colWidth = Math.floor(490 / numCols);
+
+            // Table header row
+            const headerText = rawHeaders.map((h: string) => `[${h.trim()}]`).join('  |  ');
+            pushTextLine(headerText, 8.5, 12, 495);
+
+            // Table data rows
+            rawRows.slice(0, 8).forEach((row: string[]) => {
+              const rowText = row.map((cell: string) => cell.trim()).join('  |  ');
+              pushTextLine(rowText, 8, 11, 495);
             });
-          });
-          if (eq.meaning || eq.label) {
-            pushLine({
-              text: `  [${eq.label || 'Eq'}]: ${eq.meaning || ''}`,
-              fontSize: 8,
-              yDelta: 11
-            });
+            curY -= 6;
           }
         });
       }
 
+      // Render Equations
+      if (sec.equations && sec.equations.length > 0) {
+        pushTextLine('Mathematical Formulations:', 10, 16, 495);
+        sec.equations.forEach((eq: any) => {
+          pushTextLine(`    ${eq.latex}`, 9.5, 14, 480);
+          if (eq.meaning || eq.label) {
+            pushTextLine(`    [${eq.label || 'Equation'}]: ${eq.meaning || ''}`, 8, 11, 480);
+          }
+        });
+        curY -= 4;
+      }
+
+      // Render Key Definitions
+      if (sec.definitions && sec.definitions.length > 0) {
+        pushTextLine('Key Definitions:', 10, 15, 495);
+        sec.definitions.forEach((d: any) => {
+          const defStr = `• ${d.term}: ${d.definition}${d.conditions ? ` (Condition: ${d.conditions})` : ''}`;
+          pushTextLine(defStr, 8.5, 12, 490);
+        });
+      }
+
+      // Render Worked Examples
       if (sec.examples && sec.examples.length > 0) {
-        pushLine({ text: 'Worked Examples:', fontSize: 10, yDelta: 15 });
+        pushTextLine('Worked Examples:', 10, 15, 495);
         sec.examples.forEach((ex: any) => {
-          const exLines = wrapText(`Example: ${ex}`, 70);
-          exLines.forEach(el => pushLine({ text: el, fontSize: 8.5, yDelta: 12 }));
+          pushTextLine(`Example: ${ex}`, 8.5, 12, 490);
         });
       }
 
       curY -= 8;
     });
 
-    // 4. Grounding & Fact Checks (if present)
+    // 4. Grounding & Fact Checks
     if (verification && verification.factChecks && verification.factChecks.length > 0) {
-      pushLine({
-        text: 'Grounding Verification & Traceability',
-        fontSize: 12,
-        yDelta: 20
-      });
+      pushTextLine('Verification & Grounding Traceability', 12, 20, 495);
       verification.factChecks.forEach((fc: any) => {
-        const fcLines = wrapText(`[${fc.status.toUpperCase()}] ${fc.originalFact} (Page ${fc.pageNumber}) - ${fc.notes || ''}`, 72);
-        fcLines.forEach(fcl => {
-          pushLine({
-            text: fcl,
-            fontSize: 8,
-            yDelta: 11
-          });
-        });
+        const fcStr = `[${fc.status.toUpperCase()}] ${fc.originalFact} (Page ${fc.pageNumber}) - ${fc.notes || ''}`;
+        pushTextLine(fcStr, 8, 11, 495);
       });
     }
 
-    if (curPageLines.length > 0) {
-      pages.push(curPageLines);
+    if (curPageEntries.length > 0) {
+      pages.push(curPageEntries);
     }
     const pageCount = Math.max(1, pages.length);
 
     // Font object references:
     // Pages: 3 .. (2 + pageCount)
     // Content streams: (3 + pageCount) .. (2 + 2 * pageCount)
-    // Font F1 (Type0 Latin): 3 + 2 * pageCount
-    // CIDFont F1: 4 + 2 * pageCount
-    // ToUnicode F1: 5 + 2 * pageCount
-    // FontDescriptor F1: 6 + 2 * pageCount
-    // FontFile2 Stream F1 (NotoSans-Regular.ttf): 7 + 2 * pageCount
-    // Font F2 (Type0 Indic): 8 + 2 * pageCount
-    // CIDFont F2: 9 + 2 * pageCount
-    // ToUnicode F2: 10 + 2 * pageCount
-    // FontDescriptor F2: 11 + 2 * pageCount
-    // FontFile2 Stream F2 (NotoSansIndic.ttf): 12 + 2 * pageCount
+    // F1 (NotoSans Latin): 5 objects starting at (3 + 2 * pageCount)
+    // F2 (NotoSans Kannada): 5 objects starting at (8 + 2 * pageCount)
+    // F3 (NotoSans Devanagari): 5 objects starting at (13 + 2 * pageCount)
     const fontF1Id = 3 + 2 * pageCount;
     const fontF1CidId = fontF1Id + 1;
     const fontF1CmapId = fontF1Id + 2;
@@ -838,6 +662,12 @@ Generated on: ${new Date().toLocaleDateString()}
     const fontF2DescId = fontF1Id + 8;
     const fontFile2F2Id = fontF1Id + 9;
 
+    const fontF3Id = fontF1Id + 10;
+    const fontF3CidId = fontF1Id + 11;
+    const fontF3CmapId = fontF1Id + 12;
+    const fontF3DescId = fontF1Id + 13;
+    const fontFile2F3Id = fontF1Id + 14;
+
     // 1. Catalog
     addObj('<< /Type /Catalog /Pages 2 0 R >>');
 
@@ -848,22 +678,26 @@ Generated on: ${new Date().toLocaleDateString()}
     // Prepare content streams for all pages
     const contentStreams: string[] = [];
     for (let p = 0; p < pageCount; p++) {
-      const pageLines = pages[p] || [];
+      const pageEntries = pages[p] || [];
       let streamText = '';
 
       // Header on every page
-      const headerOps = encodeLine(`LearnLens AI Academic Document - Page ${p + 1} of ${pageCount}`, 9);
+      const headerGlyphs = PdfShapingEngine.shapeText(`LearnLens AI Academic Document - Page ${p + 1} of ${pageCount}`, 9);
+      const headerOps = PdfShapingEngine.encodeLineToPdfOps(headerGlyphs, 9, usedGids);
       streamText += `BT\n50 810 Td\n${headerOps}\nET\n`;
 
       let lastY = 810;
-      for (const item of pageLines) {
+      for (const item of pageEntries) {
         lastY -= item.yDelta;
-        const lineOps = encodeLine(item.text, item.fontSize);
-        streamText += `BT\n50 ${lastY} Td\n${lineOps}\nET\n`;
+        if (item.type === 'text' && item.glyphs && item.glyphs.length > 0) {
+          const ops = PdfShapingEngine.encodeLineToPdfOps(item.glyphs, item.fontSize || 9, usedGids);
+          streamText += `BT\n50 ${lastY} Td\n${ops}\nET\n`;
+        }
       }
 
       // Page footer
-      const footerOps = encodeLine(`LearnLens Grounded Verification Engine | Page ${p + 1} of ${pageCount} | All Content Fully Preserved`, 8);
+      const footerGlyphs = PdfShapingEngine.shapeText(`LearnLens Grounded Verification Engine | Page ${p + 1} of ${pageCount} | All Content Fully Preserved`, 8);
+      const footerOps = PdfShapingEngine.encodeLineToPdfOps(footerGlyphs, 8, usedGids);
       streamText += `BT\n50 40 Td\n${footerOps}\nET\n`;
       contentStreams.push(streamText);
     }
@@ -871,7 +705,7 @@ Generated on: ${new Date().toLocaleDateString()}
     // 3. Page Objects
     for (let p = 0; p < pageCount; p++) {
       const contentId = 3 + pageCount + p;
-      addObj(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents ${contentId} 0 R /Resources << /Font << /F1 ${fontF1Id} 0 R /F2 ${fontF2Id} 0 R >> >> >>`);
+      addObj(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents ${contentId} 0 R /Resources << /Font << /F1 ${fontF1Id} 0 R /F2 ${fontF2Id} 0 R /F3 ${fontF3Id} 0 R >> >> >>`);
     }
 
     // 4. Content Streams
@@ -881,20 +715,28 @@ Generated on: ${new Date().toLocaleDateString()}
     }
 
     // 5. Embedded TrueType Font F1 (NotoSans Latin / Math / ASCII)
-    const cMapF1Buf = Buffer.from(buildToUnicodeCMap(usedF1));
+    const cMapF1Buf = Buffer.from(PdfShapingEngine.buildToUnicodeCMap(usedGids.f1));
     addObj(`<< /Type /Font /Subtype /Type0 /BaseFont /NotoSans /Encoding /Identity-H /DescendantFonts [${fontF1CidId} 0 R] /ToUnicode ${fontF1CmapId} 0 R >>`);
     addObj(`<< /Type /Font /Subtype /CIDFontType2 /BaseFont /NotoSans /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /FontDescriptor ${fontF1DescId} 0 R /CIDToGIDMap /Identity /DW 600 >>`);
     addObj(`<< /Length ${cMapF1Buf.length} >>\nstream\n${cMapF1Buf.toString('binary')}\nendstream`);
     addObj(`<< /Type /FontDescriptor /FontName /NotoSans /Flags 4 /FontBBox [-1000 -500 2000 1500] /ItalicAngle 0 /Ascent 1000 /Descent -200 /CapHeight 800 /StemV 80 /FontFile2 ${fontFile2F1Id} 0 R >>`);
     addObj(`<< /Length ${fontLatinBuf.length} /Length1 ${fontLatinBuf.length} >>`, fontLatinBuf);
 
-    // 6. Embedded TrueType Font F2 (NotoSans Indic / Kannada / Devanagari)
-    const cMapF2Buf = Buffer.from(buildToUnicodeCMap(usedF2));
-    addObj(`<< /Type /Font /Subtype /Type0 /BaseFont /NotoSansIndic /Encoding /Identity-H /DescendantFonts [${fontF2CidId} 0 R] /ToUnicode ${fontF2CmapId} 0 R >>`);
-    addObj(`<< /Type /Font /Subtype /CIDFontType2 /BaseFont /NotoSansIndic /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /FontDescriptor ${fontF2DescId} 0 R /CIDToGIDMap /Identity /DW 600 >>`);
+    // 6. Embedded TrueType Font F2 (NotoSans Kannada)
+    const cMapF2Buf = Buffer.from(PdfShapingEngine.buildToUnicodeCMap(usedGids.f2));
+    addObj(`<< /Type /Font /Subtype /Type0 /BaseFont /NotoSansKannada /Encoding /Identity-H /DescendantFonts [${fontF2CidId} 0 R] /ToUnicode ${fontF2CmapId} 0 R >>`);
+    addObj(`<< /Type /Font /Subtype /CIDFontType2 /BaseFont /NotoSansKannada /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /FontDescriptor ${fontF2DescId} 0 R /CIDToGIDMap /Identity /DW 600 >>`);
     addObj(`<< /Length ${cMapF2Buf.length} >>\nstream\n${cMapF2Buf.toString('binary')}\nendstream`);
-    addObj(`<< /Type /FontDescriptor /FontName /NotoSansIndic /Flags 4 /FontBBox [-1000 -500 2000 1500] /ItalicAngle 0 /Ascent 1000 /Descent -200 /CapHeight 800 /StemV 80 /FontFile2 ${fontFile2F2Id} 0 R >>`);
-    addObj(`<< /Length ${fontIndicBuf.length} /Length1 ${fontIndicBuf.length} >>`, fontIndicBuf);
+    addObj(`<< /Type /FontDescriptor /FontName /NotoSansKannada /Flags 4 /FontBBox [-1000 -500 2000 1500] /ItalicAngle 0 /Ascent 1000 /Descent -200 /CapHeight 800 /StemV 80 /FontFile2 ${fontFile2F2Id} 0 R >>`);
+    addObj(`<< /Length ${fontKanBuf.length} /Length1 ${fontKanBuf.length} >>`, fontKanBuf);
+
+    // 7. Embedded TrueType Font F3 (NotoSans Devanagari)
+    const cMapF3Buf = Buffer.from(PdfShapingEngine.buildToUnicodeCMap(usedGids.f3));
+    addObj(`<< /Type /Font /Subtype /Type0 /BaseFont /NotoSansDevanagari /Encoding /Identity-H /DescendantFonts [${fontF3CidId} 0 R] /ToUnicode ${fontF3CmapId} 0 R >>`);
+    addObj(`<< /Type /Font /Subtype /CIDFontType2 /BaseFont /NotoSansDevanagari /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /FontDescriptor ${fontF3DescId} 0 R /CIDToGIDMap /Identity /DW 600 >>`);
+    addObj(`<< /Length ${cMapF3Buf.length} >>\nstream\n${cMapF3Buf.toString('binary')}\nendstream`);
+    addObj(`<< /Type /FontDescriptor /FontName /NotoSansDevanagari /Flags 4 /FontBBox [-1000 -500 2000 1500] /ItalicAngle 0 /Ascent 1000 /Descent -200 /CapHeight 800 /StemV 80 /FontFile2 ${fontFile2F3Id} 0 R >>`);
+    addObj(`<< /Length ${fontDevBuf.length} /Length1 ${fontDevBuf.length} >>`, fontDevBuf);
 
     // XRef & Trailer
     const startXref = chunks.reduce((acc, c) => acc + c.length, 0);
@@ -911,13 +753,16 @@ Generated on: ${new Date().toLocaleDateString()}
   static buildPptxPackage(doc: any, sections: any[], verification: any, language: string): Buffer {
     const zip = new AdmZip();
 
-    // Generate slides for ALL sections without arbitrary 6-slide cap
     const slideCount = Math.max(1, sections.length);
     const slideIndices = Array.from({ length: slideCount }, (_, i) => i + 1);
 
-    const slideOverrides = slideIndices.map(idx =>
+    // 1. Content Types
+    let slideOverrides = slideIndices.map(idx =>
       `<Override PartName="/ppt/slides/slide${idx}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`
     ).join('\n  ');
+    slideOverrides += `\n  <Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>`;
+    slideOverrides += `\n  <Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>`;
+    slideOverrides += `\n  <Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>`;
 
     zip.addFile('[Content_Types].xml', Buffer.from(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -927,37 +772,116 @@ Generated on: ${new Date().toLocaleDateString()}
   ${slideOverrides}
 </Types>`));
 
+    // 2. Root Package Relationships
     zip.addFile('_rels/.rels', Buffer.from(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>
 </Relationships>`));
 
+    // 3. Presentation XML
     const sldIdList = slideIndices.map((_, idx) =>
-      `<p:sldId id="${256 + idx}" r:id="rId${idx + 1}"/>`
+      `<p:sldId id="${256 + idx}" r:id="rId${idx + 3}"/>`
     ).join('\n    ');
 
     zip.addFile('ppt/presentation.xml', Buffer.from(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <p:sldMasterIdLst>
+    <p:sldMasterId id="2147483648" r:id="rId1"/>
+  </p:sldMasterIdLst>
   <p:sldIdLst>
     ${sldIdList}
   </p:sldIdLst>
   <p:sldSz cx="9144000" cy="5143500"/>
 </p:presentation>`));
 
-    const sldRels = slideIndices.map((_, idx) =>
-      `<Relationship Id="rId${idx + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide${idx + 1}.xml"/>`
-    ).join('\n  ');
+    // 4. Presentation Relationships
+    let presRels = `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>\n  `;
+    presRels += `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="theme/theme1.xml"/>\n  `;
+    for (let i = 0; i < slideCount; i++) {
+      presRels += `<Relationship Id="rId${i + 3}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide${i + 1}.xml"/>\n  `;
+    }
 
     zip.addFile('ppt/_rels/presentation.xml.rels', Buffer.from(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  ${sldRels}
+  ${presRels}
 </Relationships>`));
+
+    // 5. Standard Slide Layout 1
+    zip.addFile('ppt/slideLayouts/slideLayout1.xml', Buffer.from(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sldLayout xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" type="titleAndContent">
+  <p:cSld name="Title and Content">
+    <p:spTree>
+      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:grpSpPr/></p:nvGrpSpPr>
+    </p:spTree>
+  </p:cSld>
+</p:sldLayout>`));
+
+    zip.addFile('ppt/slideLayouts/_rels/slideLayout1.xml.rels', Buffer.from(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster1.xml"/>
+</Relationships>`));
+
+    // 6. Standard Slide Master 1
+    zip.addFile('ppt/slideMasters/slideMaster1.xml', Buffer.from(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:grpSpPr/></p:nvGrpSpPr>
+    </p:spTree>
+  </p:cSld>
+  <p:sldLayoutIdLst>
+    <p:sldLayoutId id="2147483649" r:id="rId1"/>
+  </p:sldLayoutIdLst>
+</p:sldMaster>`));
+
+    zip.addFile('ppt/slideMasters/_rels/slideMaster1.xml.rels', Buffer.from(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme1.xml"/>
+</Relationships>`));
+
+    // 7. Academic Theme
+    zip.addFile('ppt/theme/theme1.xml', Buffer.from(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="LearnLens Academic Theme">
+  <a:themeElements>
+    <a:clrScheme name="Academic">
+      <a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1>
+      <a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1>
+      <a:dk2><a:srgbClr val="0F172A"/></a:dk2>
+      <a:lt2><a:srgbClr val="F8FAFC"/></a:lt2>
+      <a:accent1><a:srgbClr val="2563EB"/></a:accent1>
+      <a:accent2><a:srgbClr val="059669"/></a:accent2>
+      <a:accent3><a:srgbClr val="D97706"/></a:accent3>
+      <a:accent4><a:srgbClr val="7C3AED"/></a:accent4>
+      <a:accent5><a:srgbClr val="0284C7"/></a:accent5>
+      <a:accent6><a:srgbClr val="DC2626"/></a:accent6>
+      <a:hlink><a:srgbClr val="2563EB"/></a:hlink>
+      <a:folHlink><a:srgbClr val="7C3AED"/></a:folHlink>
+    </a:clrScheme>
+    <a:fontScheme name="AcademicFonts">
+      <a:majorFont><a:latin typeface="Segoe UI"/><a:ea typeface="Noto Sans Kannada"/><a:cs typeface="Noto Sans Devanagari"/></a:majorFont>
+      <a:minorFont><a:latin typeface="Segoe UI"/><a:ea typeface="Noto Sans Kannada"/><a:cs typeface="Noto Sans Devanagari"/></a:minorFont>
+    </a:fontScheme>
+    <a:fmtScheme name="AcademicFormat">
+      <a:fillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:fillStyleLst>
+      <a:lnStyleLst><a:ln w="9525"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln></a:lnStyleLst>
+      <a:effectStyleLst><a:effectLst/></a:effectStyleLst>
+      <a:bgFillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:bgFillStyleLst>
+    </a:fmtScheme>
+  </a:themeElements>
+</a:theme>`));
 
     const escapeXml = (str: string) => (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const langCode = language === 'kannada' ? 'kn-IN' : (language === 'hindi' ? 'hi-IN' : 'en-US');
-    const typeface = language === 'kannada' ? 'Noto Sans Kannada' : (language === 'hindi' ? 'Noto Sans Devanagari' : 'Noto Sans');
+    const typeface = language === 'kannada' ? 'Noto Sans Kannada' : (language === 'hindi' ? 'Noto Sans Devanagari' : 'Segoe UI');
 
     slideIndices.forEach((slideNum, idx) => {
+      // Slide relationship pointing to slideLayout1
+      zip.addFile(`ppt/slides/_rels/slide${slideNum}.xml.rels`, Buffer.from(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
+</Relationships>`));
+
       const sec = sections[idx] || sections[0] || { title: doc.title, content: doc.summary, pageNumber: 1 };
       const slideTitle = idx === 0 ? doc.title : sec.title;
       const rawText = idx === 0 ? doc.summary : sec.content;
@@ -970,7 +894,7 @@ Generated on: ${new Date().toLocaleDateString()}
       ).join('');
 
       const slideXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <p:cSld>
     <p:spTree>
       <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:grpSpPr/></p:nvGrpSpPr>
@@ -979,7 +903,7 @@ Generated on: ${new Date().toLocaleDateString()}
         <p:spPr><a:xfrm><a:off x="685800" y="457200"/><a:ext cx="7772400" cy="1143000"/></a:xfrm></p:spPr>
         <p:txBody>
           <a:bodyPr/>
-          <a:p><a:r><a:rPr lang="${langCode}" b="1" sz="2600"><a:ea typeface="${typeface}"/><a:cs typeface="${typeface}"/></a:rPr><a:t>${escapeXml(slideTitle)}</a:t></a:r></a:p>
+          <a:p><a:r><a:rPr lang="${langCode}" b="1" sz="2400"><a:ea typeface="${typeface}"/><a:cs typeface="${typeface}"/></a:rPr><a:t>${escapeXml(slideTitle)}</a:t></a:r></a:p>
         </p:txBody>
       </p:sp>
       <p:sp>
