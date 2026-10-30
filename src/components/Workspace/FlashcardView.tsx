@@ -382,26 +382,29 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
           </div>
         )}
 
-        {/* Self-Grading Buttons (When Flipped in Study Mode) */}
+        {/* Self-Grading Buttons (Mark as Easy, Medium, or Difficult) */}
         {viewMode === 'study' && isFlipped && (
           <div className="flex items-center gap-2 mt-5">
             <button
               onClick={() => handleGrade(0)}
-              className="px-4 py-2 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 font-semibold text-xs border border-rose-300 dark:border-rose-800 transition-colors"
+              className="px-4 py-2 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 font-semibold text-xs border border-rose-300 dark:border-rose-800 transition-colors flex items-center gap-1.5 cursor-pointer"
+              title="Mark as Difficult (1)"
             >
-              🔄 Again (1)
+              <span>🔴 Difficult</span>
             </button>
             <button
               onClick={() => handleGrade(1)}
-              className="px-4 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 font-semibold text-xs border border-amber-300 dark:border-amber-800 transition-colors"
+              className="px-4 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 font-semibold text-xs border border-amber-300 dark:border-amber-800 transition-colors flex items-center gap-1.5 cursor-pointer"
+              title="Mark as Medium (2)"
             >
-              ⚠️ Hard (2)
+              <span>🟡 Medium</span>
             </button>
             <button
               onClick={() => handleGrade(2)}
-              className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-md shadow-emerald-600/20 transition-all"
+              className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-md shadow-emerald-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
+              title="Mark as Easy (3)"
             >
-              🎯 Mastered (3)
+              <span>🟢 Easy</span>
             </button>
           </div>
         )}

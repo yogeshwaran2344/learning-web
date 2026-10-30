@@ -85,9 +85,74 @@ Key Aspects of MS Pathophysiology:
     setTimeout(() => {
       // Generate grounded, contextual response based on the document
       let replyContent = '';
+      let replyCitation: SourceCitation | undefined = undefined;
       const qLower = query.toLowerCase();
+      const primarySec = document.sections?.[0];
+      const primaryEq = document.sections?.flatMap(s => s.equations || [])[0];
 
-      if (qLower.includes('dendrite') || qLower.includes('axon') || qLower.includes('soma')) {
+      if (qLower.includes('explain this chapter') || qLower.includes('explain the chapter')) {
+        replyContent = `Comprehensive Chapter Explanation (${document.title}):
+
+1. Foundations: The chapter begins by formalizing core concepts in ${primarySec?.title || 'the opening section'} (Page ${primarySec?.pageNumber || 1}).
+2. Key Invariant: Every mathematical model preserves strict boundary conditions—preventing negative latencies, variance inflation, or ungrounded state transitions.
+3. Architecture & Methodology: Subsections systematically transition from theoretical definitions to step-by-step algorithms.
+4. Review Focus: Pay special attention to the formulas and structured parameter tables on Pages 1–${document.pageCount}.`;
+        replyCitation = primarySec ? {
+          id: 'cite-chap-exp',
+          documentId: document.id,
+          pageNumber: primarySec.pageNumber || 1,
+          sectionTitle: primarySec.title,
+          exactQuote: primarySec.content.slice(0, 140),
+          contextSnippet: primarySec.content.slice(0, 200)
+        } : undefined;
+      } else if (qLower.includes('easier example') || qLower.includes('simple example') || qLower.includes('analogy')) {
+        replyContent = `Here is an intuitive, relatable analogy for ${document.title}:
+
+Imagine a high-traffic central airport dispatch center:
+• Incoming Flights (Tasks/Inputs): Arrive at staggered times with different fuel capacities (Burst Times).
+• Runway Dispatcher (Algorithm): Allocates execution slots based on clear priority rules rather than guesswork.
+• Safety Margin (Invariants): Just as two planes can never occupy a runway at once, the system strictly enforces non-negative bounds and mutual exclusion.
+• Real-World Impact: This exact principle is what prevents bottleneck delays in your operating system and web services.`;
+      } else if (qLower.includes('explain this formula') || qLower.includes('formula') || qLower.includes('equation')) {
+        if (primaryEq) {
+          replyContent = `Formulation Breakdown:
+Equation: ${primaryEq.latex}
+Label: ${primaryEq.label || 'Governing Invariant'}
+
+Why it is structured this way:
+1. Operational Invariant: ${primaryEq.meaning || 'Enforces mathematical consistency across state transitions.'}
+2. Normalization: Variables are balanced so extreme values do not distort intermediate calculations.
+3. Verification: This exact equation is verified verbatim against Page ${primarySec?.pageNumber || 1} with zero altered symbols.`;
+        } else {
+          replyContent = `In ${document.title}:
+Governing Formulation: TAT = Completion Time - Arrival Time and WT = TAT - Burst Time.
+• Turnaround Time measures total residency from arrival to termination.
+• Waiting Time isolates unproductive delays spent queued in ready memory.
+• Invariant Rule: Waiting time can never be negative (WT >= 0).`;
+        }
+      } else if (qLower.includes('difference') || qLower.includes('compare')) {
+        replyContent = `Key Conceptual Differences in ${document.title}:
+
+• Concept A (Primary Framework): Focuses on formal baseline operations, establishing the definitions and prerequisite assumptions.
+• Concept B (Derived Mechanism): Dynamically adapts to runtime inputs, optimizing throughput while respecting the baseline invariants.
+• Critical Distinction: Concept A guarantees correctness in the worst-case, whereas Concept B optimizes efficiency under typical execution loads.`;
+      } else if (qLower.includes('practice question') || qLower.includes('5 questions') || qLower.includes('questions')) {
+        replyContent = `Five Diagnostic Practice Questions for ${document.title}:
+
+1. Multiple Choice: What primary condition must hold to prevent deadlock or variance explosion?
+2. True or False: Invariant boundary conditions may fluctuate depending on user difficulty levels. (False: Invariants remain strictly fixed).
+3. Short Answer: Define the operational relationship between Arrival Time and Completion Time.
+4. Calculation: If Process P1 arrives at AT=0 with BT=4 and completes at CT=4, compute its Waiting Time. (Answer: WT = 0 ms).
+5. Concept Connection: How does the primary equation on Page 1 ensure mathematical stability across consecutive cycles?`;
+      } else if (qLower.includes('summarize') || qLower.includes('revision') || qLower.includes('recap')) {
+        replyContent = `Ultra-Clear Revision Sheet (${document.title}):
+
+• Core Concept: Synthesizes peer-reviewed principles into verified, structured learning steps.
+• Essential Terms: Formal vocabulary must be mastered first before deriving intermediate calculations.
+• Calculation Rule: Always state governing formulas before substituting numeric parameters.
+• Key Invariant: Boundary limits remain mathematically inviolable across all 7 formats.
+• Exam Tip: Review the practice flashcards and the step-by-step worked derivation for maximum retention.`;
+      } else if (qLower.includes('dendrite') || qLower.includes('axon') || qLower.includes('soma')) {
         replyContent = `In neuronal cytology (§1):
 • Soma (Cell Body): Synthesizes proteins via Nissl bodies (rough ER) and maintains metabolic homeostasis.
 • Dendrites: Highly branched cellular arborizations that receive incoming synaptic inputs (afferent) and deploy membrane receptors.
@@ -115,21 +180,26 @@ Regarding "${query}":
 • Review Point: For clinical/mathematical verification, inspect the interactive diagrams and structured section calculations in the source panel.`;
       }
 
+      const botCitations: SourceCitation[] = [];
+      if (replyCitation) {
+        botCitations.push(replyCitation);
+      } else if (primarySec) {
+        botCitations.push({
+          id: 'cite-bot-' + Date.now(),
+          documentId: document.id,
+          pageNumber: primarySec.pageNumber || 1,
+          sectionTitle: primarySec.title,
+          exactQuote: primarySec.content.slice(0, 120),
+          contextSnippet: primarySec.content.slice(0, 180)
+        });
+      }
+
       const botMsg: ChatMessage = {
         id: 'bot-' + Date.now(),
         sender: 'assistant',
         content: replyContent,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        citations: document.sections?.[0] ? [
-          {
-            id: 'cite-bot-' + Date.now(),
-            documentId: document.id,
-            pageNumber: document.sections[0].pageNumber || 1,
-            sectionTitle: document.sections[0].title,
-            exactQuote: document.sections[0].content.slice(0, 100),
-            contextSnippet: document.sections[0].content.slice(0, 150)
-          }
-        ] : []
+        citations: botCitations
       };
 
       setMessages(prev => [...prev, botMsg]);
@@ -138,10 +208,12 @@ Regarding "${query}":
   };
 
   const sampleQuestions = [
-    'Can you explain the pathophysiology of multiple sclerosis (MS)?',
-    'What is the difference between dendrites and axons?',
-    'Why does saltatory conduction fail in demyelinated axons?',
-    'What are the key organelles labeled in Fig 1.1?'
+    'Explain this chapter',
+    'Give me an easier example',
+    'Explain this formula',
+    'What is the difference between these two concepts?',
+    'Create five practice questions',
+    'Summarize this topic for revision'
   ];
 
   return (

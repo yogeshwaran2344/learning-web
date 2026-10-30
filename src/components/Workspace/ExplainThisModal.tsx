@@ -53,7 +53,7 @@ export const ExplainThisModal: React.FC<ExplainThisModalProps> = ({
   // Follow-up question state
   const [followUpQuestion, setFollowUpQuestion] = useState<string>('');
   const [isAsking, setIsAsking] = useState<boolean>(false);
-  const [followUpAnswer, setFollowUpAnswer] = useState<any>(null);
+  const [followUpHistory, setFollowUpHistory] = useState<{ question: string; answer: string; example?: string }[]>([]);
 
   useEffect(() => {
     if (isOpen && selectionText) {
@@ -64,7 +64,7 @@ export const ExplainThisModal: React.FC<ExplainThisModalProps> = ({
   const loadExplanation = async (diff: DifficultyLevel) => {
     setIsLoading(true);
     setErrorMessage('');
-    setFollowUpAnswer(null);
+    setFollowUpHistory([]);
     try {
       const result = await ApiClient.explainThis({
         documentId,
@@ -87,17 +87,25 @@ export const ExplainThisModal: React.FC<ExplainThisModalProps> = ({
     e.preventDefault();
     if (!followUpQuestion.trim()) return;
 
+    const currentQ = followUpQuestion.trim();
     setIsAsking(true);
     try {
       const response = await ApiClient.askQuestion({
         documentId,
-        question: followUpQuestion,
+        question: currentQ,
         currentSectionTitle: explanationData?.sourceCitation?.sectionTitle || sectionTitleHint,
         difficulty,
         language: currentLanguage,
         pageNumber: explanationData?.sourceCitation?.pageNumber || pageNumberHint
       });
-      setFollowUpAnswer(response);
+      setFollowUpHistory(prev => [
+        ...prev,
+        {
+          question: response.question || currentQ,
+          answer: response.answer,
+          example: response.relatableExample
+        }
+      ]);
       setFollowUpQuestion('');
     } catch (err: any) {
       console.error('Follow-up error:', err);
@@ -306,12 +314,37 @@ export const ExplainThisModal: React.FC<ExplainThisModalProps> = ({
               </div>
             )}
 
-            {/* 6. Important Points to Remember */}
+            {/* 6. Related Concepts from the Document */}
+            <div className="p-4 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/60 dark:border-indigo-900/60 space-y-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-800 dark:text-indigo-300 flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5" />
+                Related Concepts from the Document
+              </h4>
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {terms.length > 0 ? (
+                  terms.map((t: any, idx: number) => (
+                    <span
+                      key={idx}
+                      className="px-2.5 py-1 rounded-xl bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 text-xs font-semibold text-indigo-900 dark:text-indigo-200 flex items-center gap-1"
+                    >
+                      <ArrowRight className="w-3 h-3 text-indigo-500" />
+                      <span>{t.term}</span>
+                    </span>
+                  ))
+                ) : (
+                  <div className="text-xs text-slate-600 dark:text-slate-300">
+                    Directly connected to foundational principles in {explanationData.sourceCitation?.sectionTitle || 'the uploaded source'}.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 7. Important Points to Remember */}
             {struct.keyTakeaways && struct.keyTakeaways.length > 0 && (
               <div className="space-y-2">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-purple-500" />
-                  6. Important Points to Remember
+                  Important Points to Remember
                 </h4>
                 <ul className="space-y-1 pl-2">
                   {struct.keyTakeaways.map((point: string, idx: number) => (
@@ -359,46 +392,65 @@ export const ExplainThisModal: React.FC<ExplainThisModalProps> = ({
               </div>
             )}
 
-            {/* Interactive Follow-up Question */}
+            {/* Multi-turn Interactive Follow-up Conversation */}
             <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
-              <h5 className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <HelpCircle className="w-3.5 h-3.5 text-brand-500" />
-                Ask a Follow-up Question
-              </h5>
+              <div className="flex items-center justify-between">
+                <h5 className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <HelpCircle className="w-3.5 h-3.5 text-brand-500" />
+                  Ask Follow-up Questions (Context Preserved)
+                </h5>
+                <span className="text-[10px] text-slate-400">Maintains document context</span>
+              </div>
 
+              {/* Conversational Follow-up History */}
+              {followUpHistory.length > 0 && (
+                <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                  {followUpHistory.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs space-y-2 shadow-2xs"
+                    >
+                      <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <span className="w-4 h-4 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-[10px] flex items-center justify-center font-bold">
+                          {idx + 1}
+                        </span>
+                        <span>{item.question}</span>
+                      </div>
+                      <div className="text-slate-700 dark:text-slate-300 leading-relaxed pl-5">
+                        {item.answer}
+                      </div>
+                      {item.example && (
+                        <div className="text-slate-500 dark:text-slate-400 italic pl-5 text-[11px]">
+                          {item.example}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Follow-up Question Input Form */}
               <form onSubmit={handleAskFollowUp} className="flex gap-2">
                 <input
                   type="text"
                   value={followUpQuestion}
                   onChange={(e) => setFollowUpQuestion(e.target.value)}
-                  placeholder="e.g. Why is the square root used here?..."
-                  className="flex-1 px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs focus:ring-2 focus:ring-brand-500 outline-none"
+                  placeholder="Ask any follow-up question about this explanation..."
+                  className="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs focus:ring-2 focus:ring-brand-500 outline-none"
                 />
                 <button
                   type="submit"
                   disabled={isAsking || !followUpQuestion.trim()}
-                  className="px-4 py-2 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-medium text-xs flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
                 >
-                  {isAsking ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                  {isAsking ? (
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Send className="w-3.5 h-3.5" />
+                  )}
                   <span>Ask</span>
                 </button>
               </form>
-
-              {followUpAnswer && (
-                <div className="p-3.5 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs space-y-2">
-                  <div className="font-semibold text-slate-900 dark:text-white">
-                    Q: {followUpAnswer.question}
-                  </div>
-                  <div className="text-slate-700 dark:text-slate-300 leading-relaxed">
-                    {followUpAnswer.answer}
-                  </div>
-                  {followUpAnswer.relatableExample && (
-                    <div className="text-slate-500 dark:text-slate-400 italic">
-                      {followUpAnswer.relatableExample}
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           </div>
         ) : null}
