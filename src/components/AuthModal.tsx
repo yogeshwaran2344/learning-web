@@ -228,14 +228,61 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-3 px-4 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shadow-lg shadow-brand-500/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50 mt-2"
+            className="w-full py-3 px-4 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shadow-lg shadow-brand-500/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50 mt-2 cursor-pointer"
           >
             <span>{isLoading ? 'Authenticating...' : mode === 'login' ? 'Sign In to Workspace' : 'Create Academic Account'}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
 
-        <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400 text-center flex items-center justify-center gap-1.5">
+        {/* 1-Click Quick Demo Sign In */}
+        <div className="mt-4 pt-3.5 border-t border-slate-100 dark:border-slate-800 space-y-2">
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center">
+            One-Click Instant Sign In
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              disabled={isLoading}
+              onClick={async () => {
+                setIsLoading(true);
+                setErrorMessage('');
+                try {
+                  const res = await ApiClient.login('alex.rivera@university.edu', 'student123');
+                  onSuccess(res.user);
+                } catch (e: any) {
+                  setErrorMessage(e.message || 'Login failed');
+                } finally {
+                  setIsLoading(false);
+                }
+              }}
+              className="py-2 px-3 rounded-xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-bold transition-all text-center cursor-pointer"
+            >
+              🎓 Student (Alex)
+            </button>
+            <button
+              type="button"
+              disabled={isLoading}
+              onClick={async () => {
+                setIsLoading(true);
+                setErrorMessage('');
+                try {
+                  const res = await ApiClient.login('prof.ramesh@iisc.ac.in', 'lecturer123');
+                  onSuccess(res.user);
+                } catch (e: any) {
+                  setErrorMessage(e.message || 'Login failed');
+                } finally {
+                  setIsLoading(false);
+                }
+              }}
+              className="py-2 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold transition-all text-center cursor-pointer"
+            >
+              👨‍🏫 Faculty (Prof. Ramesh)
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400 text-center flex items-center justify-center gap-1.5">
           <ShieldCheck className="w-4 h-4 text-emerald-500" />
           <span>Encrypted Password Authentication & Account Isolation</span>
         </div>

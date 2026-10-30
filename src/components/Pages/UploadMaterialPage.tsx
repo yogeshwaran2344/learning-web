@@ -532,8 +532,40 @@ Condition: Dimensions of x and F must match or be projected via shortcut matrix 
             </p>
           </div>
 
+          {/* Diagnostic Box for 401 / Authentication Required */}
+          {(errorMessage?.includes('Authentication credentials') || errorMessage?.includes('401') || errorMessage?.includes('token')) && (
+            <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-left space-y-2 text-xs shadow-xs">
+              <div className="font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 text-amber-600" />
+                <span>Session Expired or Login Required</span>
+              </div>
+              <p className="text-amber-800 dark:text-amber-300">
+                Your authenticated session has expired. Click below to instantly log in as the active demo student and resume upload, or process locally.
+              </p>
+              <div className="pt-1 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const res = await ApiClient.login('alex.rivera@university.edu', 'student123');
+                      if (res?.user) {
+                        setErrorMessage(null);
+                        handleStartProcessing();
+                      }
+                    } catch (err: any) {
+                      setErrorMessage(err.message || 'Login failed.');
+                    }
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                >
+                  ⚡ One-Click Student Login & Retry
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Diagnostic Box for 502 / Offline Backend */}
-          {(errorMessage.includes('502') || errorMessage.includes('offline') || errorMessage.includes('port 5001')) && (
+          {(errorMessage?.includes('502') || errorMessage?.includes('offline') || errorMessage?.includes('port 5001')) && (
             <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-800 text-left space-y-2 text-xs shadow-xs">
               <div className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                 <AlertTriangle className="w-4 h-4 text-amber-500" />

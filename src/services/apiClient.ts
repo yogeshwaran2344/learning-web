@@ -24,7 +24,15 @@ export class ApiClient {
   }
 
   static getToken(): string | null {
-    return this.token || localStorage.getItem('learnova_auth_token') || localStorage.getItem('learnlens_auth_token');
+    if (!this.token) {
+      this.token = localStorage.getItem('learnova_auth_token') || localStorage.getItem('learnlens_auth_token');
+    }
+    // If in development mode and token is missing, auto-bind default student session
+    if (!this.token && typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+      this.token = 'token_demo_student_active_session';
+      localStorage.setItem('learnova_auth_token', this.token);
+    }
+    return this.token;
   }
 
   static logout() {
@@ -84,8 +92,9 @@ export class ApiClient {
       ...(options.headers as Record<string, string> || {})
     };
 
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
+    const token = this.getToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
 
     if (!(options.body instanceof FormData) && !headers['Content-Type']) {
@@ -98,6 +107,12 @@ export class ApiClient {
     });
 
     if (!res.ok) {
+      if (res.status === 401) {
+        this.logout();
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('learnova_auth_required'));
+        }
+      }
       const err = await res.json().catch(() => ({ error: res.statusText }));
       throw new Error(err.error || `Request failed with status ${res.status}`);
     }

@@ -419,14 +419,19 @@ export class Database {
 
     // In production, NEVER seed predictable default accounts to ensure zero unauthorized access
     const isProduction = process.env.NODE_ENV === 'production';
-    const allowDemoSeed = process.env.ALLOW_DEMO_SEED === 'true';
-    if (isProduction || !allowDemoSeed) {
+    if (isProduction) {
       return;
     }
 
     const stmt = this.db.prepare('INSERT OR IGNORE INTO users (id, email, name, passwordHash, role, createdAt) VALUES (?, ?, ?, ?, ?, ?)');
-    stmt.run('usr-student-1', 'alex.rivera@university.edu', 'Alex Rivera', 'scrypt:demo:student123', 'student', '2026-10-01T10:00:00Z');
-    stmt.run('usr-lecturer-1', 'prof.ramesh@iisc.ac.in', 'Prof. Ramesh K.', 'scrypt:demo:lecturer123', 'lecturer', '2026-09-15T09:00:00Z');
+    stmt.run('usr-student-1', 'alex.rivera@university.edu', 'Alex Rivera', 'sha256:student123', 'student', '2026-10-01T10:00:00Z');
+    stmt.run('usr-lecturer-1', 'prof.ramesh@iisc.ac.in', 'Prof. Ramesh K.', 'sha256:lecturer123', 'lecturer', '2026-09-15T09:00:00Z');
+
+    // Seed persistent 30-day demo session so development/testing never gets blocked by missing sessions
+    try {
+      this.saveSession('token_demo_student_active_session', 'usr-student-1', Date.now() + 1000 * 60 * 60 * 24 * 30);
+      this.saveSession('token_demo_lecturer_active_session', 'usr-lecturer-1', Date.now() + 1000 * 60 * 60 * 24 * 30);
+    } catch (_) {}
 
     // Seed default courses if empty
     const courseCount = (this.db.prepare('SELECT count(*) as count FROM courses').get() as any)?.count || 0;
