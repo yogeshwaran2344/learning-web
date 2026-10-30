@@ -139,7 +139,15 @@ export class LearningController {
    */
   static async explainThis(req: AuthenticatedRequest, res: Response) {
     try {
-      const { documentId, selectionText, contextSnippet, difficulty = 'beginner', language = 'English' } = req.body;
+      const {
+        documentId,
+        selectionText,
+        contextSnippet,
+        difficulty = 'beginner',
+        language = 'English',
+        pageNumber,
+        sectionTitle
+      } = req.body;
       if (!documentId || !selectionText) {
         return res.status(400).json({ error: 'documentId and selectionText are required.' });
       }
@@ -165,7 +173,9 @@ export class LearningController {
         selectionText,
         contextSnippet || '',
         difficulty as DifficultyLevel,
-        language as AppLanguage
+        language as AppLanguage,
+        pageNumber ? Number(pageNumber) : undefined,
+        sectionTitle
       );
 
       res.json({ explanation: result });
@@ -181,7 +191,14 @@ export class LearningController {
    */
   static async askQuestion(req: AuthenticatedRequest, res: Response) {
     try {
-      const { documentId, question, currentSectionTitle, difficulty = 'intermediate', language = 'English' } = req.body;
+      const {
+        documentId,
+        question,
+        currentSectionTitle,
+        difficulty = 'intermediate',
+        language = 'English',
+        pageNumber
+      } = req.body;
       if (!documentId || !question) {
         return res.status(400).json({ error: 'documentId and question are required.' });
       }
@@ -207,7 +224,8 @@ export class LearningController {
         question,
         currentSectionTitle,
         difficulty as DifficultyLevel,
-        language as AppLanguage
+        language as AppLanguage,
+        pageNumber ? Number(pageNumber) : undefined
       );
 
       res.json({ response: result });

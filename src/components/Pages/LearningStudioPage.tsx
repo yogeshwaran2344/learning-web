@@ -68,6 +68,8 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
   const [isExplainModalOpen, setIsExplainModalOpen] = useState<boolean>(false);
   const [explainSelectionText, setExplainSelectionText] = useState<string>('');
   const [explainContextSnippet, setExplainContextSnippet] = useState<string>('');
+  const [explainPageNumber, setExplainPageNumber] = useState<number | undefined>(undefined);
+  const [explainSectionTitle, setExplainSectionTitle] = useState<string | undefined>(undefined);
 
   // Dynamic overrides per format when student regenerates or switches language
   const [dynamicOverrides, setDynamicOverrides] = useState<Record<string, any>>({});
@@ -104,9 +106,11 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
     });
   };
 
-  const handleOpenExplain = (text: string, context?: string) => {
+  const handleOpenExplain = (text: string, context?: string, pageNumber?: number, sectionTitle?: string) => {
     setExplainSelectionText(text);
     setExplainContextSnippet(context || '');
+    setExplainPageNumber(pageNumber);
+    setExplainSectionTitle(sectionTitle);
     setIsExplainModalOpen(true);
   };
 
@@ -858,6 +862,8 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
         contextSnippet={explainContextSnippet}
         currentLanguage={currentLanguage}
         initialDifficulty={difficulty}
+        pageNumberHint={explainPageNumber}
+        sectionTitleHint={explainSectionTitle}
         onSaveSnippet={handleSaveSnippet}
       />
 

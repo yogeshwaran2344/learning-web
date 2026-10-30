@@ -27,6 +27,8 @@ interface ExplainThisModalProps {
   contextSnippet?: string;
   currentLanguage?: AppLanguage;
   initialDifficulty?: DifficultyLevel;
+  pageNumberHint?: number;
+  sectionTitleHint?: string;
   onSaveSnippet?: (title: string, content: string, citation?: SourceCitation) => void;
 }
 
@@ -38,6 +40,8 @@ export const ExplainThisModal: React.FC<ExplainThisModalProps> = ({
   contextSnippet,
   currentLanguage = 'English',
   initialDifficulty = 'beginner',
+  pageNumberHint,
+  sectionTitleHint,
   onSaveSnippet
 }) => {
   const [difficulty, setDifficulty] = useState<DifficultyLevel>(initialDifficulty);
@@ -67,7 +71,9 @@ export const ExplainThisModal: React.FC<ExplainThisModalProps> = ({
         selectionText,
         contextSnippet,
         difficulty: diff,
-        language: currentLanguage
+        language: currentLanguage,
+        pageNumber: pageNumberHint,
+        sectionTitle: sectionTitleHint
       });
       setExplanationData(result);
     } catch (err: any) {
@@ -86,9 +92,10 @@ export const ExplainThisModal: React.FC<ExplainThisModalProps> = ({
       const response = await ApiClient.askQuestion({
         documentId,
         question: followUpQuestion,
-        currentSectionTitle: explanationData?.sourceCitation?.sectionTitle,
+        currentSectionTitle: explanationData?.sourceCitation?.sectionTitle || sectionTitleHint,
         difficulty,
-        language: currentLanguage
+        language: currentLanguage,
+        pageNumber: explanationData?.sourceCitation?.pageNumber || pageNumberHint
       });
       setFollowUpAnswer(response);
       setFollowUpQuestion('');

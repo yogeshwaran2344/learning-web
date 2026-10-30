@@ -4,6 +4,7 @@ import {
   SourceCitationRecord
 } from '../db/schema';
 import { AiModelService } from './aiModelService';
+import { DomainGroundingEngine } from './domainGroundingEngine';
 
 export type DifficultyLevel = 'beginner' | 'intermediate' | 'advanced';
 
@@ -218,54 +219,14 @@ export class AiGeneratorService {
     const primarySec = sections[0];
     const allCitations: SourceCitationRecord[] = [];
 
-    // Domain detection
-    const fullText = docTitle + ' ' + sections.map(s => s.title + ' ' + s.content).join(' ');
-    const isTransformer = /attention|transformer|softmax|dot-product/i.test(fullText);
-    const isByzantine = /byzantine|pbft|consensus|paxos|raft|fault/i.test(fullText);
-    const isQuantum = /quantum|wave function|schrodinger|qubit|superposition/i.test(fullText);
+    // Source-driven domain and context extraction (Zero hardcoded switch-cases)
+    const domainContext = DomainGroundingEngine.analyzeDocumentContext(docTitle, sections);
+    const groundedExamples = DomainGroundingEngine.generateExamples(domainContext, language, difficulty);
 
-    // 1. Defined Terms glossary
-    let definedTerms: { term: string; definition: string }[] = [];
-    let practicalExample = '';
-    let everydayAnalogy = '';
-    let industryApplication = '';
-
-    if (isTransformer) {
-      definedTerms = [
-        { term: 'Attention Mechanism', definition: 'A method allowing an AI model to connect related words in a sentence, regardless of how far apart they are.' },
-        { term: 'Key Vector (K)', definition: 'A feature representation of what a word offers or represents in the vocabulary.' },
-        { term: 'Scaling Factor (1/√d_k)', definition: 'A normalization constant that stabilizes mathematical variance so training gradients do not vanish.' }
-      ];
-      practicalExample = 'In a translation tool, translating "The animal didn\'t cross the street because it was tired" assigns 92% attention weight from "it" to "animal", avoiding misinterpreting "street".';
-      everydayAnalogy = 'Think of searching in a library with a flashlight. Instead of reading every book linearly from cover to cover, your flashlight immediately illuminates the exact paragraphs you need.';
-      industryApplication = 'Powers modern state-of-the-art AI language models, translation engines, and automated protein folding predictors.';
-    } else if (isByzantine) {
-      definedTerms = [
-        { term: 'Consensus', definition: 'A protocol enabling distributed computers to agree on a single shared state even if some nodes fail.' },
-        { term: 'Byzantine Fault', definition: 'An arbitrary failure mode where a server crashes, drops packets, or sends conflicting, deceptive data.' },
-        { term: 'Quorum', definition: 'The minimum number of voting nodes required to commit a valid state update.' }
-      ];
-      practicalExample = 'If a distributed bank database runs on 7 servers and 2 servers crash or send corrupt transactions, the system continues safely because 7 >= 3(2) + 1.';
-      everydayAnalogy = 'Think of a jury trial: to reach a verdict, a supermajority must agree. Even if one or two jurors are confused, the decision remains legally sound.';
-      industryApplication = 'Guarantees reliability across distributed cloud stores, blockchain protocols, and spacecraft flight computers.';
-    } else if (isQuantum) {
-      definedTerms = [
-        { term: 'Wave Function (Ψ)', definition: 'A mathematical description containing all probabilities of a particle\'s physical properties.' },
-        { term: 'Superposition', definition: 'The physical ability of a quantum particle to exist in multiple potential states simultaneously until observed.' },
-        { term: 'Born Rule', definition: 'The law stating that the square of the wave function modulus gives the probability of locating the particle.' }
-      ];
-      practicalExample = 'In MRI scanners, quantum nuclear magnetic resonance measures how atomic spins respond to magnetic pulses, generating clear internal body scans.';
-      everydayAnalogy = 'Think of a spinning coin: while spinning on a table, it is a blur of both heads and tails simultaneously until your hand slaps it down into one definite state.';
-      industryApplication = 'Underpins modern semiconductors, lasers, quantum encryption networks, and quantum chemistry simulators.';
-    } else {
-      definedTerms = [
-        { term: 'Primary Concept', definition: `The foundational academic principle described in Section "${primarySec.title}".` },
-        { term: 'Governing Invariant', definition: primarySec.conditions?.[0] || 'A fundamental rule that must strictly remain true under all transformations.' }
-      ];
-      practicalExample = `In experimental trials, applying this method guarantees that measurements yield consistent, repeatable results within tolerance bounds.`;
-      everydayAnalogy = `Think of following a trusted blueprint: measuring dimensions accurately ensures that every part fits together with zero structural defects.`;
-      industryApplication = `Applied in scientific modeling, software optimization, and production engineering systems.`;
-    }
+    const definedTerms = domainContext.definedTerms;
+    const practicalExample = groundedExamples.practicalExample;
+    const everydayAnalogy = groundedExamples.everydayAnalogy;
+    const industryApplication = groundedExamples.industryApplication;
 
     // 2. Multilingual Overarching Analogy
     let overallAnalogy = '';
@@ -274,19 +235,19 @@ export class AiGeneratorService {
     if (language === 'Kannada') {
       overallAnalogy = difficulty === 'beginner'
         ? `ಸುಲಭ ವಿವರಣೆ: ${docTitle} ಒಂದು ಸುಸಂಘಟಿತ ಜ್ಞಾನ ವ್ಯವಸ್ಥೆಯಂತೆ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತದೆ. ಪ್ರತಿಯೊಂದು ಘಟಕವೂ ತನ್ನದೇ ಆದ ಪಾತ್ರವನ್ನು ಹೊಂದಿದ್ದು, ಸಂಕೀರ್ಣ ನಿಯಮಗಳನ್ನು ಸರಳವಾದ ಹಂತಗಳಲ್ಲಿ ಪೂರೈಸುತ್ತದೆ.`
-        : `ಪರಿಕಲ್ಪನಾ ದೃಷ್ಟಾಂತ: ${docTitle} ಒಂದು ಸ್ವಯಂಚಾಲಿತ ಗ್ರಂಥಾಲಯದಂತಿದೆ; ಇಲ್ಲಿ ಮಾಹಿತಿಗಳನ್ನು ಪ್ರತ್ಯೇಕವಾಗಿ ಹುಡುಕುವ ಬದಲು, ಎಲ್ಲಾ ಸಂಬಂಧಿತ ಅಂಶಗಳನ್ನು ಏಕಕಾಲದಲ್ಲಿ ಪರಿಶೀಲಿಸಿ ಸೂಕ್ತ ಉತ್ತರವನ್ನು ನೀಡಲಾಗುತ್ತದೆ.`;
+        : `ಪರಿಕಲ್ಪನಾ ದೃಷ್ಟಾಂತ: ${docTitle} - ${everydayAnalogy}`;
       additionalContext = 'ಗಮನಿಸಿ: ಈ ದೃಷ್ಟಾಂತವು ಅಧ್ಯಯನವನ್ನು ಸರಳಗೊಳಿಸಲು ನೀಡಲಾದ ಪೂರಕ ಉದಾಹರಣೆಯಾಗಿದೆ (ಮೂಲ ಪಠ್ಯದ ನಿಖರ ಗಣಿತ ಷರತ್ತುಗಳು ಅಖಂಡವಾಗಿವೆ).';
     } else if (language === 'Hindi') {
       overallAnalogy = difficulty === 'beginner'
         ? `सरल व्याख्या: ${docTitle} एक सुव्यवस्थित संचार तंत्र की तरह है, जहाँ प्रत्येक घटक व्यवस्थित रूप से कार्य करते हुए जटिल प्रक्रियाओं को सहज बनाता है।`
-        : `अवधारणात्मक रूपक: ${docTitle} एक आधुनिक डिजिटल पुस्तकालय की तरह है; जहाँ स्वतंत्र रूप से खोजने के बजाय, सभी संबंधित संदर्भों का एक साथ विश्लेषण करके सटीक परिणाम निकाला जाता है।`;
+        : `अवधारणात्मक रूपक: ${docTitle} - ${everydayAnalogy}`;
       additionalContext = 'नोट: यह रूपक समझने की सुगमता के लिए अतिरिक्त रूप से जोड़ा गया है (मूल नोट्स के गणितीय सूत्र और नियम पूर्णतः सुरक्षित हैं)।';
     } else {
       overallAnalogy = difficulty === 'beginner'
-        ? `Conceptual Mental Model: Think of ${docTitle} like a high-speed routing hub. Rather than processing each signal sequentially through slow, interdependent checkpoints, it maps out the entire context simultaneously, routing information directly where it is needed most.`
+        ? `Conceptual Mental Model: Think of ${docTitle} in everyday terms. ${everydayAnalogy}`
         : difficulty === 'advanced'
-        ? `Architectural Overview: ${docTitle} establishes direct relational mapping across high-dimensional state spaces without recurrence or temporal bottlenecking, enforcing invariant variance normalization and strict quorum bounds.`
-        : `Intuitive Analogy: Think of ${docTitle} like a cooperative orchestra conductor. Instead of each musician playing blindly in isolation, the system continuously evaluates the relationships between all sections in real-time, harmonizing their outputs while strictly maintaining rhythm and boundary constraints.`;
+        ? `Architectural Overview: ${docTitle} establishes formal state mappings across observed operational parameters, enforcing boundary constraints: ${domainContext.boundaryConditions[0] || 'verified invariants'}.`
+        : `Intuitive Analogy: ${everydayAnalogy}`;
       additionalContext = 'Pedagogical analogy provided as supplementary conceptual anchor (beyond raw uploaded text; technical invariants remain strictly preserved).';
     }
 
@@ -313,14 +274,16 @@ export class AiGeneratorService {
         ? `Rigorous Definition: ${coreIdea}. Governs high-order state transitions with strict boundary invariance.`
         : `Conceptual Overview: ${coreIdea}. Establishes the governing relationship among the primary variables.`;
 
-      const whyItMatters = `This is crucial because without it, the system would produce inconsistent outputs or face computational bottlenecks.`;
-      const howItWorks = `The process operates by evaluating input parameters, verifying boundary conditions, and calculating intermediate states step by step.`;
+      const whyItMatters = `This is crucial in "${sec.title}" because without it, the system would produce inconsistent outputs or violate boundary condition: ${sec.conditions?.[0] || domainContext.boundaryConditions[0]}.`;
+      const howItWorks = sentences.length > 2
+        ? `The process operates through sequential stages: ${sentences.slice(1, 3).join(' ')}`
+        : `The process operates by evaluating input parameters, verifying boundary conditions, and calculating intermediate states step by step.`;
 
       const stepByStep = [
-        'Step 1: Check that all initial parameters and preconditions are satisfied.',
-        'Step 2: Apply the governing transformation formula or algorithmic rule.',
+        `Step 1: Check that all initial parameters and preconditions in "${sec.title}" are satisfied.`,
+        'Step 2: Apply the governing transformation formula or algorithmic rule from the source.',
         'Step 3: Normalize outputs to keep values within safe numerical bounds.',
-        'Step 4: Verify that the result satisfies the original invariant condition.'
+        `Step 4: Verify that the result satisfies the invariant condition: "${sec.conditions?.[0] || domainContext.boundaryConditions[0]}".`
       ];
 
       let formulaExpl = '';
@@ -329,7 +292,7 @@ export class AiGeneratorService {
         formulaExpl = `Formula Breakdown: ${eq.latex} — ${eq.meaning || 'Relates the primary variables to ensure output stability without numerical divergence.'}`;
       }
 
-      const invariantRule = sec.conditions?.[0] || 'Mathematical consistency and non-negative bounds must be verified.';
+      const invariantRule = sec.conditions?.[0] || domainContext.boundaryConditions[0];
 
       return {
         sectionTitle: sec.title,
@@ -353,7 +316,7 @@ export class AiGeneratorService {
 
     const takeaways = [
       `Grounded in ${sections.length} extracted section(s) across ${docTitle}.`,
-      primarySec.conditions?.[0] ? `Core Invariant: ${primarySec.conditions[0]}` : 'Preconditions and boundary constraints must remain strictly satisfied.',
+      primarySec.conditions?.[0] ? `Core Invariant: ${primarySec.conditions[0]}` : `Core Invariant: ${domainContext.boundaryConditions[0]}`,
       primarySec.equations?.[0] ? `Preserved Formulation: ${primarySec.equations[0].latex}` : 'Analytical proofs guarantee invariant consistency across transitions.',
       'All theoretical claims remain directly traceable to page/slide citations.'
     ];
@@ -473,83 +436,44 @@ export class AiGeneratorService {
   ): GeneratedFormatResult {
     const eqSec = sections.find(s => s.equations && s.equations.length > 0) || sections[0];
     const firstEq = eqSec.equations?.[0]?.latex || 'Y = f(X) + C';
-    const condition = eqSec.conditions?.[0] || 'Parameters must be real and bounded.';
+    const eqMeaning = eqSec.equations?.[0]?.meaning || 'Governing theoretical formulation';
+    const condition = eqSec.conditions?.[0] || 'Parameters must be real, non-negative, and bounded.';
 
-    let problemTitle = `Worked Problem: ${eqSec.title}`;
-    let problemStatement = '';
-    let givenParameters: string[] = [];
-    let steps: string[] = [];
+    let problemTitle = language === 'Kannada'
+      ? `ಉದಾಹರಣೆ ಲೆಕ್ಕಾಚಾರ: ${eqSec.title}`
+      : language === 'Hindi'
+      ? `हल उदाहरण: ${eqSec.title}`
+      : `Worked Problem: Applying ${eqSec.title} and Verifying Boundary Invariants`;
 
-    const isTransformer = /attention|transformer|softmax|dot-product/i.test(docTitle + ' ' + eqSec.title + ' ' + eqSec.content);
-    const isByzantine = /byzantine|pbft|consensus|fault/i.test(docTitle + ' ' + eqSec.title + ' ' + eqSec.content);
-    const isQuantum = /quantum|teleportation|entangle|bell/i.test(docTitle + ' ' + eqSec.title + ' ' + eqSec.content);
+    // Extract any explicit numerical or variable parameters from the section's content
+    const paramMatches = eqSec.content.match(/\b([a-zA-Z_][a-zA-Z0-9_]*\s*=\s*[0-9]+(?:\.[0-9]+)?)\b/g);
+    const extractedParams = paramMatches ? paramMatches.slice(0, 3) : [];
 
-    if (isTransformer) {
-      problemTitle = language === 'Kannada'
-        ? `ಉದಾಹರಣೆ ಲೆಕ್ಕಾಚಾರ: ಅಟೆನ್ಶನ್ ಸ್ಕೇಲಿಂಗ್ ಮತ್ತು ಸಾಫ್ಟ್‌ಮ್ಯಾಕ್ಸ್ ಸಾಮಾನ್ಯೀಕರಣ`
-        : language === 'Hindi'
-        ? `हल उदाहरण: अटेंशन स्केलिंग और सॉफ्टमैक्स प्रसरण सामान्यीकरण`
-        : `Worked Problem: Calculating Attention Scale Normalization & Softmax Variance`;
+    const givenParameters: string[] = [
+      `Extracted Formulation: ${firstEq} (${eqMeaning})`,
+      `Governing Source Section: "${eqSec.title}" (Page/Slide ${eqSec.pageNumber || 1})`,
+      `Boundary Condition: "${condition}"`
+    ];
 
-      problemStatement = language === 'Kannada'
-        ? `ನೀಡಲಾದ ಕೀ ಆಯಾಮ d_k = 64 ಮತ್ತು ಡಾಟ್ ಪ್ರಾಡಕ್ಟ್ QK^T = 32.0. ಸ್ಕೇಲ್ ಫ್ಯಾಕ್ಟರ್ 1/√d_k ಅನ್ನು ಲೆಕ್ಕಹಾಕಿ, ಸಾಫ್ಟ್‌ಮ್ಯಾಕ್ಸ್ ಇನ್‌ಪುಟ್ ಮೌಲ್ಯವನ್ನು ನಿರ್ಧರಿಸಿ ಮತ್ತು ಗ್ರೇಡಿಯಂಟ್ ಕಣ್ಮರೆಯಾಗುವುದನ್ನು ತಡೆಯುವ ವಿಧಾನವನ್ನು ತೋರಿಸಿ.`
-        : language === 'Hindi'
-        ? `दिए गए पैरामीटर: की डायमेंशन d_k = 64 और डॉट प्रोडक्ट QK^T = 32.0। स्केल फैक्टर 1/√d_k की गणना करें, सॉफ्टमैक्स इनपुट मान निर्धारित करें और स्पष्ट करें कि प्रसरण स्थिर रखने से ग्रेडिएंट वैनिशिंग कैसे रुकती है।`
-        : `Given key vector dimension d_k = 64 and an unscaled query-key dot product QK^T = 32.0. Calculate the exact scaling factor 1/√d_k, evaluate the scaled logit argument for the softmax operator, and verify that variance is normalized to prevent gradient vanishing.`;
-
-      givenParameters = [
-        'Key dimension: d_k = 64',
-        'Unscaled dot product: QK^T = 32.0',
-        'Theoretical Formula: Attention(Q, K, V) = softmax(QK^T / √d_k) * V',
-        'Invariant Requirement: Scaling factor 1/√d_k must normalize variance to 1.0 when d_k is large'
-      ];
-
-      steps = [
-        'Step 1: Check Preconditions — [Why performed]: Verify that key dimension d_k = 64 is strictly positive (d_k > 0) so the inverse square root is physically and mathematically defined without division-by-zero errors.',
-        'Step 2: Calculate Scale Factor — [Why performed]: Compute √64 = 8.0, yielding scaling factor 1/√d_k = 1/8 = 0.125. This dampens large inner products before passing into the exponential softmax function.',
-        'Step 3: Scale the Raw Dot Product — [Why performed]: Multiply QK^T by the scale factor: Scaled Logit = (32.0) * (0.125) = 4.0. This prevents exponential overflow where e^32 would cause numerical overflow and zero gradients.',
-        'Step 4: Softmax Argument Verification — [Why performed]: Evaluate the softmax operator on the normalized logit 4.0. The softmax derivative remains non-zero, allowing neural backpropagation to learn smoothly without vanishing gradients.',
-        'Step 5: Verify Governing Invariant — [Why performed]: Confirm that the scaled dot product variance is normalized to 1.0, preserving mathematical integrity as proven in Equation (1).'
-      ];
-    } else if (isByzantine) {
-      problemTitle = language === 'Kannada'
-        ? `ಉದಾಹರಣೆ ಲೆಕ್ಕಾಚಾರ: PBFT ಕನ್ಸೆನ್ಸಸ್‌ಗಾಗಿ ಕನಿಷ್ಠ ನೋಡ್‌ಗಳ ನಿರ್ಧಾರ`
-        : language === 'Hindi'
-        ? `हल उदाहरण: PBFT सर्वसम्मति हेतु आवश्यक न्यूनतम नोड्स का निर्धारण`
-        : `Worked Problem: Computing Minimum Fault-Tolerant Replicas for PBFT Consensus`;
-
-      problemStatement = `An asynchronous distributed ledger network must tolerate up to f = 2 arbitrary Byzantine (malicious or crashed) nodes. Calculate the minimum total replicas n required, and prove that any two valid quorums intersect in at least one non-faulty replica.`;
-
-      givenParameters = [
-        'Tolerable Byzantine faults: f = 2',
-        'Invariant Resilience Theorem: n >= 3f + 1',
-        'Quorum Size Rule: Q = 2f + 1'
-      ];
-
-      steps = [
-        'Step 1: Inspect Safety Condition — [Why performed]: In asynchronous networks, delayed messages are indistinguishable from crashed nodes, requiring the resilience bound n >= 3f + 1.',
-        'Step 2: Substitute Fault Parameters — [Why performed]: Compute n_min = 3(2) + 1 = 6 + 1 = 7 replicas to establish the minimal cluster size.',
-        'Step 3: Determine Quorum Threshold — [Why performed]: Calculate Q = 2f + 1 = 2(2) + 1 = 5 replicas. Any valid state transition requires confirmation from at least 5 nodes.',
-        'Step 4: Quorum Intersection Calculation — [Why performed]: Calculate overlap = Q_1 + Q_2 - n = 5 + 5 - 7 = 3 nodes. Any two independent quorums must share at least 3 nodes.',
-        'Step 5: Prove Fault-Freedom — [Why performed]: Since at most f = 2 nodes can be faulty, 3 - 2 = 1 shared node is mathematically guaranteed to be honest and truthful, preventing split-brain states.'
-      ];
+    if (extractedParams.length > 0) {
+      extractedParams.forEach(p => givenParameters.push(`Source Parameter: ${p}`));
     } else {
-      problemStatement = `Given the operational parameters defined in Section ${eqSec.pageNumber || 1} ("${eqSec.title}"), apply formulation ${firstEq} to compute the equilibrium state and verify that boundary constraint "${condition}" is strictly satisfied.`;
-
-      givenParameters = [
-        `Extracted Formulation: ${firstEq}`,
-        `Governing Section: ${eqSec.title} (Page/Slide ${eqSec.pageNumber || 1})`,
-        `Boundary Condition: ${condition}`
-      ];
-
-      steps = [
-        `Step 1: Check Preconditions — [Why performed]: Confirm that system parameters satisfy the boundary invariant "${condition}" before performing algebraic transformations.`,
-        `Step 2: Apply Governing Formulation — [Why performed]: Substitute variables into ${firstEq} to establish the dependent variable response curve.`,
-        `Step 3: Algebraic Evaluation — [Why performed]: Compute intermediate expressions step by step to preserve full arithmetic transparency.`,
-        `Step 4: Bounds & Normalization Check — [Why performed]: Verify that computed output values fall within strictly bounded theoretical ranges.`,
-        `Step 5: Invariant Verification — [Why performed]: Confirm that all mathematical boundary conditions hold true with zero altered constants.`
-      ];
+      givenParameters.push('Evaluation Baseline: Nominal operational state with verified invariant constraints');
     }
+
+    const problemStatement = language === 'Kannada'
+      ? `"${eqSec.title}" ವಿಭಾಗದಲ್ಲಿ ವಿವರಿಸಲಾದ ನಿಯಮಗಳ ಪ್ರಕಾರ, ಸೂತ್ರ ${firstEq} ಅನ್ನು ವಿಶ್ಲೇಷಿಸಿ, ಮಧ್ಯಂತರ ಹಂತಗಳನ್ನು ಲೆಕ್ಕಹಾಕಿ ಮತ್ತು "${condition}" ಎಂಬ ಷರತ್ತು ಪಾಲನೆಯಾಗುವುದನ್ನು ಸಾಬೀತುಪಡಿಸಿ.`
+      : language === 'Hindi'
+      ? `"${eqSec.title}" के संदर्भ में, सूत्र ${firstEq} का अनुप्रयोग करके मध्यवर्ती चरणों का मूल्यांकन करें और सिद्ध करें कि सीमा शर्त "${condition}" पूर्णतः संतुष्ट होती है।`
+      : `Based on the principles extracted from Section "${eqSec.title}" (Page/Slide ${eqSec.pageNumber || 1}), evaluate the formulation ${firstEq}, calculate the intermediate state transformations, and rigorously prove that boundary condition "${condition}" is satisfied without unverified approximations.`;
+
+    const steps: string[] = [
+      `Step 1: Check Preconditions & Boundary Bounds — [Why performed]: Confirm that all system inputs satisfy the verified boundary condition "${condition}" to ensure calculations are physically and mathematically defined.`,
+      `Step 2: State Governing Formulation — [Why performed]: Sourced directly from Section "${eqSec.title}", equation ${firstEq} formally establishes how the independent variables map into the target state.`,
+      `Step 3: Parameter Mapping & Normalization — [Why performed]: Map input variables to verified quantities from the source text, ensuring scaling and normalization constants prevent divergence or extreme values.`,
+      `Step 4: Step-by-Step Analytical Evaluation — [Why performed]: Compute intermediate operations sequentially, maintaining algebraic transparency so every transformation can be independently audited.`,
+      `Step 5: Verify Governing Invariant — [Why performed]: Confirm that the resulting equilibrium output satisfies the governing invariant "${condition}" with zero altered constants or ungrounded statistics.`
+    ];
 
     const citation: SourceCitationRecord = {
       id: `cite-worked-${documentId}`,

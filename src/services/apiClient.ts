@@ -243,6 +243,8 @@ export class ApiClient {
     contextSnippet?: string;
     difficulty?: 'beginner' | 'intermediate' | 'advanced';
     language?: string;
+    pageNumber?: number;
+    sectionTitle?: string;
   }): Promise<any> {
     const data = await this.request<{ explanation: any }>('/learning/explain-this', {
       method: 'POST',
@@ -258,6 +260,7 @@ export class ApiClient {
     currentSectionTitle?: string;
     difficulty?: 'beginner' | 'intermediate' | 'advanced';
     language?: string;
+    pageNumber?: number;
   }): Promise<any> {
     const data = await this.request<{ response: any }>('/learning/ask-question', {
       method: 'POST',

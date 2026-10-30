@@ -24,7 +24,7 @@ interface OriginalDocumentViewProps {
   document: AcademicDocument;
   highlightedCitation?: SourceCitation | null;
   onClearHighlight?: () => void;
-  onExplainSelection?: (text: string, context?: string) => void;
+  onExplainSelection?: (text: string, context?: string, pageNumber?: number, sectionTitle?: string) => void;
 }
 
 export const OriginalDocumentView: React.FC<OriginalDocumentViewProps> = ({
@@ -37,6 +37,8 @@ export const OriginalDocumentView: React.FC<OriginalDocumentViewProps> = ({
   const activeHighlightRef = useRef<HTMLDivElement>(null);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [selectedText, setSelectedText] = useState<string>('');
+  const [selectedPageNumber, setSelectedPageNumber] = useState<number | undefined>(undefined);
+  const [selectedSectionTitle, setSelectedSectionTitle] = useState<string | undefined>(undefined);
   const [selectionPosition, setSelectionPosition] = useState<{ x: number; y: number } | null>(null);
 
   const handleMouseUp = () => {
@@ -49,6 +51,15 @@ export const OriginalDocumentView: React.FC<OriginalDocumentViewProps> = ({
         if (rect && rect.top > 0) {
           setSelectionPosition({ x: rect.left + rect.width / 2, y: rect.top - 8 });
           setSelectedText(text);
+
+          // Find enclosing section element to resolve page number and section title
+          const node = range?.commonAncestorContainer;
+          const el = node ? (node.nodeType === Node.ELEMENT_NODE ? (node as HTMLElement) : node.parentElement) : null;
+          const sectionEl = el?.closest('[data-section-page]');
+          const pageStr = sectionEl?.getAttribute('data-section-page');
+          const titleStr = sectionEl?.getAttribute('data-section-title');
+          setSelectedPageNumber(pageStr ? parseInt(pageStr, 10) : undefined);
+          setSelectedSectionTitle(titleStr || undefined);
           return;
         }
       } catch (e) {
@@ -78,7 +89,7 @@ export const OriginalDocumentView: React.FC<OriginalDocumentViewProps> = ({
       {selectionPosition && (
         <button
           onClick={() => {
-            if (onExplainSelection) onExplainSelection(selectedText);
+            if (onExplainSelection) onExplainSelection(selectedText, undefined, selectedPageNumber, selectedSectionTitle);
             setSelectionPosition(null);
           }}
           className="fixed z-50 px-3 py-1.5 rounded-full bg-brand-600 hover:bg-brand-700 text-white shadow-xl text-xs font-semibold flex items-center space-x-1.5 -translate-x-1/2 -translate-y-full transition-all cursor-pointer border border-white/20 active:scale-95"
@@ -263,6 +274,8 @@ export const OriginalDocumentView: React.FC<OriginalDocumentViewProps> = ({
           return (
             <div
               key={sec.id}
+              data-section-page={sec.pageNumber || sec.slideNumber || secIdx + 1}
+              data-section-title={sec.title}
               className={`space-y-4 p-5 rounded-3xl transition-all ${
                 isSectionTargeted
                   ? 'bg-amber-50/50 dark:bg-amber-950/20 border-2 border-amber-400 shadow-md'
