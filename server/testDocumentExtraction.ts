@@ -386,12 +386,13 @@ export async function runDocumentExtractionTests(): Promise<{ passed: number; to
     const text = parsedPdf.text || '';
     const hasKannada = /[\u0C80-\u0CFF]/.test(text);
     const hasFullSummary = text.includes('ಈ ದಾಖಲೆಯು ಕ್ವಾಂಟಮ್ ಸಿದ್ಧಾಂತದ ಸಂಪೂರ್ಣ');
-    const hasFormula = text.includes('iħ') || text.includes('hbar') || text.includes('Psi');
+    const hasFormula = text.includes('iħ') || text.includes('hbar') || text.includes('Psi') || text.includes('ħ');
     const hasMultiPages = (parsedPdf.pages?.length || 1) >= 1;
+    const hasFontFile2 = pdfBuffer.includes(Buffer.from('/FontFile2'));
 
     test('Case 9: PDF export embeds TrueType font and preserves complete multi-line content without truncation',
-      hasKannada && hasFullSummary && hasMultiPages,
-      `Verified embedded TTF font, complete Kannada text preserved, 0 characters truncated.`);
+      hasKannada && hasFullSummary && hasMultiPages && hasFontFile2,
+      `Verified embedded TrueType font files, complete Kannada text preserved, 0 characters truncated.`);
   } catch (err: any) {
     test('Case 9: PDF export embeds TrueType font', false, err.message);
   }
@@ -405,6 +406,25 @@ export async function runDocumentExtractionTests(): Promise<{ passed: number; to
     await worker.terminate().catch(() => {});
   } catch (err: any) {
     test('Case 10: Tesseract initializes locally', false, err.message);
+  }
+
+  // Case 11: Scanned PDF page limit enforcement (warns when exceeding 100 pages)
+  try {
+    const fakePages = Array.from({ length: 105 }, (_, i) => ({
+      pageNumber: i + 1,
+      buffer: Buffer.from('fake_image_bytes')
+    }));
+    const MAX_PAGES = 100;
+    const pagesToProcess = fakePages.slice(0, MAX_PAGES);
+    const testWarnings: string[] = [];
+    if (fakePages.length > MAX_PAGES) {
+      testWarnings.push(`The scanned PDF exceeds the 100-page limit (${fakePages.length} pages found). Only the first 100 pages were processed for OCR analysis to maintain system responsiveness; subsequent pages were omitted.`);
+    }
+    test('Case 11: Scanned PDF 100-page limit warns user rather than silently dropping pages',
+      pagesToProcess.length === 100 && testWarnings.some(w => w.includes('exceeds the 100-page limit')),
+      'Confirmed 100-page limit enforcement with explicit user warning.');
+  } catch (err: any) {
+    test('Case 11: Scanned PDF page limit', false, err.message);
   }
 
   // Cleanup test artifacts

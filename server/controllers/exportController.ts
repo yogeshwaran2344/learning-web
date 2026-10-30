@@ -501,31 +501,107 @@ Generated on: ${new Date().toLocaleDateString()}
 
     chunks.push(Buffer.from('%PDF-1.4\n'));
 
-    // UTF-16BE hex encoding for PDF text strings (supports Kannada, Devanagari, Greek, Math, Latin)
-    const toHexUtf16 = (str: string): string => {
-      const buf = Buffer.from(str || '', 'utf16le');
-      let hex = '';
-      for (let i = 0; i < buf.length; i += 2) {
-        hex += buf[i + 1].toString(16).padStart(2, '0') + buf[i].toString(16).padStart(2, '0');
+    // TrueType Format 4 CMAP Subtable Parser
+    // Maps character codes to exact TrueType Glyph IDs (GIDs) for reliable visual rendering
+    const parseCmapFormat4 = (fontBuf: Buffer): ((code: number) => number) => {
+      try {
+        const numTables = fontBuf.readUInt16BE(4);
+        let cmapOffset = 0;
+        for (let i = 0; i < numTables; i++) {
+          if (fontBuf.toString('utf8', 12 + i * 16, 16 + i * 16) === 'cmap') {
+            cmapOffset = fontBuf.readUInt32BE(12 + i * 16 + 8);
+            break;
+          }
+        }
+        if (!cmapOffset) return (code: number) => code;
+
+        const numSubtables = fontBuf.readUInt16BE(cmapOffset + 2);
+        let subOffset = 0;
+        for (let i = 0; i < numSubtables; i++) {
+          const off = cmapOffset + fontBuf.readUInt32BE(cmapOffset + 4 + i * 8 + 4);
+          if (fontBuf.readUInt16BE(off) === 4) {
+            subOffset = off;
+            break;
+          }
+        }
+        if (!subOffset) return (code: number) => code;
+
+        const segCount = fontBuf.readUInt16BE(subOffset + 6) / 2;
+        const endCodes: number[] = [];
+        for (let i = 0; i < segCount; i++) endCodes.push(fontBuf.readUInt16BE(subOffset + 14 + i * 2));
+        const startCodesOffset = subOffset + 16 + segCount * 2;
+        const startCodes: number[] = [];
+        for (let i = 0; i < segCount; i++) startCodes.push(fontBuf.readUInt16BE(startCodesOffset + i * 2));
+        const idDeltasOffset = startCodesOffset + segCount * 2;
+        const idDeltas: number[] = [];
+        for (let i = 0; i < segCount; i++) idDeltas.push(fontBuf.readInt16BE(idDeltasOffset + i * 2));
+        const idRangeOffsetsOffset = idDeltasOffset + segCount * 2;
+        const idRangeOffsets: number[] = [];
+        for (let i = 0; i < segCount; i++) idRangeOffsets.push(fontBuf.readUInt16BE(idRangeOffsetsOffset + i * 2));
+
+        return (charCode: number): number => {
+          for (let i = 0; i < segCount; i++) {
+            if (endCodes[i] >= charCode && startCodes[i] <= charCode) {
+              if (idRangeOffsets[i] === 0) {
+                return (charCode + idDeltas[i]) & 0xFFFF;
+              } else {
+                const roOffset = idRangeOffsetsOffset + i * 2;
+                const glyphOffset = roOffset + idRangeOffsets[i] + (charCode - startCodes[i]) * 2;
+                const gid = fontBuf.readUInt16BE(glyphOffset);
+                return gid !== 0 ? ((gid + idDeltas[i]) & 0xFFFF) : 0;
+              }
+            }
+          }
+          return 0;
+        };
+      } catch (err) {
+        return (code: number) => code;
       }
-      return hex;
     };
 
-    // Helper: Wrap text into lines of maxLen characters without truncating
-    const wrapText = (text: string, maxLen = 70): string[] => {
-      if (!text) return [];
-      const words = text.split(/\s+/).filter(Boolean);
+    // ToUnicode CMap Generator: Maps each embedded TrueType GID back to Unicode UCS-2
+    const buildToUnicodeCMap = (usedMap: Map<number, number>): string => {
       const lines: string[] = [];
-      let cur = '';
-      for (const w of words) {
-        if ((cur + ' ' + w).trim().length > maxLen && cur.length > 0) {
-          lines.push(cur.trim());
-          cur = w;
-        } else {
-          cur = cur ? `${cur} ${w}` : w;
-        }
+      for (const [gid, code] of usedMap.entries()) {
+        lines.push(`<${gid.toString(16).padStart(4, '0')}> <${code.toString(16).padStart(4, '0')}>`);
       }
-      if (cur.trim()) lines.push(cur.trim());
+      let bfBlocks = '';
+      for (let i = 0; i < lines.length; i += 100) {
+        const chunk = lines.slice(i, i + 100);
+        bfBlocks += `${chunk.length} beginbfchar\n${chunk.join('\n')}\nendbfchar\n`;
+      }
+      return `/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n/CMapName /Custom-ToUnicode def\n/CMapType 2 def\n1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n${bfBlocks}endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend`;
+    };
+
+    // Text wrapping without truncation: wraps on whitespace and wraps oversized words
+    const wrapText = (text: string, maxLen = 72): string[] => {
+      if (!text) return [];
+      const lines: string[] = [];
+      const rawParagraphs = text.split(/\r?\n/);
+      for (const para of rawParagraphs) {
+        if (!para.trim()) continue;
+        const words = para.trim().split(/\s+/).filter(Boolean);
+        let cur = '';
+        for (const w of words) {
+          if (w.length > maxLen) {
+            if (cur.length > 0) {
+              lines.push(cur);
+              cur = '';
+            }
+            for (let i = 0; i < w.length; i += maxLen) {
+              lines.push(w.slice(i, i + maxLen));
+            }
+            continue;
+          }
+          if ((cur + ' ' + w).trim().length > maxLen && cur.length > 0) {
+            lines.push(cur.trim());
+            cur = w;
+          } else {
+            cur = cur ? `${cur} ${w}` : w;
+          }
+        }
+        if (cur.trim()) lines.push(cur.trim());
+      }
       return lines;
     };
 
@@ -533,29 +609,68 @@ Generated on: ${new Date().toLocaleDateString()}
       ? sections
       : [{ pageNumber: 1, title: doc.title, content: doc.summary || 'Academic Notes Content', equations: [] }];
 
-    // Choose TrueType font binary based on language or character content
+    // Choose TrueType font binaries
     const fontDir = path.resolve(process.cwd(), 'server', 'assets', 'fonts');
-    let fontFileName = 'NotoSans-Regular.ttf';
-    if (language === 'kannada' || secList.some(s => /[\u0C80-\u0CFF]/.test(s.content + s.title))) {
-      fontFileName = 'NotoSansKannada-Regular.ttf';
-    } else if (language === 'hindi' || secList.some(s => /[\u0900-\u097F]/.test(s.content + s.title))) {
-      fontFileName = 'NotoSansDevanagari-Regular.ttf';
-    }
+    const fontLatinPath = path.join(fontDir, 'NotoSans-Regular.ttf');
+    const fontLatinBuf = fs.existsSync(fontLatinPath)
+      ? fs.readFileSync(fontLatinPath)
+      : Buffer.alloc(100);
 
-    let fontBuffer: Buffer;
-    const fontPath = path.join(fontDir, fontFileName);
-    if (fs.existsSync(fontPath)) {
-      fontBuffer = fs.readFileSync(fontPath);
-    } else {
-      fontBuffer = fs.readFileSync(path.join(fontDir, 'NotoSans-Regular.ttf'));
+    let fontIndicFileName = 'NotoSansKannada-Regular.ttf';
+    if (language === 'hindi' || secList.some(s => /[\u0900-\u097F]/.test(s.content + s.title))) {
+      fontIndicFileName = 'NotoSansDevanagari-Regular.ttf';
     }
+    const fontIndicPath = path.join(fontDir, fontIndicFileName);
+    const fontIndicBuf = fs.existsSync(fontIndicPath)
+      ? fs.readFileSync(fontIndicPath)
+      : fontLatinBuf;
 
-    // Dynamic Multi-page Flow Layout:
-    // Flow complete title, summary, sections, paragraphs, and formulas across pages
+    const lookupLatin = parseCmapFormat4(fontLatinBuf);
+    const lookupIndic = parseCmapFormat4(fontIndicBuf);
+
+    const usedF1 = new Map<number, number>();
+    const usedF2 = new Map<number, number>();
+
+    // Encode text line into font-switched PDF text operators using real TrueType GIDs
+    const encodeLine = (text: string, fontSize: number): string => {
+      let res = '';
+      let curFont = '';
+      let curHex = '';
+
+      const flush = () => {
+        if (curHex && curFont) {
+          res += `${curFont} ${fontSize} Tf <${curHex}> Tj `;
+          curHex = '';
+        }
+      };
+
+      for (const ch of text) {
+        const code = ch.charCodeAt(0);
+        const isIndic = /[\u0C80-\u0CFF\u0900-\u097F]/.test(ch);
+        const font = isIndic ? '/F2' : '/F1';
+        const gid = isIndic ? lookupIndic(code) : lookupLatin(code);
+
+        if (isIndic) {
+          usedF2.set(gid, code);
+        } else {
+          usedF1.set(gid, code);
+        }
+
+        const gidHex = (gid || 0).toString(16).padStart(4, '0');
+        if (font !== curFont) {
+          flush();
+          curFont = font;
+        }
+        curHex += gidHex;
+      }
+      flush();
+      return res.trim();
+    };
+
+    // Dynamic Multi-page Flow Layout
     interface LayoutLine {
       text: string;
       fontSize: number;
-      fontKey: string;
       yDelta: number;
     }
 
@@ -573,38 +688,36 @@ Generated on: ${new Date().toLocaleDateString()}
       curY -= item.yDelta;
     };
 
-    // 1. Title & Metadata
-    wrapText(doc.title, 55).forEach((tLine, idx) => {
+    // 1. Title & Academic Metadata
+    wrapText(doc.title, 50).forEach((tLine, idx) => {
       pushLine({
         text: tLine,
         fontSize: 16,
-        fontKey: '/F1',
         yDelta: idx === 0 ? 24 : 18
       });
     });
 
-    const metaStr = `Author: ${doc.author || 'Academic Faculty'} | Subject: ${doc.category || 'General'}`;
-    pushLine({
-      text: metaStr,
-      fontSize: 9,
-      fontKey: '/F2',
-      yDelta: 16
+    const metaStr = `Author: ${doc.author || 'Academic Faculty'} | Subject: ${doc.category || 'General'} | File: ${doc.originalFileName || 'Document'}`;
+    wrapText(metaStr, 75).forEach(mLine => {
+      pushLine({
+        text: mLine,
+        fontSize: 9,
+        yDelta: 14
+      });
     });
 
     const fidelityStr = verification?.overallFidelityScore ? `${verification.overallFidelityScore}% Grounded` : 'Not verified';
     pushLine({
-      text: `Verification Fidelity: ${fidelityStr}`,
+      text: `Meaning Preservation Audit: ${fidelityStr}`,
       fontSize: 9,
-      fontKey: '/F2',
-      yDelta: 20
+      yDelta: 18
     });
 
-    // 2. Executive Summary (Complete content without truncation)
+    // 2. Executive Summary (Complete content without any character truncation)
     if (doc.summary) {
       pushLine({
         text: 'Executive Summary',
         fontSize: 12,
-        fontKey: '/F1',
         yDelta: 18
       });
       const summaryLines = wrapText(doc.summary, 72);
@@ -612,52 +725,88 @@ Generated on: ${new Date().toLocaleDateString()}
         pushLine({
           text: sLine,
           fontSize: 9,
-          fontKey: '/F2',
           yDelta: 13
         });
       });
       curY -= 10;
     }
 
-    // 3. Sections & Complete Content
+    // 3. Sections (Complete content without truncation)
     secList.forEach((sec, sIdx) => {
+      const loc = sec.slideNumber ? `Slide ${sec.slideNumber}` : `Page ${sec.pageNumber || (sIdx + 1)}`;
       pushLine({
-        text: `Section ${sec.pageNumber || (sIdx + 1)}: ${sec.title}`,
+        text: `${sIdx + 1}. ${sec.title} (${loc})`,
         fontSize: 12,
-        fontKey: '/F1',
         yDelta: 20
       });
 
-      const paragraphs = (sec.content || '').split(/\n+/).filter(Boolean);
-      paragraphs.forEach(para => {
-        const lines = wrapText(para, 72);
-        lines.forEach(line => {
-          pushLine({
-            text: line,
-            fontSize: 9,
-            fontKey: '/F2',
-            yDelta: 13
-          });
+      const bodyLines = wrapText(sec.content || '', 72);
+      bodyLines.forEach(bLine => {
+        pushLine({
+          text: bLine,
+          fontSize: 9,
+          yDelta: 13
         });
-        curY -= 6;
       });
 
+      if (sec.definitions && sec.definitions.length > 0) {
+        pushLine({ text: 'Key Definitions:', fontSize: 10, yDelta: 15 });
+        sec.definitions.forEach((d: any) => {
+          const defLines = wrapText(`• ${d.term}: ${d.definition}${d.conditions ? ` (Condition: ${d.conditions})` : ''}`, 70);
+          defLines.forEach(dl => pushLine({ text: dl, fontSize: 8.5, yDelta: 12 }));
+        });
+      }
+
       if (sec.equations && sec.equations.length > 0) {
+        pushLine({ text: 'Mathematical Equations:', fontSize: 10, yDelta: 15 });
         sec.equations.forEach((eq: any) => {
           const eqLines = wrapText(`Formula: ${eq.latex}`, 65);
           eqLines.forEach(eqLine => {
             pushLine({
               text: eqLine,
               fontSize: 9,
-              fontKey: '/F2',
-              yDelta: 14
+              yDelta: 13
             });
           });
+          if (eq.meaning || eq.label) {
+            pushLine({
+              text: `  [${eq.label || 'Eq'}]: ${eq.meaning || ''}`,
+              fontSize: 8,
+              yDelta: 11
+            });
+          }
+        });
+      }
+
+      if (sec.examples && sec.examples.length > 0) {
+        pushLine({ text: 'Worked Examples:', fontSize: 10, yDelta: 15 });
+        sec.examples.forEach((ex: any) => {
+          const exLines = wrapText(`Example: ${ex}`, 70);
+          exLines.forEach(el => pushLine({ text: el, fontSize: 8.5, yDelta: 12 }));
         });
       }
 
       curY -= 8;
     });
+
+    // 4. Grounding & Fact Checks (if present)
+    if (verification && verification.factChecks && verification.factChecks.length > 0) {
+      pushLine({
+        text: 'Grounding Verification & Traceability',
+        fontSize: 12,
+        yDelta: 20
+      });
+      verification.factChecks.forEach((fc: any) => {
+        const fcLines = wrapText(`[${fc.status.toUpperCase()}] ${fc.originalFact} (Page ${fc.pageNumber}) - ${fc.notes || ''}`, 72);
+        fcLines.forEach(fcl => {
+          pushLine({
+            text: fcl,
+            fontSize: 8,
+            yDelta: 11
+          });
+        });
+      });
+    }
 
     if (curPageLines.length > 0) {
       pages.push(curPageLines);
@@ -665,26 +814,29 @@ Generated on: ${new Date().toLocaleDateString()}
     const pageCount = Math.max(1, pages.length);
 
     // Font object references:
-    // Page objects: 3 .. (2 + pageCount)
+    // Pages: 3 .. (2 + pageCount)
     // Content streams: (3 + pageCount) .. (2 + 2 * pageCount)
-    // Font F1 (Type0): 3 + 2 * pageCount
+    // Font F1 (Type0 Latin): 3 + 2 * pageCount
     // CIDFont F1: 4 + 2 * pageCount
     // ToUnicode F1: 5 + 2 * pageCount
     // FontDescriptor F1: 6 + 2 * pageCount
-    // FontFile2 Stream (embedded TTF binary): 7 + 2 * pageCount
-    // Font F2 (Type0): 8 + 2 * pageCount
+    // FontFile2 Stream F1 (NotoSans-Regular.ttf): 7 + 2 * pageCount
+    // Font F2 (Type0 Indic): 8 + 2 * pageCount
     // CIDFont F2: 9 + 2 * pageCount
     // ToUnicode F2: 10 + 2 * pageCount
     // FontDescriptor F2: 11 + 2 * pageCount
+    // FontFile2 Stream F2 (NotoSansIndic.ttf): 12 + 2 * pageCount
     const fontF1Id = 3 + 2 * pageCount;
     const fontF1CidId = fontF1Id + 1;
     const fontF1CmapId = fontF1Id + 2;
     const fontF1DescId = fontF1Id + 3;
-    const fontFile2Id = fontF1Id + 4;
+    const fontFile2F1Id = fontF1Id + 4;
+
     const fontF2Id = fontF1Id + 5;
     const fontF2CidId = fontF1Id + 6;
     const fontF2CmapId = fontF1Id + 7;
     const fontF2DescId = fontF1Id + 8;
+    const fontFile2F2Id = fontF1Id + 9;
 
     // 1. Catalog
     addObj('<< /Type /Catalog /Pages 2 0 R >>');
@@ -700,16 +852,19 @@ Generated on: ${new Date().toLocaleDateString()}
       let streamText = '';
 
       // Header on every page
-      streamText += `BT\n/F1 9 Tf 50 810 Td <${toHexUtf16(`LearnLens AI Academic Document - Page ${p + 1} of ${pageCount}`)}> Tj\nET\n`;
+      const headerOps = encodeLine(`LearnLens AI Academic Document - Page ${p + 1} of ${pageCount}`, 9);
+      streamText += `BT\n50 810 Td\n${headerOps}\nET\n`;
 
       let lastY = 810;
       for (const item of pageLines) {
         lastY -= item.yDelta;
-        streamText += `BT\n${item.fontKey} ${item.fontSize} Tf 50 ${lastY} Td <${toHexUtf16(item.text)}> Tj\nET\n`;
+        const lineOps = encodeLine(item.text, item.fontSize);
+        streamText += `BT\n50 ${lastY} Td\n${lineOps}\nET\n`;
       }
 
       // Page footer
-      streamText += `BT\n/F2 8 Tf 50 40 Td <${toHexUtf16(`LearnLens Grounded Verification Engine | Page ${p + 1} of ${pageCount} | All Content Fully Preserved`)}> Tj\nET\n`;
+      const footerOps = encodeLine(`LearnLens Grounded Verification Engine | Page ${p + 1} of ${pageCount} | All Content Fully Preserved`, 8);
+      streamText += `BT\n50 40 Td\n${footerOps}\nET\n`;
       contentStreams.push(streamText);
     }
 
@@ -725,24 +880,21 @@ Generated on: ${new Date().toLocaleDateString()}
       addObj(`<< /Length ${Buffer.byteLength(text)} >>\nstream\n${text}\nendstream`);
     }
 
-    // 5. Embedded TrueType Fonts:
-    // ToUnicode CMap mapping identity CIDs to standard Unicode UCS codepoints
-    const toUnicodeCMap = `/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n/CMapName /Custom-ToUnicode def\n/CMapType 2 def\n1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n1 beginbfrange\n<0000> <FFFF> <0000>\nendbfrange\nendcmap\nCMapName currentdict /CMap defineresource pop\nend\nend`;
-
-    // Font F1 (Type0 Bold)
+    // 5. Embedded TrueType Font F1 (NotoSans Latin / Math / ASCII)
+    const cMapF1Buf = Buffer.from(buildToUnicodeCMap(usedF1));
     addObj(`<< /Type /Font /Subtype /Type0 /BaseFont /NotoSans /Encoding /Identity-H /DescendantFonts [${fontF1CidId} 0 R] /ToUnicode ${fontF1CmapId} 0 R >>`);
-    addObj(`<< /Type /Font /Subtype /CIDFontType2 /BaseFont /NotoSans /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /FontDescriptor ${fontF1DescId} 0 R /W [0 [1000]] >>`);
-    addObj(`<< /Length ${toUnicodeCMap.length} >>\nstream\n${toUnicodeCMap}\nendstream`);
-    addObj(`<< /Type /FontDescriptor /FontName /NotoSans /Flags 4 /FontBBox [-1000 -500 2000 1500] /ItalicAngle 0 /Ascent 1000 /Descent -200 /CapHeight 800 /StemV 120 /FontFile2 ${fontFile2Id} 0 R >>`);
+    addObj(`<< /Type /Font /Subtype /CIDFontType2 /BaseFont /NotoSans /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /FontDescriptor ${fontF1DescId} 0 R /CIDToGIDMap /Identity /DW 600 >>`);
+    addObj(`<< /Length ${cMapF1Buf.length} >>\nstream\n${cMapF1Buf.toString('binary')}\nendstream`);
+    addObj(`<< /Type /FontDescriptor /FontName /NotoSans /Flags 4 /FontBBox [-1000 -500 2000 1500] /ItalicAngle 0 /Ascent 1000 /Descent -200 /CapHeight 800 /StemV 80 /FontFile2 ${fontFile2F1Id} 0 R >>`);
+    addObj(`<< /Length ${fontLatinBuf.length} /Length1 ${fontLatinBuf.length} >>`, fontLatinBuf);
 
-    // Embedded FontFile2 Stream (Actual TrueType binary data!)
-    addObj(`<< /Length ${fontBuffer.length} /Length1 ${fontBuffer.length} >>`, fontBuffer);
-
-    // Font F2 (Type0 Regular)
-    addObj(`<< /Type /Font /Subtype /Type0 /BaseFont /NotoSans /Encoding /Identity-H /DescendantFonts [${fontF2CidId} 0 R] /ToUnicode ${fontF2CmapId} 0 R >>`);
-    addObj(`<< /Type /Font /Subtype /CIDFontType2 /BaseFont /NotoSans /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /FontDescriptor ${fontF2DescId} 0 R /W [0 [1000]] >>`);
-    addObj(`<< /Length ${toUnicodeCMap.length} >>\nstream\n${toUnicodeCMap}\nendstream`);
-    addObj(`<< /Type /FontDescriptor /FontName /NotoSans /Flags 4 /FontBBox [-1000 -500 2000 1500] /ItalicAngle 0 /Ascent 1000 /Descent -200 /CapHeight 800 /StemV 80 /FontFile2 ${fontFile2Id} 0 R >>`);
+    // 6. Embedded TrueType Font F2 (NotoSans Indic / Kannada / Devanagari)
+    const cMapF2Buf = Buffer.from(buildToUnicodeCMap(usedF2));
+    addObj(`<< /Type /Font /Subtype /Type0 /BaseFont /NotoSansIndic /Encoding /Identity-H /DescendantFonts [${fontF2CidId} 0 R] /ToUnicode ${fontF2CmapId} 0 R >>`);
+    addObj(`<< /Type /Font /Subtype /CIDFontType2 /BaseFont /NotoSansIndic /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /FontDescriptor ${fontF2DescId} 0 R /CIDToGIDMap /Identity /DW 600 >>`);
+    addObj(`<< /Length ${cMapF2Buf.length} >>\nstream\n${cMapF2Buf.toString('binary')}\nendstream`);
+    addObj(`<< /Type /FontDescriptor /FontName /NotoSansIndic /Flags 4 /FontBBox [-1000 -500 2000 1500] /ItalicAngle 0 /Ascent 1000 /Descent -200 /CapHeight 800 /StemV 80 /FontFile2 ${fontFile2F2Id} 0 R >>`);
+    addObj(`<< /Length ${fontIndicBuf.length} /Length1 ${fontIndicBuf.length} >>`, fontIndicBuf);
 
     // XRef & Trailer
     const startXref = chunks.reduce((acc, c) => acc + c.length, 0);

@@ -363,36 +363,39 @@ export async function runSecurityTestSuite(): Promise<{ passed: number; total: n
 
   // Test 14: Strict Production Security Configuration Halts Startup
   let prodMissingJwtHalted = false;
+  const { validateProductionConfig, config } = await import('./config/environment');
+  const prevEnv14a = config.env;
+  const prevSecret14a = config.jwtSecret;
   try {
-    const { validateProductionConfig, config } = await import('./config/environment');
-    const prevEnv = config.env;
-    const prevSecret = config.jwtSecret;
     (config as any).env = 'production';
     (config as any).jwtSecret = '';
     validateProductionConfig();
-    (config as any).env = prevEnv;
-    (config as any).jwtSecret = prevSecret;
   } catch (err: any) {
     prodMissingJwtHalted = err.message.includes('FATAL CONFIGURATION ERROR: Production requires a secure, high-entropy JWT_SECRET');
+  } finally {
+    (config as any).env = prevEnv14a;
+    (config as any).jwtSecret = prevSecret14a;
   }
   test('Test 14a: Missing/weak JWT_SECRET in production strictly halts server startup', prodMissingJwtHalted);
 
   let prodWildcardCorsHalted = false;
+  const prevEnv14b = config.env;
+  const prevOrigins14b = config.corsOrigins;
+  const prevSecret14b = config.jwtSecret;
+  const prevFacultyKey14b = config.facultyInviteKey;
   try {
-    const { validateProductionConfig, config } = await import('./config/environment');
-    const prevEnv = config.env;
-    const prevOrigins = config.corsOrigins;
-    const prevSecret = config.jwtSecret;
     (config as any).env = 'production';
     (config as any).jwtSecret = 'a_very_long_valid_32_character_jwt_secret_here';
     (config as any).facultyInviteKey = 'replace_with_strong_random_faculty_secret_min_32_chars';
     (config as any).corsOrigins = '*';
     validateProductionConfig();
-    (config as any).env = prevEnv;
-    (config as any).corsOrigins = prevOrigins;
-    (config as any).jwtSecret = prevSecret;
   } catch (err: any) {
     prodWildcardCorsHalted = err.message.includes('CORS_ORIGIN');
+  } finally {
+    (config as any).env = prevEnv14b;
+    (config as any).corsOrigins = prevOrigins14b;
+    (config as any).jwtSecret = prevSecret14b;
+    (config as any).facultyInviteKey = prevFacultyKey14b;
   }
   test('Test 14b: Unrestricted wildcard CORS in production strictly halts server startup', prodWildcardCorsHalted);
 

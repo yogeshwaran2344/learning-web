@@ -456,8 +456,12 @@ export class RealExtractor {
     let confidenceCount = 0;
     let isMultilingual = false;
 
-    // Process every rendered page preserving exact page numbers without artificial page caps
-    const pagesToProcess = renderedPages;
+    // Process at most 100 pages to maintain system responsiveness; warn user if document exceeds limit
+    const MAX_SCANNED_PAGES = 100;
+    const pagesToProcess = renderedPages.slice(0, MAX_SCANNED_PAGES);
+    if (renderedPages.length > MAX_SCANNED_PAGES) {
+      warnings.push(`The scanned PDF exceeds the 100-page limit (${renderedPages.length} pages found). Only the first 100 pages were processed for OCR analysis to maintain system responsiveness; subsequent pages were omitted.`);
+    }
     const tempDir = path.resolve(process.cwd(), 'server', 'uploads');
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
