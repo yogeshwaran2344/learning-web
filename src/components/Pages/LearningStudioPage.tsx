@@ -458,26 +458,15 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
               <span className="text-base sm:text-lg font-black text-slate-900 dark:text-white truncate max-w-xl">
                 {document.title}
               </span>
-              {document.meaningPreservation && document.meaningPreservation.overallFidelityScore > 0 ? (
-                <button
-                  onClick={() => setIsAuditModalOpen(true)}
-                  className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1.5 hover:bg-emerald-200 dark:hover:bg-emerald-900 transition-colors cursor-pointer shadow-2xs"
-                  title="Click to view Meaning Preservation Audit & Section Breakdown"
-                >
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>{document.meaningPreservation.overallFidelityScore}% Verified</span>
-                  <span className="text-[9px] opacity-75 underline">Audit Report</span>
-                </button>
-              ) : (
-                <button
-                  onClick={() => setIsAuditModalOpen(true)}
-                  className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-300 dark:border-slate-700 flex items-center gap-1 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
-                  title="Click to check verification status"
-                >
-                  <span>Not Verified</span>
-                  <span className="text-[9px] opacity-75 underline">Details</span>
-                </button>
-              )}
+              <button
+                onClick={() => setIsAuditModalOpen(true)}
+                className="px-3 py-1 rounded-full text-[10px] font-bold uppercase bg-blue-50 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300 border border-blue-200 dark:border-blue-800 flex items-center gap-1.5 hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors cursor-pointer shadow-2xs"
+                title="Click to view Content Verification Report"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+                <span>Content Verification Report</span>
+                <span className="text-[9px] opacity-75 underline font-normal">Audit</span>
+              </button>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">
               {document.author} • {document.category} • {document.pageCount} Pages • Zero Altered Equations
