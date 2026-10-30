@@ -86,11 +86,35 @@ export class FeedbackController {
 
   static update(req: AuthenticatedRequest, res: Response) {
     try {
+      const userId = req.user?.id;
+      const role = req.user?.role;
+      if (!userId) {
+        return res.status(401).json({ error: 'Authentication credentials required.' });
+      }
+
       const { id } = req.params;
       const { status, resolutionNotes } = req.body;
 
       if (!status || !['pending', 'reviewed', 'resolved'].includes(status)) {
         return res.status(400).json({ error: 'Valid status (pending, reviewed, resolved) is required.' });
+      }
+
+      const report = Database.getFeedbackReportById(id);
+      if (!report) {
+        return res.status(404).json({ error: 'Feedback report not found.' });
+      }
+
+      // Security Authorization: Confirm lecturer actually manages or owns the associated document
+      if (role !== 'admin') {
+        const doc = Database.getDocumentById(report.documentId);
+        const isOwner = doc && doc.ownerId === userId;
+        const isCourseLecturer = Database.isDocumentInLecturerCourses(report.documentId, userId);
+
+        if (!isOwner && !isCourseLecturer) {
+          return res.status(403).json({
+            error: 'Access denied: You can only review and resolve feedback for documents you own or manage in your assigned courses.'
+          });
+        }
       }
 
       const success = Database.updateFeedbackReportStatus(

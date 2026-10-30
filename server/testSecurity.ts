@@ -20,6 +20,7 @@ process.env.LECTURER_INVITE_KEY = process.env.LECTURER_INVITE_KEY || 'FACULTY_VE
 
 import http from 'http';
 import express from 'express';
+import crypto from 'crypto';
 import { Database } from './db/database';
 import { AuthService } from './services/authService';
 import { apiRouter } from './routes/apiRoutes';
@@ -234,17 +235,82 @@ export async function runSecurityTestSuite(): Promise<{ passed: number; total: n
   apiRouter(reqAiStudent, resAiStudent as any, () => {});
   test('Test 8d: Student posting to /system/ai-config -> HTTP 403 Forbidden', resAiStudent.statusCode === 403);
 
-  // 8e. Lecturer posting to /system/ai-config -> HTTP 200 OK
+  // 8e. Lecturer posting to /system/ai-config -> HTTP 403 Forbidden (requires Admin role)
   const reqAiLecturer: any = { method: 'POST', url: '/system/ai-config', headers: { authorization: `Bearer ${carolReg.token}` }, body: { provider: 'gemini', apiKey: 'test_key' } };
   const resAiLecturer = createMockResponse();
   apiRouter(reqAiLecturer, resAiLecturer as any, () => {});
-  test('Test 8e: Lecturer posting to /system/ai-config -> HTTP 200 OK', resAiLecturer.statusCode === 200);
+  test('Test 8e: Lecturer posting to /system/ai-config -> HTTP 403 Forbidden (Admin only)', resAiLecturer.statusCode === 403);
 
-  // 8f. Session persistence across operations
+  // 8f. Admin posting to /system/ai-config -> HTTP 200 OK
+  const adminId = `admin-${ts}`;
+  const adminUser: UserRecord = {
+    id: adminId,
+    name: 'System Admin',
+    email: `admin.${ts}@learnlens.ai`,
+    passwordHash: AuthService.hashPassword('AdminPass123!'),
+    role: 'admin',
+    createdAt: new Date().toISOString()
+  };
+  Database.createUser(adminUser);
+  const adminToken = AuthService.createSession(adminId);
+  const reqAiAdmin: any = { method: 'POST', url: '/system/ai-config', headers: { authorization: `Bearer ${adminToken}` }, body: { provider: 'gemini', apiKey: 'admin_key' } };
+  const resAiAdmin = createMockResponse();
+  apiRouter(reqAiAdmin, resAiAdmin as any, () => {});
+  test('Test 8f: Admin posting to /system/ai-config -> HTTP 200 OK', resAiAdmin.statusCode === 200);
+
+  // 8g. Session persistence across operations
   const reqMe: any = { method: 'GET', url: '/auth/me', headers: { authorization: `Bearer ${aliceReg.token}` }, query: {} };
   const resMe = createMockResponse();
   apiRouter(reqMe, resMe as any, () => {});
-  test('Test 8f: Persistent session verified via /auth/me', resMe.statusCode === 200 && resMe.body?.user?.email === aliceEmail && !resMe.body?.user?.passwordHash);
+  test('Test 8g: Persistent session verified via /auth/me', resMe.statusCode === 200 && resMe.body?.user?.email === aliceEmail && !resMe.body?.user?.passwordHash);
+
+  // Test 9: Legacy SHA-256 password hash is transparently upgraded to scrypt upon login
+  const legacyPass = 'LegacyPass123!';
+  const legacyHash = `sha256:${crypto.createHash('sha256').update(legacyPass).digest('hex')}`;
+  const legacyUserId = `legacy-user-${ts}`;
+  Database.createUser({
+    id: legacyUserId,
+    name: 'Legacy User',
+    email: `legacy.${ts}@stanford.edu`,
+    passwordHash: legacyHash,
+    role: 'student',
+    createdAt: new Date().toISOString()
+  });
+  const loginBeforeUpgrade = AuthService.login(`legacy.${ts}@stanford.edu`, legacyPass);
+  const upgradedUserRecord = Database.findUserById(legacyUserId);
+  test('Test 9: Legacy SHA-256 hash transparently upgraded to scrypt upon successful login',
+    loginBeforeUpgrade.user.id === legacyUserId &&
+    !!upgradedUserRecord?.passwordHash.startsWith('scrypt:'));
+
+  // Test 10: Clear-all documents requires explicit confirmation token
+  const reqClearNoConfirm: any = { method: 'POST', url: '/documents/clear-all', headers: { authorization: `Bearer ${aliceReg.token}` }, body: {} };
+  const resClearNoConfirm = createMockResponse();
+  apiRouter(reqClearNoConfirm, resClearNoConfirm as any, () => {});
+  test('Test 10a: Clear-all without confirmation token rejected -> HTTP 400', resClearNoConfirm.statusCode === 400);
+
+  // Test 11: Lecturer Dave cannot update feedback on Lecturer Carol unassigned document -> HTTP 403
+  const fbCarolId = `fb-carol-${ts}`;
+  Database.createFeedbackReport({
+    id: fbCarolId,
+    documentId: docCarolId,
+    userId: carolReg.user.id,
+    userName: 'Carol Lecturer',
+    formatType: 'summary',
+    itemIdentifier: 'sec-1',
+    reason: 'missing_concept',
+    userComment: 'Carol feedback item',
+    reportedAt: new Date().toISOString()
+  });
+  const reqDaveUpdateFb: any = {
+    method: 'PATCH',
+    url: `/feedback/${fbCarolId}`,
+    headers: { authorization: `Bearer ${daveReg.token}` },
+    params: { id: fbCarolId },
+    body: { status: 'reviewed' }
+  };
+  const resDaveUpdateFb = createMockResponse();
+  apiRouter(reqDaveUpdateFb, resDaveUpdateFb as any, () => {});
+  test('Test 11: Lecturer cannot update feedback for unassigned course documents -> HTTP 403', resDaveUpdateFb.statusCode === 403);
 
   // Clean up test documents and users
   Database.deleteDocument(docAliceId);
@@ -253,6 +319,8 @@ export async function runSecurityTestSuite(): Promise<{ passed: number; total: n
   Database.deleteUser(bobReg.user.id);
   Database.deleteUser(carolReg.user.id);
   Database.deleteUser(daveReg.user.id);
+  Database.deleteUser(adminId);
+  Database.deleteUser(legacyUserId);
 
   return { passed, total, details };
 }

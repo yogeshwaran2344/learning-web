@@ -86,23 +86,30 @@ STRICT ACADEMIC FIDELITY RULES:
     }
 
     try {
+      let result: GeneratedFormatResult | null = null;
       if (formatType === 'notes') {
-        return await this.generateStructuredNotes(documentId, docTitle, sections, language, difficulty);
+        result = await this.generateStructuredNotes(documentId, docTitle, sections, language, difficulty);
       } else if (formatType === 'flashcards') {
-        return await this.generateStructuredFlashcards(documentId, docTitle, sections, language, difficulty);
+        result = await this.generateStructuredFlashcards(documentId, docTitle, sections, language, difficulty);
       } else if (formatType === 'map') {
-        return await this.generateStructuredConceptMap(documentId, docTitle, sections, language, difficulty);
+        result = await this.generateStructuredConceptMap(documentId, docTitle, sections, language, difficulty);
       } else if (formatType === 'simplified') {
-        return await this.generateStructuredSimplified(documentId, docTitle, sections, language, difficulty);
+        result = await this.generateStructuredSimplified(documentId, docTitle, sections, language, difficulty);
       } else if (formatType === 'worked') {
-        return await this.generateStructuredWorked(documentId, docTitle, sections, language, difficulty);
+        result = await this.generateStructuredWorked(documentId, docTitle, sections, language, difficulty);
       } else if (formatType === 'audio') {
-        return await this.generateStructuredAudio(documentId, docTitle, sections, language, difficulty);
+        result = await this.generateStructuredAudio(documentId, docTitle, sections, language, difficulty);
       } else if (formatType === 'quiz') {
-        return await this.generateStructuredQuiz(documentId, docTitle, sections, language, difficulty);
-      } else {
-        return null;
+        result = await this.generateStructuredQuiz(documentId, docTitle, sections, language, difficulty);
       }
+
+      if (result) {
+        result.generationSource = this.geminiApiKey ? 'gemini' : 'openai';
+        result.modelName = this.geminiApiKey ? 'Gemini 1.5 Flash' : 'GPT-4o mini';
+        result.isAiFallback = false;
+        return result;
+      }
+      return null;
     } catch (err: any) {
       console.warn(`[AiModelService] External AI generation failed: ${err.message}. Falling back to deterministic generator.`);
       return null;

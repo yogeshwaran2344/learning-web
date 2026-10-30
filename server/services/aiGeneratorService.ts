@@ -12,6 +12,9 @@ export interface GeneratedFormatResult {
   language: AppLanguage;
   difficultyLevel: DifficultyLevel;
   content: any;
+  generationSource?: 'gemini' | 'openai' | 'deterministic_fallback';
+  modelName?: string;
+  isAiFallback?: boolean;
   hasBeyondNotesAnnotation?: boolean;
   additionalContextSummary?: string;
   sourceCitations: SourceCitationRecord[];
@@ -55,24 +58,38 @@ export class AiGeneratorService {
     language: AppLanguage = 'English',
     difficulty: DifficultyLevel = 'intermediate'
   ): GeneratedFormatResult {
+    let result: GeneratedFormatResult;
     switch (formatType) {
       case 'map':
-        return this.generateConceptMap(documentId, docTitle, sections, language, difficulty);
+        result = this.generateConceptMap(documentId, docTitle, sections, language, difficulty);
+        break;
       case 'simplified':
-        return this.generateSimplifiedExplanation(documentId, docTitle, sections, language, difficulty);
+        result = this.generateSimplifiedExplanation(documentId, docTitle, sections, language, difficulty);
+        break;
       case 'notes':
-        return this.generateDetailedNotes(documentId, docTitle, sections, language, difficulty);
+        result = this.generateDetailedNotes(documentId, docTitle, sections, language, difficulty);
+        break;
       case 'worked':
-        return this.generateWorkedExamples(documentId, docTitle, sections, language, difficulty);
+        result = this.generateWorkedExamples(documentId, docTitle, sections, language, difficulty);
+        break;
       case 'flashcards':
-        return this.generateFlashcards(documentId, sections, language, difficulty);
+        result = this.generateFlashcards(documentId, sections, language, difficulty);
+        break;
       case 'audio':
-        return this.generateAudioLesson(documentId, docTitle, sections, language, difficulty);
+        result = this.generateAudioLesson(documentId, docTitle, sections, language, difficulty);
+        break;
       case 'quiz':
-        return this.generatePracticeQuiz(documentId, sections, language, difficulty);
+        result = this.generatePracticeQuiz(documentId, sections, language, difficulty);
+        break;
       default:
-        return this.generateSimplifiedExplanation(documentId, docTitle, sections, language, difficulty);
+        result = this.generateSimplifiedExplanation(documentId, docTitle, sections, language, difficulty);
+        break;
     }
+
+    result.generationSource = 'deterministic_fallback';
+    result.modelName = 'LearnLens Grounded Deterministic Engine (Offline Rule-Based)';
+    result.isAiFallback = true;
+    return result;
   }
 
   // --- 1. Concept Maps ---

@@ -149,11 +149,8 @@ export class RealExtractor {
     });
 
     if (sections.length === 0) {
-      const isScanned = dataBuffer.includes(Buffer.from('/Image')) || dataBuffer.includes(Buffer.from('/DCTDecode'));
-      if (isScanned) {
-        throw new Error(`The uploaded PDF "${originalFileName}" is a scanned image document without an embedded text layer. Please use the Scanned Notes upload option or provide an OCR-processed PDF.`);
-      }
-      throw new Error(`The uploaded PDF "${originalFileName}" contains no selectable text or content.`);
+      // Pipeline automatically falls back to rendering page images and running optical character recognition (OCR)
+      return await this.extractScannedPdfWithOcr(filePath, originalFileName, dataBuffer);
     }
 
     const totalWords = sections.reduce((acc, s) => acc + s.content.split(/\s+/).filter(Boolean).length, 0);
@@ -320,7 +317,12 @@ export class RealExtractor {
     let confidence = 75;
 
     try {
-      const worker = await createWorker('eng');
+      let worker: any;
+      try {
+        worker = await createWorker(['eng', 'kan', 'hin']);
+      } catch (_) {
+        worker = await createWorker('eng');
+      }
       const ret = await worker.recognize(filePath);
       await worker.terminate();
 
@@ -383,6 +385,128 @@ export class RealExtractor {
       hasEquations: sections.some(s => (s.equations?.length || 0) > 0),
       isMultilingual
     };
+  }
+
+  /**
+   * Scanned-PDF Page Rendering and Optical Character Recognition (OCR):
+   * Converts scanned image-only PDF pages into image slices and recognizes text with Tesseract
+   */
+  static async extractScannedPdfWithOcr(filePath: string, originalFileName: string, dataBuffer: Buffer): Promise<RealExtractionResult> {
+    const isScanned = dataBuffer.includes(Buffer.from('/Image')) || dataBuffer.includes(Buffer.from('/DCTDecode'));
+    const jpegBuffers = this.extractJpegStreamsFromPdf(dataBuffer);
+
+    if (jpegBuffers.length === 0 && !isScanned) {
+      throw new Error(`The uploaded PDF "${originalFileName}" contains no selectable text or scanned images.`);
+    }
+
+    const sections: ExtractedPageSection[] = [];
+    const warnings: string[] = ['Document is a scanned image PDF. Extracted using optical character recognition (OCR).'];
+    let totalConfidence = 0;
+    let confidenceCount = 0;
+    let isMultilingual = false;
+
+    // Process each page image up to max 10 pages
+    const tempDir = path.resolve(process.cwd(), 'server', 'uploads');
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+
+    let worker: any = null;
+    try {
+      try {
+        worker = await createWorker(['eng', 'kan', 'hin']);
+      } catch (_) {
+        worker = await createWorker('eng');
+      }
+
+      const imagesToProcess = jpegBuffers.slice(0, 10);
+      for (let pIdx = 0; pIdx < imagesToProcess.length; pIdx++) {
+        const pageNum = pIdx + 1;
+        const tempImgPath = path.join(tempDir, `temp_scan_${Date.now()}_${pIdx}.jpg`);
+        fs.writeFileSync(tempImgPath, imagesToProcess[pIdx]);
+
+        try {
+          const ret = await worker.recognize(tempImgPath);
+          const pageText = (ret.data.text || '').trim();
+          const pageConfidence = Math.round(ret.data.confidence || 75);
+
+          if (pageText) {
+            totalConfidence += pageConfidence;
+            confidenceCount++;
+            if (/[\u0C80-\u0CFF\u0900-\u097F]/.test(pageText)) {
+              isMultilingual = true;
+            }
+
+            const equations = this.detectFormulas(pageText);
+            const conditions = this.detectConditions(pageText);
+            const tables = this.detectTables(pageText, pageNum);
+
+            sections.push({
+              pageNumber: pageNum,
+              sectionIdentifier: `scan-pdf-p${pageNum}`,
+              title: `Scanned Page ${pageNum}`,
+              content: pageText,
+              contentType: tables.length > 0 ? 'table' : (equations.length > 0 ? 'equation' : 'paragraph'),
+              equations: equations.length > 0 ? equations : undefined,
+              conditions: conditions.length > 0 ? conditions : undefined,
+              tables: tables.length > 0 ? tables : undefined,
+              sourceType: 'scanned_notes',
+              confidence: pageConfidence
+            });
+          }
+        } finally {
+          if (fs.existsSync(tempImgPath)) {
+            try { fs.unlinkSync(tempImgPath); } catch (_) {}
+          }
+        }
+      }
+    } finally {
+      if (worker) {
+        await worker.terminate().catch(() => {});
+      }
+    }
+
+    if (sections.length === 0) {
+      throw new Error(`The uploaded scanned PDF "${originalFileName}" contains images without legible printed or handwritten text.`);
+    }
+
+    const totalWords = sections.reduce((acc, s) => acc + s.content.split(/\s+/).filter(Boolean).length, 0);
+    const avgOcrConf = confidenceCount > 0 ? Math.round(totalConfidence / confidenceCount) : 75;
+
+    return {
+      title: originalFileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '),
+      pageCount: sections.length,
+      wordCount: totalWords,
+      sections,
+      warnings,
+      isScanned: true,
+      hasTables: sections.some(s => Boolean(s.tables)),
+      hasEquations: sections.some(s => Boolean(s.equations)),
+      isMultilingual,
+      ocrConfidence: avgOcrConf
+    };
+  }
+
+  static extractJpegStreamsFromPdf(pdfBuffer: Buffer): Buffer[] {
+    const jpegs: Buffer[] = [];
+    let pos = 0;
+    while (pos < pdfBuffer.length - 4) {
+      if (pdfBuffer[pos] === 0xFF && pdfBuffer[pos + 1] === 0xD8 && pdfBuffer[pos + 2] === 0xFF) {
+        const start = pos;
+        let end = -1;
+        for (let i = start + 3; i < pdfBuffer.length - 1; i++) {
+          if (pdfBuffer[i] === 0xFF && pdfBuffer[i + 1] === 0xD9) {
+            end = i + 2;
+            break;
+          }
+        }
+        if (end !== -1 && end - start > 500) {
+          jpegs.push(pdfBuffer.slice(start, end));
+          pos = end;
+          continue;
+        }
+      }
+      pos++;
+    }
+    return jpegs;
   }
 
   // --- Helper: Extract Tables from PowerPoint XML ---

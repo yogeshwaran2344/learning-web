@@ -510,6 +510,15 @@ export class Database {
     return false;
   }
 
+  static updateUserPasswordHash(id: string, passwordHash: string): boolean {
+    this.init();
+    if (this.db) {
+      const info = this.db.prepare('UPDATE users SET passwordHash = ? WHERE id = ?').run(passwordHash, id);
+      return info.changes > 0;
+    }
+    return false;
+  }
+
   // --- Documents ---
   static createDocument(doc: DocumentRecord): DocumentRecord {
     this.init();
@@ -604,10 +613,11 @@ export class Database {
     return info.changes > 0;
   }
 
-  static clearAll(): void {
+  static clearUserDocuments(ownerId: string): number {
     this.init();
-    if (!this.db) return;
-    this.db.prepare('DELETE FROM documents').run();
+    if (!this.db || !ownerId) return 0;
+    const info = this.db.prepare('DELETE FROM documents WHERE ownerId = ?').run(ownerId);
+    return info.changes;
   }
 
   // --- Extracted Sections ---
@@ -848,6 +858,13 @@ export class Database {
     return courses.some(c => c.isPublished && c.documentIds.includes(docId));
   }
 
+  static isDocumentInLecturerCourses(docId: string, lecturerId: string): boolean {
+    this.init();
+    if (!this.db || !lecturerId) return false;
+    const courses = this.getCourses(lecturerId);
+    return courses.some(c => c.documentIds.includes(docId));
+  }
+
   static removeDocumentFromCourse(courseId: string, documentId: string): boolean {
     this.init();
     if (!this.db) return false;
@@ -1058,6 +1075,12 @@ export class Database {
     query += ' ORDER BY reportedAt DESC';
 
     return this.db.prepare(query).all(...params) as FeedbackReportRecord[];
+  }
+
+  static getFeedbackReportById(id: string): FeedbackReportRecord | null {
+    this.init();
+    if (!this.db || !id) return null;
+    return (this.db.prepare('SELECT * FROM feedback_reports WHERE id = ?').get(id) as FeedbackReportRecord) || null;
   }
 
   static updateFeedbackReportStatus(id: string, status: 'pending' | 'reviewed' | 'resolved', notes?: string): boolean {

@@ -57,7 +57,7 @@ export const config: AppConfig = {
   maxAiRequestsPerMinute: 20,            // Max 20 AI generation requests per minute
   geminiApiKey: process.env.GEMINI_API_KEY || process.env.API_KEY || '',
   openaiApiKey: process.env.OPENAI_API_KEY || '',
-  facultyInviteKey: process.env.LECTURER_INVITE_KEY || 'FACULTY_VERIFIED_KEY_2026',
+  facultyInviteKey: process.env.LECTURER_INVITE_KEY || (isProd ? '' : 'DEV_FACULTY_SECRET_ONLY_2026'),
   dbPath: process.env.DATABASE_PATH || path.resolve(dataDir, 'learnlens.db'),
   uploadsDir,
   backupsDir
@@ -67,6 +67,9 @@ export function validateProductionConfig(): void {
   if (config.env === 'production') {
     if (config.jwtSecret === 'CRITICAL_PROD_SECRET_OVERRIDE_REQUIRED') {
       console.warn('[Config Warning]: JWT_SECRET environment variable is not explicitly set in production.');
+    }
+    if (!config.facultyInviteKey || config.facultyInviteKey === 'FACULTY_VERIFIED_KEY_2026' || config.facultyInviteKey === 'DEV_FACULTY_SECRET_ONLY_2026') {
+      console.warn('[Config Security Alert]: LECTURER_INVITE_KEY must be set to a strong high-entropy secret in production (minimum 32 characters).');
     }
     if (!config.geminiApiKey && !config.openaiApiKey) {
       console.info('[Config Notice]: External LLM API key not set; high-fidelity deterministic generation engine active.');

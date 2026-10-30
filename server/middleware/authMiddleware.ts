@@ -31,8 +31,15 @@ export function authMiddleware(req: AuthenticatedRequest, res: Response, next: N
 }
 
 export function requireLecturerRole(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-  if (req.user?.role !== 'lecturer') {
+  if (req.user?.role !== 'lecturer' && req.user?.role !== 'admin') {
     return res.status(403).json({ error: 'Access denied: Lecturer privileges required.' });
+  }
+  next();
+}
+
+export function requireAdminRole(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied: Administrator privileges required.' });
   }
   next();
 }

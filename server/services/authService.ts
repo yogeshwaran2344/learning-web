@@ -2,6 +2,14 @@ import crypto from 'crypto';
 import { Database } from '../db/database';
 import { UserRecord, Role } from '../db/schema';
 
+// OWASP Recommended scrypt work parameters for interactive password hashing
+const SCRYPT_PARAMS = {
+  N: 16384, // CPU/memory cost parameter (2^14)
+  r: 8,     // block size parameter
+  p: 1,     // parallelization parameter
+  maxmem: 32 * 1024 * 1024 // 32MB max memory
+};
+
 export class AuthService {
   /**
    * Cryptographically hardened salted scrypt password hashing (OWASP standard).
@@ -9,7 +17,7 @@ export class AuthService {
    */
   static hashPassword(password: string): string {
     const salt = crypto.randomBytes(16).toString('hex');
-    const derivedKey = crypto.scryptSync(password.trim(), salt, 64);
+    const derivedKey = crypto.scryptSync(password.trim(), salt, 64, SCRYPT_PARAMS);
     return `scrypt:${salt}:${derivedKey.toString('hex')}`;
   }
 
@@ -25,7 +33,7 @@ export class AuthService {
       const parts = storedHash.split(':');
       if (parts.length !== 3) return false;
       const [, salt, expectedHex] = parts;
-      const derivedKey = crypto.scryptSync(trimmed, salt, 64);
+      const derivedKey = crypto.scryptSync(trimmed, salt, 64, SCRYPT_PARAMS);
       const expectedBuf = Buffer.from(expectedHex, 'hex');
       if (derivedKey.length !== expectedBuf.length) return false;
       return crypto.timingSafeEqual(derivedKey, expectedBuf);
@@ -107,6 +115,13 @@ export class AuthService {
 
     if (!user.passwordHash || !this.verifyPassword(password, user.passwordHash)) {
       throw new Error('Invalid credentials: Incorrect email or password.');
+    }
+
+    // Security Hardening: Upgrade legacy SHA-256 or unhardened hashes immediately upon successful authentication
+    if (user.passwordHash.startsWith('sha256:') || !user.passwordHash.startsWith('scrypt:')) {
+      const upgradedHash = this.hashPassword(password);
+      Database.updateUserPasswordHash(user.id, upgradedHash);
+      user.passwordHash = upgradedHash;
     }
 
     const token = this.createSession(user.id);

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authMiddleware, requireLecturerRole } from '../middleware/authMiddleware';
+import { authMiddleware, requireLecturerRole, requireAdminRole } from '../middleware/authMiddleware';
 import { uploadMiddleware } from '../middleware/uploadMiddleware';
 import { aiRequestRateLimiter } from '../middleware/rateLimitMiddleware';
 import { Database } from '../db/database';
@@ -105,7 +105,7 @@ apiRouter.get('/system/ai-status', (req, res) => {
   res.json({ status: AiModelService.getProviderStatus() });
 });
 
-apiRouter.post('/system/ai-config', authMiddleware, requireLecturerRole, (req, res) => {
+apiRouter.post('/system/ai-config', authMiddleware, requireAdminRole, (req, res) => {
   const { provider, apiKey } = req.body;
   if (!provider || (provider !== 'gemini' && provider !== 'openai')) {
     return res.status(400).json({ error: 'Provider must be "gemini" or "openai"' });

@@ -85,7 +85,38 @@ export class MeaningComparisonService {
       );
     }
 
-    // 3. Contradiction & Meaning Inversion Detection
+    // 3. Directional, Quantifier & Antonym Contradiction Detection
+    const directionalPairs: [string[], string[]][] = [
+      [['increases', 'grows', 'higher', 'rises'], ['decreases', 'diminishes', 'drops', 'falls', 'lowers']],
+      [['upper bound', 'big o', 'o(n)'], ['lower bound', 'omega', 'omega(n)']],
+      [['synchronous', 'bounded delay'], ['asynchronous', 'unbounded delay']],
+      [['deterministic'], ['randomized', 'non-deterministic', 'probabilistic']],
+      [['immutable', 'cannot be modified'], ['mutable', 'modifiable', 'writable']],
+      [['necessary condition'], ['sufficient condition']],
+      [['maximum', 'maximal'], ['minimum', 'minimal']],
+      [['lossless'], ['lossy']],
+      [['discrete'], ['continuous']]
+    ];
+
+    for (const [groupA, groupB] of directionalPairs) {
+      const srcHasA = groupA.some(w => srcLower.includes(w));
+      const srcHasB = groupB.some(w => srcLower.includes(w));
+      const genHasA = groupA.some(w => genLower.includes(w));
+      const genHasB = groupB.some(w => genLower.includes(w));
+
+      if (srcHasA && !srcHasB && genHasB && !genHasA) {
+        unsupportedClaims.push(`Semantic inversion contradiction: Source states ${groupA[0]}, but generated claim states opposing concept ${groupB[0]}.`);
+      } else if (srcHasB && !srcHasA && genHasA && !genHasB) {
+        unsupportedClaims.push(`Semantic inversion contradiction: Source states ${groupB[0]}, but generated claim states opposing concept ${groupA[0]}.`);
+      }
+    }
+
+    // 4. Negation & Modifier Polarity Check
+    const negations = ['not', 'never', 'no', 'neither', 'without', 'eschewing', 'excluding', 'cannot'];
+    const srcNegated = negations.some(n => new RegExp(`\\b${n}\\b`).test(srcLower));
+    const genNegated = negations.some(n => new RegExp(`\\b${n}\\b`).test(genLower));
+
+    // Specific domain contradictions
     if (srcLower.includes('no recurrence') || srcLower.includes('eschewing recurrence') || srcLower.includes('without using sequence-aligned rnns')) {
       if (genLower.includes('uses recurrence') || genLower.includes('recurrent architecture') || genLower.includes('recurrent lstm')) {
         unsupportedClaims.push('Direct contradiction: Model claims recurrence is used, but source explicitly eschews recurrence.');

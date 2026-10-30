@@ -20,10 +20,11 @@ export class LearningController {
       }
 
       const isOwner = doc.ownerId === userId;
-      const isLecturer = role === 'lecturer';
+      const isCourseLecturer = role === 'lecturer' && Database.isDocumentInLecturerCourses(doc.id, userId!);
       const isShared = Database.isDocumentSharedWithStudents(doc.id);
+      const isAdmin = role === 'admin';
 
-      if (!isOwner && !isLecturer && !isShared) {
+      if (!isOwner && !isCourseLecturer && !isShared && !isAdmin) {
         return res.status(403).json({ error: 'Access denied: You cannot generate learning materials for another user\'s document.' });
       }
 
@@ -68,6 +69,9 @@ export class LearningController {
         formatType,
         language: language as AppLanguage,
         content: generated,
+        generationSource: generated.generationSource || 'deterministic_fallback',
+        modelName: generated.modelName || 'Deterministic Engine',
+        isAiFallback: generated.isAiFallback ?? true,
         verificationStatus: verification.status,
         generatedAt: new Date().toISOString()
       };
@@ -88,9 +92,11 @@ export class LearningController {
     const userId = req.user?.id;
     const role = req.user?.role;
     const isOwner = doc.ownerId === userId;
-    const isLecturer = role === 'lecturer';
+    const isCourseLecturer = role === 'lecturer' && Database.isDocumentInLecturerCourses(doc.id, userId!);
     const isShared = Database.isDocumentSharedWithStudents(doc.id);
-    if (!isOwner && !isLecturer && !isShared) {
+    const isAdmin = role === 'admin';
+
+    if (!isOwner && !isCourseLecturer && !isShared && !isAdmin) {
       return res.status(403).json({ error: 'Access denied: You cannot view materials for another user\'s document.' });
     }
     const materials = Database.getMaterialsByDocId(req.params.id);
@@ -107,7 +113,11 @@ export class LearningController {
 
       const userId = req.user?.id;
       const role = req.user?.role;
-      if (doc.ownerId !== userId && role !== 'lecturer') {
+      const isOwner = doc.ownerId === userId;
+      const isCourseLecturer = role === 'lecturer' && Database.isDocumentInLecturerCourses(doc.id, userId!);
+      const isAdmin = role === 'admin';
+
+      if (!isOwner && !isCourseLecturer && !isAdmin) {
         return res.status(403).json({ error: 'Access denied: You cannot run generator tests for another user\'s document.' });
       }
 

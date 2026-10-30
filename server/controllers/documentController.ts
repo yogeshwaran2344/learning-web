@@ -12,32 +12,7 @@ import { ExtractionTestSuite } from '../services/extractionTestSuite';
 export function enrichDocumentWithMaterials(doc: DocumentRecord): any {
   const sections = Database.getSectionsByDocId(doc.id);
   const verification = Database.getVerification(doc.id);
-  let materials = Database.getMaterialsByDocId(doc.id);
-
-  const neededFormats: ('map' | 'simplified' | 'notes' | 'worked' | 'flashcards' | 'audio' | 'quiz')[] = [
-    'map', 'simplified', 'notes', 'worked', 'flashcards', 'audio', 'quiz'
-  ];
-
-  // If any format is missing, pre-generate and save it now so all tabs are populated with deep content
-  for (const fmt of neededFormats) {
-    if (!materials.some(m => m.formatType === fmt)) {
-      try {
-        const generated = AiGeneratorService.generateFormat(doc.id, doc.title, sections, fmt, 'English');
-        const matRec = {
-          id: `mat-${fmt}-${doc.id}`,
-          documentId: doc.id,
-          formatType: fmt,
-          language: 'English' as const,
-          content: generated,
-          generatedAt: new Date().toISOString()
-        };
-        Database.saveMaterial(matRec);
-        materials.push(matRec);
-      } catch (err) {
-        console.warn(`Enrichment format generation warning for ${fmt}:`, err);
-      }
-    }
-  }
+  const materials = Database.getMaterialsByDocId(doc.id);
 
   const unwrap = (obj: any) => obj?.content !== undefined && (obj.formatType !== undefined || obj.language !== undefined) ? obj.content : obj;
 
@@ -49,19 +24,20 @@ export function enrichDocumentWithMaterials(doc: DocumentRecord): any {
   const audioMat = materials.find(m => m.formatType === 'audio')?.content;
   const quizMat = materials.find(m => m.formatType === 'quiz')?.content;
 
-  const conceptMap = unwrap(mapMat) || { nodes: [], links: [] };
-  const simplified = unwrap(simplifiedMat);
-  const notes = unwrap(notesMat);
-  const worked = unwrap(workedMat);
+  const conceptMap = unwrap(mapMat) || null;
+  const simplified = unwrap(simplifiedMat) || null;
+  const notes = unwrap(notesMat) || null;
+  const worked = unwrap(workedMat) || null;
   const flashcards = unwrap(flashcardsMat) || [];
-  const audioLesson = unwrap(audioMat) || { id: `audio-${doc.id}`, title: doc.title, totalDurationSeconds: 120, sections: [] };
+  const audioLesson = unwrap(audioMat) || null;
   const quiz = unwrap(quizMat) || [];
 
-  const explanations = Array.isArray(simplified) ? simplified : [simplified].filter(Boolean);
+  const explanations = simplified ? (Array.isArray(simplified) ? simplified : [simplified]) : [];
 
   return {
     ...doc,
     sections,
+    materials,
     meaningPreservation: verification || undefined,
     verificationStatus: verification && verification.overallFidelityScore > 0 ? (verification.overallFidelityScore >= 90 ? 'verified' : 'needs_review') : 'not_verified',
     conceptMap,
@@ -91,20 +67,53 @@ export class DocumentController {
       let fileSizeMb = 1.0;
 
       if (file) {
+        // Enforce consistent 25 MB limit
+        if (file.size > 25 * 1024 * 1024) {
+          if (fs.existsSync(file.path)) { try { fs.unlinkSync(file.path); } catch (_) {} }
+          return res.status(400).json({ error: 'File size exceeds maximum 25 MB upload limit.' });
+        }
+
         originalFileName = file.originalname;
         fileSizeMb = Number((file.size / (1024 * 1024)).toFixed(2));
         const ext = file.originalname.toLowerCase();
 
+        // 1. Verify file signature (magic bytes) to prevent spoofing
+        const bufferHeader = Buffer.alloc(8);
+        try {
+          const fd = fs.openSync(file.path, 'r');
+          fs.readSync(fd, bufferHeader, 0, 8, 0);
+          fs.closeSync(fd);
+        } catch (readErr) {
+          return res.status(400).json({ error: 'Failed reading uploaded file header.' });
+        }
+
         if (ext.endsWith('.ppt') && !ext.endsWith('.pptx')) {
+          if (fs.existsSync(file.path)) { try { fs.unlinkSync(file.path); } catch (_) {} }
           return res.status(400).json({
             error: 'Legacy binary .ppt files are not supported. Please upload modern .pptx or export as PDF.',
             processingStatus: 'failed'
           });
         } else if (ext.endsWith('.pptx')) {
+          if (!bufferHeader.slice(0, 2).equals(Buffer.from([0x50, 0x4B]))) { // PK
+            if (fs.existsSync(file.path)) { try { fs.unlinkSync(file.path); } catch (_) {} }
+            return res.status(400).json({ error: 'Invalid file signature: Content is not a genuine PPTX presentation.' });
+          }
           fileType = 'pptx';
         } else if (file.mimetype.startsWith('image/') || ext.endsWith('.png') || ext.endsWith('.jpg') || ext.endsWith('.jpeg')) {
+          if (ext.endsWith('.png') && !bufferHeader.slice(0, 4).equals(Buffer.from([0x89, 0x50, 0x4E, 0x47]))) {
+            if (fs.existsSync(file.path)) { try { fs.unlinkSync(file.path); } catch (_) {} }
+            return res.status(400).json({ error: 'Invalid file signature: Content is not a genuine PNG image.' });
+          }
+          if ((ext.endsWith('.jpg') || ext.endsWith('.jpeg')) && !bufferHeader.slice(0, 3).equals(Buffer.from([0xFF, 0xD8, 0xFF]))) {
+            if (fs.existsSync(file.path)) { try { fs.unlinkSync(file.path); } catch (_) {} }
+            return res.status(400).json({ error: 'Invalid file signature: Content is not a genuine JPEG image.' });
+          }
           fileType = 'scanned_notes';
         } else if (ext.endsWith('.pdf')) {
+          if (!bufferHeader.slice(0, 4).equals(Buffer.from('%PDF'))) {
+            if (fs.existsSync(file.path)) { try { fs.unlinkSync(file.path); } catch (_) {} }
+            return res.status(400).json({ error: 'Invalid file signature: Content is not a genuine PDF document.' });
+          }
           fileType = 'pdf';
         } else if (file.mimetype.includes('text') || ext.endsWith('.txt') || ext.endsWith('.md')) {
           textContent = fs.readFileSync(file.path, 'utf-8');
@@ -215,9 +224,11 @@ export class DocumentController {
     const userId = req.user?.id;
     const role = req.user?.role;
     const isOwner = doc.ownerId === userId;
-    const isLecturer = role === 'lecturer';
+    const isCourseLecturer = role === 'lecturer' && Database.isDocumentInLecturerCourses(doc.id, userId!);
     const isShared = Database.isDocumentSharedWithStudents(doc.id);
-    if (!isOwner && !isLecturer && !isShared) {
+    const isAdmin = role === 'admin';
+
+    if (!isOwner && !isCourseLecturer && !isShared && !isAdmin) {
       return res.status(403).json({ error: 'Access denied: You do not have permission to view this document.' });
     }
     const enriched = enrichDocumentWithMaterials(doc);
@@ -232,9 +243,11 @@ export class DocumentController {
     const userId = req.user?.id;
     const role = req.user?.role;
     const isOwner = doc.ownerId === userId;
-    const isLecturer = role === 'lecturer';
+    const isCourseLecturer = role === 'lecturer' && Database.isDocumentInLecturerCourses(doc.id, userId!);
     const isShared = Database.isDocumentSharedWithStudents(doc.id);
-    if (!isOwner && !isLecturer && !isShared) {
+    const isAdmin = role === 'admin';
+
+    if (!isOwner && !isCourseLecturer && !isShared && !isAdmin) {
       return res.status(403).json({ error: 'Access denied: You do not have permission to check this document.' });
     }
     res.json({
@@ -254,9 +267,11 @@ export class DocumentController {
     const userId = req.user?.id;
     const role = req.user?.role;
     const isOwner = doc.ownerId === userId;
-    const isLecturer = role === 'lecturer';
+    const isCourseLecturer = role === 'lecturer' && Database.isDocumentInLecturerCourses(doc.id, userId!);
     const isShared = Database.isDocumentSharedWithStudents(doc.id);
-    if (!isOwner && !isLecturer && !isShared) {
+    const isAdmin = role === 'admin';
+
+    if (!isOwner && !isCourseLecturer && !isShared && !isAdmin) {
       return res.status(403).json({ error: 'Access denied: You do not have permission to inspect this extraction.' });
     }
     const sections = Database.getSectionsByDocId(doc.id);
@@ -283,8 +298,11 @@ export class DocumentController {
     }
     const userId = req.user?.id;
     const role = req.user?.role;
-    if (doc.ownerId !== userId && role !== 'lecturer') {
-      return res.status(403).json({ error: 'Access denied: You cannot rename another user\'s document.' });
+    const isOwner = doc.ownerId === userId;
+    const isAdmin = role === 'admin';
+
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'Access denied: You can only rename documents you own.' });
     }
     const updated = Database.renameDocument(req.params.id, title.trim());
     res.json({ document: updated });
@@ -297,8 +315,11 @@ export class DocumentController {
     }
     const userId = req.user?.id;
     const role = req.user?.role;
-    if (doc.ownerId !== userId && role !== 'lecturer') {
-      return res.status(403).json({ error: 'Access denied: You cannot delete another user\'s document.' });
+    const isOwner = doc.ownerId === userId;
+    const isAdmin = role === 'admin';
+
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'Access denied: You can only delete documents you own.' });
     }
     const success = Database.deleteDocument(req.params.id);
     if (!success) {
@@ -318,26 +339,33 @@ export class DocumentController {
   static clearAll(req: AuthenticatedRequest, res: Response) {
     const userId = req.user?.id;
     const role = req.user?.role;
+    const { confirmation, courseId } = req.body || {};
 
     if (!userId) {
       return res.status(401).json({ error: 'Authentication required.' });
     }
 
-    if (role === 'lecturer') {
-      // Lecturers can clear course records
-      Database.clearAll();
-      return res.json({ success: true, message: 'All demo and course documents cleared.' });
+    // Safety guard: Must provide explicit confirmation string
+    if (confirmation !== 'CONFIRM_DELETE_MY_DOCUMENTS') {
+      return res.status(400).json({
+        error: 'Dangerous operation: Deletion requires explicit confirmation payload { confirmation: "CONFIRM_DELETE_MY_DOCUMENTS" }.'
+      });
     }
 
-    // Scoped clearance for student: only clear own documents
-    const userDocs = Database.getDocuments(userId, 'student');
-    for (const doc of userDocs) {
+    const userDocs = Database.getDocuments(userId, role);
+    let targetDocs = userDocs.filter(d => d.ownerId === userId);
+
+    if (courseId && (role === 'lecturer' || role === 'admin')) {
+      targetDocs = targetDocs.filter(d => Database.isDocumentInLecturerCourses(d.id, userId));
+    }
+
+    for (const doc of targetDocs) {
       Database.deleteDocument(doc.id);
       if (doc.storagePath && fs.existsSync(doc.storagePath)) {
         try { fs.unlinkSync(doc.storagePath); } catch (e) { /* ignore */ }
       }
     }
 
-    res.json({ success: true, message: 'All your uploaded documents have been cleared.' });
+    res.json({ success: true, message: `Successfully cleared ${targetDocs.length} personal documents.` });
   }
 }
