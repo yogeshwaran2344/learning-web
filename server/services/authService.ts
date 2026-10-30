@@ -2,28 +2,36 @@ import crypto from 'crypto';
 import { Database } from '../db/database';
 import { UserRecord, Role } from '../db/schema';
 
-// OWASP Recommended scrypt work parameters for interactive password hashing
+// OWASP & NIST Hardened scrypt work parameters (N = 2^16 = 65536)
 const SCRYPT_PARAMS = {
-  N: 16384, // CPU/memory cost parameter (2^14)
-  r: 8,     // block size parameter
-  p: 1,     // parallelization parameter
-  maxmem: 32 * 1024 * 1024 // 32MB max memory
+  N: 65536, // Hardened CPU/memory cost parameter (2^16 = 65,536 iterations)
+  r: 8,     // Block size parameter
+  p: 1,     // Parallelization parameter
+  maxmem: 128 * 1024 * 1024 // 128MB max memory allocation
+};
+
+// Legacy parameters for backward-compatible verification
+const LEGACY_SCRYPT_PARAMS = {
+  N: 16384,
+  r: 8,
+  p: 1,
+  maxmem: 64 * 1024 * 1024
 };
 
 export class AuthService {
   /**
-   * Cryptographically hardened salted scrypt password hashing (OWASP standard).
+   * Cryptographically hardened salted scrypt password hashing (OWASP standard N=65536).
    * Resistant to GPU-accelerated brute-force attacks and rainbow tables.
    */
   static hashPassword(password: string): string {
     const salt = crypto.randomBytes(16).toString('hex');
     const derivedKey = crypto.scryptSync(password.trim(), salt, 64, SCRYPT_PARAMS);
-    return `scrypt:${salt}:${derivedKey.toString('hex')}`;
+    return `scrypt:65536:${salt}:${derivedKey.toString('hex')}`;
   }
 
   /**
    * Constant-time password hash verification.
-   * Protects against timing attacks. Backwards-compatible with scrypt and legacy sha256.
+   * Protects against timing attacks. Backwards-compatible with scrypt (N=65536 & N=16384) and legacy sha256.
    */
   static verifyPassword(password: string, storedHash: string): boolean {
     if (!password || !storedHash) return false;
@@ -31,12 +39,38 @@ export class AuthService {
 
     if (storedHash.startsWith('scrypt:')) {
       const parts = storedHash.split(':');
-      if (parts.length !== 3) return false;
-      const [, salt, expectedHex] = parts;
-      const derivedKey = crypto.scryptSync(trimmed, salt, 64, SCRYPT_PARAMS);
-      const expectedBuf = Buffer.from(expectedHex, 'hex');
-      if (derivedKey.length !== expectedBuf.length) return false;
-      return crypto.timingSafeEqual(derivedKey, expectedBuf);
+      
+      // Modern format: scrypt:65536:salt:hex
+      if (parts.length === 4 && parts[1] === '65536') {
+        const [, , salt, expectedHex] = parts;
+        const derivedKey = crypto.scryptSync(trimmed, salt, 64, SCRYPT_PARAMS);
+        const expectedBuf = Buffer.from(expectedHex, 'hex');
+        if (derivedKey.length !== expectedBuf.length) return false;
+        return crypto.timingSafeEqual(derivedKey, expectedBuf);
+      }
+
+      // Format: scrypt:salt:hex (Try N=65536 then N=16384)
+      if (parts.length === 3) {
+        const [, salt, expectedHex] = parts;
+        const expectedBuf = Buffer.from(expectedHex, 'hex');
+        
+        // Try current N=65536 first
+        try {
+          const derivedKey = crypto.scryptSync(trimmed, salt, 64, SCRYPT_PARAMS);
+          if (derivedKey.length === expectedBuf.length && crypto.timingSafeEqual(derivedKey, expectedBuf)) {
+            return true;
+          }
+        } catch (_) {}
+
+        // Fallback to legacy N=16384
+        try {
+          const derivedLegacy = crypto.scryptSync(trimmed, salt, 64, LEGACY_SCRYPT_PARAMS);
+          if (derivedLegacy.length === expectedBuf.length && crypto.timingSafeEqual(derivedLegacy, expectedBuf)) {
+            return true;
+          }
+        } catch (_) {}
+      }
+      return false;
     }
 
     if (storedHash.startsWith('sha256:')) {
@@ -68,8 +102,12 @@ export class AuthService {
       throw new Error('An account with this email already exists.');
     }
 
-    if (!password || password.trim().length < 6) {
-      throw new Error('Password must be at least 6 characters long.');
+    if (!password || password.trim().length < 10) {
+      throw new Error('Password must be at least 10 characters long.');
+    }
+
+    if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9\W]/.test(password)) {
+      throw new Error('Password must contain at least one uppercase letter, one lowercase letter, and one number or special symbol.');
     }
 
     // Role verification: Lecturer privilege requires authorized approval key
@@ -118,7 +156,7 @@ export class AuthService {
     }
 
     // Security Hardening: Upgrade legacy SHA-256 or unhardened hashes immediately upon successful authentication
-    if (user.passwordHash.startsWith('sha256:') || !user.passwordHash.startsWith('scrypt:')) {
+    if (!user.passwordHash.startsWith('scrypt:65536:')) {
       const upgradedHash = this.hashPassword(password);
       Database.updateUserPasswordHash(user.id, upgradedHash);
       user.passwordHash = upgradedHash;

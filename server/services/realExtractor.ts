@@ -300,6 +300,28 @@ export class RealExtractor {
     };
   }
 
+  static getTessDataDir(): string {
+    const dir = path.resolve(process.cwd(), 'server', 'tessdata');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    return dir;
+  }
+
+  /**
+   * Initializes and verifies multilingual Tesseract worker with English, Kannada, and Hindi.
+   * Throws an explicit error if any of the three language models are missing.
+   */
+  static async getMultilingualWorker(): Promise<any> {
+    const tessDir = this.getTessDataDir();
+    const requiredLangs = ['eng', 'kan', 'hin'];
+    for (const lang of requiredLangs) {
+      const dataFile = path.join(tessDir, `${lang}.traineddata`);
+      if (!fs.existsSync(dataFile)) {
+        throw new Error(`Multilingual OCR verification failed: Language model "${lang}.traineddata" is not provisioned in ${tessDir}.`);
+      }
+    }
+    return await createWorker(['eng', 'kan', 'hin'], 1, { cachePath: tessDir });
+  }
+
   /**
    * 3. Scanned-Note Extraction Pipeline (Handwritten Notes & OCR):
    * - Recognizes printed and handwritten text via Tesseract OCR
@@ -317,12 +339,7 @@ export class RealExtractor {
     let confidence = 75;
 
     try {
-      let worker: any;
-      try {
-        worker = await createWorker(['eng', 'kan', 'hin']);
-      } catch (_) {
-        worker = await createWorker('eng');
-      }
+      const worker = await this.getMultilingualWorker();
       const ret = await worker.recognize(filePath);
       await worker.terminate();
 
@@ -389,39 +406,66 @@ export class RealExtractor {
 
   /**
    * Scanned-PDF Page Rendering and Optical Character Recognition (OCR):
-   * Converts scanned image-only PDF pages into image slices and recognizes text with Tesseract
+   * Converts scanned image-only PDF pages into rendered image buffers and recognizes text with Tesseract.
+   * Renders every page of the PDF to an image and preserves original 1-based page numbers.
    */
   static async extractScannedPdfWithOcr(filePath: string, originalFileName: string, dataBuffer: Buffer): Promise<RealExtractionResult> {
-    const isScanned = dataBuffer.includes(Buffer.from('/Image')) || dataBuffer.includes(Buffer.from('/DCTDecode'));
-    const jpegBuffers = this.extractJpegStreamsFromPdf(dataBuffer);
+    let renderedPages: { pageNumber: number; buffer: Buffer }[] = [];
 
-    if (jpegBuffers.length === 0 && !isScanned) {
+    // 1. Real PDF Page-Rendering Pipeline:
+    // Render every page of the PDF to an image using PDFParse getScreenshot
+    try {
+      if (pdfParseModule && typeof pdfParseModule.PDFParse === 'function') {
+        const parser = new pdfParseModule.PDFParse({ data: dataBuffer });
+        try {
+          const screenshotRes = await parser.getScreenshot();
+          if (screenshotRes && screenshotRes.pages && screenshotRes.pages.length > 0) {
+            renderedPages = screenshotRes.pages.map((p: any, idx: number) => ({
+              pageNumber: p.pageNumber || (idx + 1),
+              buffer: Buffer.from(p.data)
+            }));
+          }
+        } finally {
+          await parser.destroy().catch(() => {});
+        }
+      }
+    } catch (err: any) {
+      console.warn('Screenshot rendering fallback to stream extractor:', err.message);
+    }
+
+    // Fallback: If screenshot rendering produced 0 pages, extract embedded image streams
+    if (renderedPages.length === 0) {
+      const jpegBuffers = this.extractJpegStreamsFromPdf(dataBuffer);
+      renderedPages = jpegBuffers.map((buf, idx) => ({
+        pageNumber: idx + 1,
+        buffer: buf
+      }));
+    }
+
+    if (renderedPages.length === 0) {
       throw new Error(`The uploaded PDF "${originalFileName}" contains no selectable text or scanned images.`);
     }
 
     const sections: ExtractedPageSection[] = [];
-    const warnings: string[] = ['Document is a scanned image PDF. Extracted using optical character recognition (OCR).'];
+    const warnings: string[] = ['Document is a scanned image PDF. Extracted using rendered page optical character recognition (OCR).'];
     let totalConfidence = 0;
     let confidenceCount = 0;
     let isMultilingual = false;
 
-    // Process each page image up to max 10 pages
+    // Process every rendered page preserving exact page numbers (supports up to 100 pages, not capped at 10)
+    const pagesToProcess = renderedPages.slice(0, 100);
     const tempDir = path.resolve(process.cwd(), 'server', 'uploads');
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
     let worker: any = null;
     try {
-      try {
-        worker = await createWorker(['eng', 'kan', 'hin']);
-      } catch (_) {
-        worker = await createWorker('eng');
-      }
+      worker = await this.getMultilingualWorker();
 
-      const imagesToProcess = jpegBuffers.slice(0, 10);
-      for (let pIdx = 0; pIdx < imagesToProcess.length; pIdx++) {
-        const pageNum = pIdx + 1;
-        const tempImgPath = path.join(tempDir, `temp_scan_${Date.now()}_${pIdx}.jpg`);
-        fs.writeFileSync(tempImgPath, imagesToProcess[pIdx]);
+      for (let pIdx = 0; pIdx < pagesToProcess.length; pIdx++) {
+        const pageItem = pagesToProcess[pIdx];
+        const pageNum = pageItem.pageNumber;
+        const tempImgPath = path.join(tempDir, `temp_scan_${Date.now()}_${pIdx}.png`);
+        fs.writeFileSync(tempImgPath, pageItem.buffer);
 
         try {
           const ret = await worker.recognize(tempImgPath);

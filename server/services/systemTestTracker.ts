@@ -131,7 +131,7 @@ export class SystemTestTracker {
     let auth4Passed = false;
     try {
       // Attempt to register as lecturer without authorized key or institutional faculty domain
-      AuthService.register('Attacker', `fake-${Date.now()}@gmail.com`, 'password123', 'lecturer');
+      AuthService.register('Attacker', `fake-${Date.now()}@gmail.com`, 'Password123!', 'lecturer');
     } catch (err: any) {
       auth4Passed = err.message.includes('Lecturer role requires');
     }

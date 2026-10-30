@@ -9,8 +9,8 @@ export class AuthController {
       if (!email || !name) {
         return res.status(400).json({ error: 'Name and email are required.' });
       }
-      if (!password || typeof password !== 'string' || password.trim().length < 6) {
-        return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
+      if (!password || typeof password !== 'string' || password.trim().length < 10) {
+        return res.status(400).json({ error: 'Password must be at least 10 characters long and contain uppercase, lowercase, and numbers/symbols.' });
       }
       const result = AuthService.register(name, email, password, role, lecturerInviteKey);
       const { passwordHash, ...safeUser } = result.user;

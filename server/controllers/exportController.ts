@@ -195,10 +195,23 @@ ${doc.summary}
       if (format === 'wav') {
         const audioMat = materials.find(m => m.formatType === 'audio' && m.language === language) || materials.find(m => m.formatType === 'audio');
         const scriptText = (audioMat?.content?.sections || []).map((s: any) => s.scriptText).join(' ') || doc.summary || doc.title;
-        const wavBuffer = await this.buildWavAudio(doc.title, scriptText);
+        const allowSynthetic = req.query.allowSynthetic === 'true' || process.env.NODE_ENV === 'test';
+        const audioResult = await this.buildWavAudio(doc.title, scriptText, allowSynthetic);
+
+        if (!audioResult.available && !audioResult.buffer) {
+          return res.status(503).json({
+            error: 'Genuine spoken audio narration is currently unavailable. Please configure OPENAI_API_KEY to generate text-to-speech narration for this complete lesson.',
+            available: false,
+            provider: audioResult.provider,
+            details: audioResult.error
+          });
+        }
+
         res.setHeader('Content-Type', 'audio/wav');
+        res.setHeader('X-Audio-TTS-Provider', audioResult.provider);
+        res.setHeader('X-Audio-Available', audioResult.available ? 'true' : 'false');
         res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}_audio_${language}.wav"`);
-        return res.send(wavBuffer);
+        return res.send(audioResult.buffer);
       }
 
       if (format === 'audio' || format === 'audio_script') {
@@ -480,7 +493,16 @@ Generated on: ${new Date().toLocaleDateString()}
 
     chunks.push('%PDF-1.4\n');
 
-    const escapePdf = (text: string) => (text || '').replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+    // Helper to convert any Unicode string (Kannada, Hindi, Greek, Math, English) to UTF-16BE hex format
+    const toHexUtf16 = (str: string): string => {
+      const buf = Buffer.from(str || '', 'utf16le');
+      let hex = '';
+      for (let i = 0; i < buf.length; i += 2) {
+        hex += buf[i + 1].toString(16).padStart(2, '0') + buf[i].toString(16).padStart(2, '0');
+      }
+      return hex;
+    };
+
     const secList = sections && sections.length > 0
       ? sections
       : [{ pageNumber: 1, title: doc.title, content: doc.summary || 'Academic Notes Content', equations: [] }];
@@ -489,9 +511,11 @@ Generated on: ${new Date().toLocaleDateString()}
     const sectionsPerPage = 2;
     const pageCount = Math.max(1, Math.ceil(secList.length / sectionsPerPage));
 
-    // Calculate dynamic object references
+    // Calculate dynamic object references:
+    // F1 (Bold Type0): 3 + 2 * pageCount
+    // F2 (Regular Type0): F1 + 4
     const fontF1Id = 3 + 2 * pageCount;
-    const fontF2Id = fontF1Id + 1;
+    const fontF2Id = fontF1Id + 4;
 
     // 1. Catalog
     addObj('<< /Type /Catalog /Pages 2 0 R >>');
@@ -506,23 +530,24 @@ Generated on: ${new Date().toLocaleDateString()}
       const pageSections = secList.slice(p * sectionsPerPage, (p + 1) * sectionsPerPage);
       let streamText = 'BT\n';
 
-      // Header on every page
-      streamText += `/F1 14 Tf 50 800 Td (${escapePdf(doc.title.slice(0, 50))}) Tj\n`;
-      streamText += `/F2 9 Tf 0 -18 Td (Author: ${escapePdf(doc.author || 'Academic Faculty')} | Subject: ${escapePdf(doc.category || 'General')} | Page ${p + 1} of ${pageCount}) Tj\n`;
+      // Header on every page with full Unicode support
+      streamText += `/F1 14 Tf 50 800 Td <${toHexUtf16(doc.title.slice(0, 50))}> Tj\n`;
+      const authorText = `Author: ${doc.author || 'Academic Faculty'} | Subject: ${doc.category || 'General'} | Page ${p + 1} of ${pageCount}`;
+      streamText += `/F2 9 Tf 0 -18 Td <${toHexUtf16(authorText)}> Tj\n`;
       const fidelityStr = verification?.overallFidelityScore ? `${verification.overallFidelityScore}% Grounded` : 'Not verified';
-      streamText += `0 -14 Td (Verification Fidelity: ${fidelityStr}) Tj\n`;
+      streamText += `0 -14 Td <${toHexUtf16(`Verification Fidelity: ${fidelityStr}`)}> Tj\n`;
 
       if (p === 0 && doc.summary) {
-        streamText += `0 -20 Td (Summary: ${escapePdf(doc.summary.slice(0, 92))}...) Tj\n`;
+        streamText += `0 -20 Td <${toHexUtf16(`Summary: ${doc.summary.slice(0, 92)}...`)}> Tj\n`;
       }
 
       let yOffset = p === 0 ? -28 : -35;
       for (let sIdx = 0; sIdx < pageSections.length; sIdx++) {
         const s = pageSections[sIdx];
-        streamText += `0 ${yOffset} Td /F1 12 Tf (${escapePdf(`Section ${s.pageNumber || (p * sectionsPerPage + sIdx + 1)}: ${s.title.slice(0, 48)}`)}) Tj\n`;
-        streamText += `0 -16 Td /F2 9 Tf (${escapePdf(s.content.slice(0, 90))}...) Tj\n`;
+        streamText += `0 ${yOffset} Td /F1 12 Tf <${toHexUtf16(`Section ${s.pageNumber || (p * sectionsPerPage + sIdx + 1)}: ${s.title.slice(0, 48)}`)}> Tj\n`;
+        streamText += `0 -16 Td /F2 9 Tf <${toHexUtf16(`${s.content.slice(0, 90)}...`)}> Tj\n`;
         if (s.equations && s.equations.length > 0) {
-          streamText += `0 -14 Td /F2 9 Tf (Formula: ${escapePdf(s.equations[0].latex.slice(0, 75))}) Tj\n`;
+          streamText += `0 -14 Td /F2 9 Tf <${toHexUtf16(`Formula: ${s.equations[0].latex.slice(0, 75)}`)}> Tj\n`;
           yOffset = -22;
         } else {
           yOffset = -20;
@@ -530,7 +555,7 @@ Generated on: ${new Date().toLocaleDateString()}
       }
 
       // Page footer
-      streamText += `0 -45 Td /F2 8 Tf (LearnLens AI Grounded Verification Engine | Page ${p + 1} of ${pageCount}) Tj\n`;
+      streamText += `0 -45 Td /F2 8 Tf <${toHexUtf16(`LearnLens AI Grounded Verification Engine | Page ${p + 1} of ${pageCount}`)}> Tj\n`;
       streamText += 'ET';
       contentStreams.push(streamText);
     }
@@ -547,9 +572,20 @@ Generated on: ${new Date().toLocaleDateString()}
       addObj(`<< /Length ${Buffer.byteLength(text)} >>\nstream\n${text}\nendstream`);
     }
 
-    // 5. Fonts
-    addObj('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
-    addObj('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+    // 5. Fonts: Type0 Composite Font with Identity-H and ToUnicode CMap (Unicode Kannada, Hindi, Equations, Latin)
+    const toUnicodeCMap = `/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n/CMapName /Custom-ToUnicode def\n/CMapType 2 def\n1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n1 beginbfrange\n<0000> <FFFF> <0000>\nendbfrange\nendcmap\nCMapName currentdict /CMap defineresource pop\nend\nend`;
+
+    // Font F1 (Bold Type0)
+    addObj(`<< /Type /Font /Subtype /Type0 /BaseFont /NotoSans-Bold /Encoding /Identity-H /DescendantFonts [${fontF1Id + 1} 0 R] /ToUnicode ${fontF1Id + 2} 0 R >>`);
+    addObj(`<< /Type /Font /Subtype /CIDFontType2 /BaseFont /NotoSans-Bold /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /FontDescriptor ${fontF1Id + 3} 0 R /W [0 [1000]] >>`);
+    addObj(`<< /Length ${toUnicodeCMap.length} >>\nstream\n${toUnicodeCMap}\nendstream`);
+    addObj(`<< /Type /FontDescriptor /FontName /NotoSans-Bold /Flags 4 /FontBBox [-1000 -500 2000 1500] /ItalicAngle 0 /Ascent 1000 /Descent -200 /CapHeight 800 /StemV 120 >>`);
+
+    // Font F2 (Regular Type0)
+    addObj(`<< /Type /Font /Subtype /Type0 /BaseFont /NotoSans /Encoding /Identity-H /DescendantFonts [${fontF2Id + 1} 0 R] /ToUnicode ${fontF2Id + 2} 0 R >>`);
+    addObj(`<< /Type /Font /Subtype /CIDFontType2 /BaseFont /NotoSans /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /FontDescriptor ${fontF2Id + 3} 0 R /W [0 [1000]] >>`);
+    addObj(`<< /Length ${toUnicodeCMap.length} >>\nstream\n${toUnicodeCMap}\nendstream`);
+    addObj(`<< /Type /FontDescriptor /FontName /NotoSans /Flags 4 /FontBBox [-1000 -500 2000 1500] /ItalicAngle 0 /Ascent 1000 /Descent -200 /CapHeight 800 /StemV 80 >>`);
 
     // XRef
     const startXref = Buffer.byteLength(chunks.join(''));
@@ -648,46 +684,110 @@ Generated on: ${new Date().toLocaleDateString()}
     return zip.toBuffer();
   }
 
-  static async buildWavAudio(title: string, narrationText?: string): Promise<Buffer> {
-    // 1. External AI Model TTS if configured
+  static async buildWavAudio(title: string, narrationText?: string, allowSynthetic = false): Promise<{ buffer: Buffer | null; provider: string; available: boolean; error?: string }> {
+    const fullText = (narrationText ? `${title}. ${narrationText}` : title).trim();
+
+    // 1. External AI Model TTS: Full lesson narration without character truncation
     if (process.env.OPENAI_API_KEY) {
       try {
-        const textToSpeak = (narrationText ? `${title}. ${narrationText}` : title).slice(0, 500);
-        const res = await fetch('https://api.openai.com/v1/audio/speech', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
-          },
-          body: JSON.stringify({
-            model: 'tts-1',
-            input: textToSpeak,
-            voice: 'alloy',
-            response_format: 'wav'
-          })
-        });
-        if (res.ok) {
-          const ab = await res.arrayBuffer();
-          return Buffer.from(ab);
+        const sentences = fullText.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [fullText];
+        const chunks: string[] = [];
+        let currentChunk = '';
+
+        for (const sentence of sentences) {
+          if ((currentChunk + ' ' + sentence).length > 3800 && currentChunk.length > 0) {
+            chunks.push(currentChunk.trim());
+            currentChunk = sentence;
+          } else {
+            currentChunk = currentChunk ? `${currentChunk} ${sentence}` : sentence;
+          }
         }
-      } catch (err) {
-        console.warn('External TTS fallback to academic synthesizer:', err);
+        if (currentChunk.trim()) {
+          chunks.push(currentChunk.trim());
+        }
+
+        const pcmDataBuffers: Buffer[] = [];
+        let sampleRate = 24000;
+
+        for (const chunk of chunks) {
+          const res = await fetch('https://api.openai.com/v1/audio/speech', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+            },
+            body: JSON.stringify({
+              model: 'tts-1',
+              input: chunk,
+              voice: 'alloy',
+              response_format: 'wav'
+            })
+          });
+
+          if (!res.ok) {
+            throw new Error(`OpenAI TTS API responded with status ${res.status}`);
+          }
+
+          const wavChunkBuf = Buffer.from(await res.arrayBuffer());
+          if (wavChunkBuf.length > 44) {
+            sampleRate = wavChunkBuf.readUInt32LE(24);
+            pcmDataBuffers.push(wavChunkBuf.slice(44));
+          }
+        }
+
+        if (pcmDataBuffers.length > 0) {
+          const totalPcmLength = pcmDataBuffers.reduce((acc, b) => acc + b.length, 0);
+          const finalWavBuffer = Buffer.alloc(44 + totalPcmLength);
+
+          finalWavBuffer.write('RIFF', 0);
+          finalWavBuffer.writeUInt32LE(36 + totalPcmLength, 4);
+          finalWavBuffer.write('WAVE', 8);
+          finalWavBuffer.write('fmt ', 12);
+          finalWavBuffer.writeUInt32LE(16, 16);
+          finalWavBuffer.writeUInt16LE(1, 20); // PCM
+          finalWavBuffer.writeUInt16LE(1, 22); // Mono
+          finalWavBuffer.writeUInt32LE(sampleRate, 24);
+          finalWavBuffer.writeUInt32LE(sampleRate * 2, 28);
+          finalWavBuffer.writeUInt16LE(2, 32);
+          finalWavBuffer.writeUInt16LE(16, 34);
+          finalWavBuffer.write('data', 36);
+          finalWavBuffer.writeUInt32LE(totalPcmLength, 40);
+
+          let offset = 44;
+          for (const pcm of pcmDataBuffers) {
+            pcm.copy(finalWavBuffer, offset);
+            offset += pcm.length;
+          }
+
+          return {
+            buffer: finalWavBuffer,
+            provider: 'openai-tts',
+            available: true
+          };
+        }
+      } catch (err: any) {
+        console.warn('External TTS processing error:', err.message);
       }
     }
 
-    // 2. Real Academic Speech Narration Synthesizer (Pure Node PCM)
-    // Converts the actual text of the lesson into articulated phonetic syllables
-    const textToSynthesize = (narrationText ? `${title}. ${narrationText}` : title)
-      .replace(/[^a-zA-Z0-9\s.,?!]/g, ' ')
-      .trim();
+    // 2. Clear Reporting when TTS is unavailable
+    if (!allowSynthetic) {
+      return {
+        buffer: null,
+        provider: 'none',
+        available: false,
+        error: 'Genuine spoken audio narration requires OPENAI_API_KEY. Configure key to generate text-to-speech for the complete lesson.'
+      };
+    }
 
+    // 3. Synthetic Tone Generator (Offline tests & fallback)
+    const textToSynthesize = fullText.replace(/[^a-zA-Z0-9\s.,?!]/g, ' ').trim();
     const rawWords = textToSynthesize.split(/\s+/).filter(w => w.length > 0).slice(0, 16);
     const words = rawWords.length > 0 ? rawWords : ['LearnLens', 'Audio', 'Lesson'];
 
     const sampleRate = 22050;
-    // Map words to phonetic syllables with dynamic duration
     const syllables: { start: number; end: number; f0: number; f1: number; f2: number; f3: number; consonant: number }[] = [];
-    let currentTime = 0.6; // 0.6s chime intro
+    let currentTime = 0.6;
 
     for (let wIdx = 0; wIdx < words.length; wIdx++) {
       const word = words[wIdx].toLowerCase();
@@ -709,7 +809,7 @@ Generated on: ${new Date().toLocaleDateString()}
           f1 = 400; f2 = 1700; f3 = 2700;
         }
 
-        const basePitch = 140 - (wIdx * 1.5) + (s * 4); // Cadence shaping
+        const basePitch = 140 - (wIdx * 1.5) + (s * 4);
         syllables.push({
           start: currentTime,
           end: currentTime + sylDuration * 0.9,
@@ -721,21 +821,20 @@ Generated on: ${new Date().toLocaleDateString()}
         });
         currentTime += sylDuration;
       }
-      currentTime += 0.08; // Pause between words
+      currentTime += 0.08;
     }
 
     const totalDuration = currentTime + 0.8;
     const numSamples = Math.floor(sampleRate * totalDuration);
     const buffer = Buffer.alloc(44 + numSamples * 2);
 
-    // RIFF WAV Header
     buffer.write('RIFF', 0);
     buffer.writeUInt32LE(36 + numSamples * 2, 4);
     buffer.write('WAVE', 8);
     buffer.write('fmt ', 12);
     buffer.writeUInt32LE(16, 16);
-    buffer.writeUInt16LE(1, 20); // PCM
-    buffer.writeUInt16LE(1, 22); // Mono
+    buffer.writeUInt16LE(1, 20);
+    buffer.writeUInt16LE(1, 22);
     buffer.writeUInt32LE(sampleRate, 24);
     buffer.writeUInt32LE(sampleRate * 2, 28);
     buffer.writeUInt16LE(2, 32);
@@ -747,7 +846,6 @@ Generated on: ${new Date().toLocaleDateString()}
       const t = i / sampleRate;
       let sample = 0;
 
-      // Intro chime
       if (t < 0.6) {
         const env = Math.exp(-t * 5);
         sample = (0.15 * Math.sin(2 * Math.PI * 523.25 * t) + 0.12 * Math.sin(2 * Math.PI * 659.25 * t)) * env;
@@ -771,6 +869,10 @@ Generated on: ${new Date().toLocaleDateString()}
       buffer.writeInt16LE(Math.floor(clamped * 32767), 44 + i * 2);
     }
 
-    return buffer;
+    return {
+      buffer,
+      provider: 'synthetic-chime',
+      available: true
+    };
   }
 }

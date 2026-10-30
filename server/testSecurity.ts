@@ -312,6 +312,119 @@ export async function runSecurityTestSuite(): Promise<{ passed: number; total: n
   apiRouter(reqDaveUpdateFb, resDaveUpdateFb as any, () => {});
   test('Test 11: Lecturer cannot update feedback for unassigned course documents -> HTTP 403', resDaveUpdateFb.statusCode === 403);
 
+  // Test 12: Feedback Submission Authorization
+  // 12a. Bob attempts to submit feedback for Alice's private document -> HTTP 403 Forbidden
+  const reqBobSubmitFb: any = {
+    method: 'POST',
+    url: '/feedback',
+    headers: { authorization: `Bearer ${bobReg.token}` },
+    body: {
+      documentId: docAliceId,
+      userComment: 'Intruder feedback attempt on private doc.'
+    }
+  };
+  const resBobSubmitFb = createMockResponse();
+  apiRouter(reqBobSubmitFb, resBobSubmitFb as any, () => {});
+  test('Test 12a: User cannot submit feedback on unowned/unauthorized document -> HTTP 403', resBobSubmitFb.statusCode === 403);
+
+  // 12b. Alice submits feedback for her own document -> HTTP 201 Created
+  const reqAliceSubmitFb: any = {
+    method: 'POST',
+    url: '/feedback',
+    headers: { authorization: `Bearer ${aliceReg.token}` },
+    body: {
+      documentId: docAliceId,
+      userComment: 'Legitimate owner feedback on formula derivation.'
+    }
+  };
+  const resAliceSubmitFb = createMockResponse();
+  apiRouter(reqAliceSubmitFb, resAliceSubmitFb as any, () => {});
+  test('Test 12b: Document owner can submit feedback -> HTTP 201', resAliceSubmitFb.statusCode === 201);
+
+  // Test 13: Strengthened Password Policy & N=65536 Scrypt Work Factor
+  let shortPasswordBlocked = false;
+  try {
+    AuthService.register('Short Pass User', `short.${ts}@edu.org`, 'Short9!');
+  } catch (err: any) {
+    shortPasswordBlocked = err.message.includes('at least 10 characters');
+  }
+  test('Test 13a: Password shorter than 10 characters rejected', shortPasswordBlocked);
+
+  let simplePasswordBlocked = false;
+  try {
+    AuthService.register('Simple Pass User', `simple.${ts}@edu.org`, 'alllowercasepassword');
+  } catch (err: any) {
+    simplePasswordBlocked = err.message.includes('uppercase letter');
+  }
+  test('Test 13b: Password without complexity rejected', simplePasswordBlocked);
+
+  test('Test 13c: New accounts use cryptographically hardened N=65536 scrypt format',
+    aliceReg.user.passwordHash.startsWith('scrypt:65536:'));
+
+  // Test 14: Strict Production Security Configuration Halts Startup
+  let prodMissingJwtHalted = false;
+  try {
+    const { validateProductionConfig, config } = await import('./config/environment');
+    const prevEnv = config.env;
+    const prevSecret = config.jwtSecret;
+    (config as any).env = 'production';
+    (config as any).jwtSecret = '';
+    validateProductionConfig();
+    (config as any).env = prevEnv;
+    (config as any).jwtSecret = prevSecret;
+  } catch (err: any) {
+    prodMissingJwtHalted = err.message.includes('FATAL CONFIGURATION ERROR: Production requires a secure, high-entropy JWT_SECRET');
+  }
+  test('Test 14a: Missing/weak JWT_SECRET in production strictly halts server startup', prodMissingJwtHalted);
+
+  let prodWildcardCorsHalted = false;
+  try {
+    const { validateProductionConfig, config } = await import('./config/environment');
+    const prevEnv = config.env;
+    const prevOrigins = config.corsOrigins;
+    const prevSecret = config.jwtSecret;
+    (config as any).env = 'production';
+    (config as any).jwtSecret = 'a_very_long_valid_32_character_jwt_secret_here';
+    (config as any).facultyInviteKey = 'replace_with_strong_random_faculty_secret_min_32_chars';
+    (config as any).corsOrigins = '*';
+    validateProductionConfig();
+    (config as any).env = prevEnv;
+    (config as any).corsOrigins = prevOrigins;
+    (config as any).jwtSecret = prevSecret;
+  } catch (err: any) {
+    prodWildcardCorsHalted = err.message.includes('CORS_ORIGIN');
+  }
+  test('Test 14b: Unrestricted wildcard CORS in production strictly halts server startup', prodWildcardCorsHalted);
+
+  // Test 15: Full Unicode PDF Export & Parse Verification
+  const { ExportController } = await import('./controllers/exportController');
+  const unicodePdfDoc = {
+    id: `doc-uni-${ts}`,
+    title: 'ಕ್ವಾಂಟಮ್ ಗಣಕಶಾಸ್ತ್ರ ಮತ್ತು ಯಂತ್ರ ಕಲಿಕೆ (Quantum Computing)',
+    author: 'ಡಾ. ರಾಜ್ (Dr. Raj)',
+    category: 'ಕಂಪ್ಯೂಟರ್ ವಿಜ್ಞಾನ',
+    summary: 'ಕ್ವಾಂಟಮ್ ಪ್ರಕ್ರಿಯೆಗಳು ಮತ್ತು ಯಂತ್ರ ಕಲಿಕೆಯ ತತ್ವಗಳು.'
+  };
+  const unicodeSections = [{
+    pageNumber: 1,
+    title: 'ಅಧ್ಯಾಯ 1: ಕ್ವಾಂಟಮ್ ಸಿದ್ಧಾಂತ (Chapter 1: Theory)',
+    content: 'ಕ್ವಾಂಟಮ್ ಗಣಕಶಾಸ್ತ್ರದಲ್ಲಿ ಶ್ರೋಡಿಂಗರ್ ಸಮೀಕರಣ: iħ ∂/∂t Ψ = HΨ ಮತ್ತು ಸುಸಂಗತತೆ.',
+    equations: [{ latex: 'i\\hbar \\frac{\\partial}{\\partial t} \\Psi = \\hat{H}\\Psi' }]
+  }];
+  const unicodePdfBuffer = ExportController.buildPdfDocument(unicodePdfDoc, unicodeSections, { overallFidelityScore: 100 }, 'kannada');
+  const pdfModule: any = await import('pdf-parse');
+  const PDFParseClass = pdfModule.PDFParse || pdfModule.default?.PDFParse || pdfModule.default;
+  const parser = new PDFParseClass({ data: unicodePdfBuffer });
+  const parsedPdf = await parser.getText();
+  await parser.destroy();
+  const pdfHasKannada = parsedPdf.text && /[\u0C80-\u0CFF]/.test(parsedPdf.text);
+  test('Test 15: Binary PDF export generates Type0 Identity-H Unicode font with Kannada & Math preserved', Boolean(pdfHasKannada));
+
+  // Test 16: Full Lesson Spoken Audio Availability Reporting
+  const audioResultNoKey = await ExportController.buildWavAudio('Audio Lesson Title', 'Narration text of the lesson.', false);
+  test('Test 16: Spoken audio clearly reports unavailable when external TTS is unconfigured',
+    audioResultNoKey.available === false && audioResultNoKey.buffer === null);
+
   // Clean up test documents and users
   Database.deleteDocument(docAliceId);
   Database.deleteDocument(docCarolId);

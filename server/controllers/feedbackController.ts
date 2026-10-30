@@ -25,6 +25,20 @@ export class FeedbackController {
         return res.status(400).json({ error: 'Document ID and user comment are required.' });
       }
 
+      // Authorization Check: Verify that the document exists and user has authorized access
+      const doc = Database.getDocumentById(documentId);
+      if (!doc) {
+        return res.status(404).json({ error: 'Document not found.' });
+      }
+
+      const isOwner = doc.ownerId === userId;
+      const isLecturerCourseDoc = Database.isDocumentInLecturerCourses(doc.id, userId);
+      const isAdmin = req.user?.role === 'admin';
+
+      if (!isOwner && !isLecturerCourseDoc && !isAdmin) {
+        return res.status(403).json({ error: 'Access denied: You do not have permission to submit feedback for this document.' });
+      }
+
       const report: FeedbackReportRecord = {
         id: 'fb-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
         documentId,
