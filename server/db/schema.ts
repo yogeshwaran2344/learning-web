@@ -1,6 +1,6 @@
 export type Role = 'student' | 'lecturer' | 'admin';
 export type AppLanguage = 'English' | 'Kannada' | 'Hindi';
-export type DocumentFileType = 'pdf' | 'pptx' | 'scanned_notes';
+export type DocumentFileType = 'pdf' | 'pptx' | 'scanned_notes' | 'docx';
 export type ProcessingStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'warning';
 export type ExtractionUserStatus = 'ready' | 'needs_review' | 'failed';
 

@@ -363,6 +363,188 @@ export class RealExtractor {
     };
   }
 
+  /**
+   * 2b. DOCX Extraction Pipeline:
+   * - Extracts paragraphs, headings, bullet points, and tables from word/document.xml
+   * - Splits into sequential pages preserving document structure and order
+   * - Extracts mathematical equations and boundary conditions
+   */
+  static extractDocx(filePathOrBuffer: string | Buffer, originalFileName = 'document.docx'): RealExtractionResult {
+    let zip: AdmZip;
+    try {
+      if (Buffer.isBuffer(filePathOrBuffer)) {
+        zip = new AdmZip(filePathOrBuffer);
+      } else {
+        if (!fs.existsSync(filePathOrBuffer)) {
+          throw new Error(`DOCX file not found at path: ${filePathOrBuffer}`);
+        }
+        zip = new AdmZip(filePathOrBuffer);
+      }
+    } catch (err: any) {
+      if (err.message.includes('not found')) throw err;
+      throw new Error(`Failed to read DOCX file "${originalFileName}": Corrupted archive.`);
+    }
+
+    const docXmlEntry = zip.getEntry('word/document.xml');
+    if (!docXmlEntry) {
+      throw new Error(`Invalid DOCX format: "word/document.xml" not found in "${originalFileName}".`);
+    }
+
+    const xmlContent = docXmlEntry.getData().toString('utf8');
+    const isMultilingual = /[\u0C80-\u0CFF\u0900-\u097F]/.test(xmlContent);
+
+    // Extract paragraphs <w:p>...</w:p>
+    const pMatches = xmlContent.match(/<w:p[\s\S]*?<\/w:p>/gi) || [];
+    const paragraphs: { text: string; isHeading: boolean; isPageBreak: boolean }[] = [];
+
+    for (const pXml of pMatches) {
+      const isPageBreak = /<w:br[^>]*type="page"|<w:lastRenderedPageBreak/i.test(pXml);
+      const isHeading = /<w:pStyle[^>]*w:val="Heading/i.test(pXml) || /<w:b\b/i.test(pXml);
+
+      // Extract text inside <w:t>...</w:t> or Office Math <m:t>...</m:t>
+      const tMatches = pXml.match(/<(?:w|m):t[^>]*>(.*?)<\/(?:w|m):t>/gi) || [];
+      const text = tMatches.map(t => t.replace(/<[^>]+>/g, '').trim()).filter(Boolean).join(' ');
+
+      if (text || isPageBreak) {
+        paragraphs.push({ text, isHeading, isPageBreak });
+      }
+    }
+
+    // Split paragraphs into pages (every page break or ~350 words per page)
+    const pages: { pageNum: number; title: string; lines: string[] }[] = [];
+    let curPageNum = 1;
+    let curLines: string[] = [];
+    let curTitle = `Page 1: Overview`;
+    let curWordCount = 0;
+
+    for (const p of paragraphs) {
+      if (p.isHeading && p.text && curTitle.startsWith('Page ')) {
+        curTitle = p.text;
+      }
+
+      if (p.text) {
+        curLines.push(p.text);
+        curWordCount += p.text.split(/\s+/).filter(Boolean).length;
+      }
+
+      if (p.isPageBreak || (curWordCount >= 380 && curLines.length >= 3)) {
+        pages.push({
+          pageNum: curPageNum,
+          title: curTitle,
+          lines: [...curLines]
+        });
+        curPageNum++;
+        curLines = [];
+        curTitle = `Page ${curPageNum}: Overview`;
+        curWordCount = 0;
+      }
+    }
+
+    if (curLines.length > 0 || pages.length === 0) {
+      pages.push({
+        pageNum: curPageNum,
+        title: curTitle,
+        lines: curLines.length > 0 ? curLines : ['Document content extracted.']
+      });
+    }
+
+    const sections: ExtractedPageSection[] = [];
+    let hasTables = false;
+    let hasEquations = false;
+
+    // Detect tables in XML
+    const tblMatches = xmlContent.match(/<w:tbl[\s\S]*?<\/w:tbl>/gi) || [];
+    if (tblMatches.length > 0) hasTables = true;
+
+    // Detect mathematical Office Math formulas
+    const hasMath = /<m:oMath\b|<m:oMathPara\b/i.test(xmlContent);
+    if (hasMath) hasEquations = true;
+
+    pages.forEach((p, idx) => {
+      const content = p.lines.join('\n\n');
+      const equations = this.detectFormulas(content);
+      if (equations.length > 0) hasEquations = true;
+      const conditions = this.detectConditions(content);
+
+      sections.push({
+        pageNumber: p.pageNum,
+        sectionIdentifier: `docx-p${p.pageNum}-sec${idx + 1}`,
+        title: p.title,
+        content: content.trim(),
+        contentType: equations.length > 0 ? 'equation' : 'paragraph',
+        equations: equations.length > 0 ? equations : undefined,
+        conditions: conditions.length > 0 ? conditions : undefined,
+        sourceType: 'text',
+        confidence: 97
+      });
+    });
+
+    const totalWords = sections.reduce((acc, s) => acc + s.content.split(/\s+/).filter(Boolean).length, 0);
+
+    return {
+      title: originalFileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '),
+      pageCount: sections.length,
+      wordCount: totalWords,
+      sections,
+      warnings: [],
+      isScanned: false,
+      hasTables,
+      hasEquations,
+      isMultilingual
+    };
+  }
+
+  /**
+   * Extracts legacy .doc binary files using string stream parsing
+   */
+  static extractLegacyDoc(filePath: string, originalFileName: string): RealExtractionResult {
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`DOC file not found at path: ${filePath}`);
+    }
+    const buffer = fs.readFileSync(filePath);
+    const rawBinary = buffer.toString('binary');
+    const matches = (rawBinary.match(/[\x20-\x7E\t\r\n]{6,}/g) || [])
+      .map(s => s.trim())
+      .filter(s => s.length > 10 && !/^[0-9a-fA-F\s]+$/.test(s));
+
+    const chunkSize = Math.max(4, Math.ceil(matches.length / 5));
+    const pages: string[][] = [];
+    for (let i = 0; i < matches.length; i += chunkSize) {
+      pages.push(matches.slice(i, i + chunkSize));
+    }
+
+    const sections: ExtractedPageSection[] = (pages.length > 0 ? pages : [[`Page 1: Overview`]]).map((chunk, idx) => {
+      const pageNum = idx + 1;
+      const content = chunk.join('\n\n');
+      const equations = this.detectFormulas(content);
+      const conditions = this.detectConditions(content);
+      return {
+        pageNumber: pageNum,
+        sectionIdentifier: `doc-p${pageNum}`,
+        title: chunk[0]?.slice(0, 70) || `Page ${pageNum}: Overview`,
+        content,
+        contentType: 'paragraph',
+        equations: equations.length > 0 ? equations : undefined,
+        conditions: conditions.length > 0 ? conditions : undefined,
+        sourceType: 'text',
+        confidence: 88
+      };
+    });
+
+    const totalWords = sections.reduce((acc, s) => acc + s.content.split(/\s+/).filter(Boolean).length, 0);
+    return {
+      title: originalFileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '),
+      pageCount: sections.length,
+      wordCount: totalWords,
+      sections,
+      warnings: ['Extracted from legacy binary .doc format.'],
+      isScanned: false,
+      hasTables: false,
+      hasEquations: sections.some(s => Boolean(s.equations)),
+      isMultilingual: false
+    };
+  }
+
   static getTessDataDir(): string {
     const dir = path.resolve(process.cwd(), 'server', 'tessdata');
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -717,7 +899,7 @@ export class RealExtractor {
         });
       }
     }
-    return formulas.slice(0, 5);
+    return formulas;
   }
 
   // --- Helper: Detect Boundary Qualifiers and Invariants ---
@@ -731,6 +913,6 @@ export class RealExtractor {
         conditions.push(cond);
       }
     }
-    return conditions.slice(0, 5);
+    return conditions;
   }
 }

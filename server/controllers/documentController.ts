@@ -115,6 +115,12 @@ export class DocumentController {
             return res.status(400).json({ error: 'Invalid file signature: Content is not a genuine PDF document.' });
           }
           fileType = 'pdf';
+        } else if (ext.endsWith('.docx') || ext.endsWith('.doc')) {
+          if (ext.endsWith('.docx') && !bufferHeader.slice(0, 2).equals(Buffer.from([0x50, 0x4B]))) { // PK
+            if (fs.existsSync(file.path)) { try { fs.unlinkSync(file.path); } catch (_) {} }
+            return res.status(400).json({ error: 'Invalid file signature: Content is not a genuine DOCX document.' });
+          }
+          fileType = 'docx';
         } else if (file.mimetype.includes('text') || ext.endsWith('.txt') || ext.endsWith('.md')) {
           textContent = fs.readFileSync(file.path, 'utf-8');
         }
@@ -147,6 +153,9 @@ export class DocumentController {
       }
 
       const hasWarning = extraction.qualityReport.diagnostics.length > 0;
+      const isComplete = extraction.completeness?.isFullyComplete ?? (!hasWarning && extraction.pageCount === extraction.sections.length);
+      const processingStatus: ProcessingStatus = isComplete ? 'completed' : ((extraction.completeness?.verdict as any) || (hasWarning ? 'warning' : 'failed'));
+
       const docRecord: DocumentRecord = {
         id: docId,
         ownerId: userId,
@@ -158,9 +167,9 @@ export class DocumentController {
         originalFileName,
         storagePath: file?.path,
         uploadDate: new Date().toISOString().split('T')[0],
-        processingStatus: hasWarning ? 'warning' : 'completed',
-        extractionStatus: extraction.qualityReport.userStatus,
-        extractionWarnings: extraction.qualityReport.diagnostics.map((d: any) => d.message),
+        processingStatus,
+        extractionStatus: isComplete ? 'ready' : extraction.qualityReport.userStatus,
+        extractionWarnings: extraction.warnings || extraction.qualityReport.diagnostics.map((d: any) => d.message),
         extractionQuality: extraction.qualityReport,
         pageCount: extraction.pageCount,
         wordCount: extraction.wordCount,
@@ -229,6 +238,9 @@ export class DocumentController {
       })().catch(() => {});
 
       const enriched = enrichDocumentWithMaterials(docRecord);
+      if (extraction.batchProgress) {
+        (enriched as any).batchProgress = extraction.batchProgress;
+      }
 
       res.status(201).json({
         document: enriched,

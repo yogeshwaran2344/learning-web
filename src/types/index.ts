@@ -44,7 +44,7 @@ export type LearningFormat =
 
 export type AppLanguage = 'English' | 'Kannada' | 'Hindi';
 
-export type DocumentFileType = 'pdf' | 'pptx' | 'scanned_notes';
+export type DocumentFileType = 'pdf' | 'pptx' | 'scanned_notes' | 'docx';
 export type ExtractionUserStatus = 'ready' | 'needs_review' | 'failed';
 
 export interface ExtractionDiagnosticWarning {
@@ -56,6 +56,22 @@ export interface ExtractionDiagnosticWarning {
   message: string;
   flaggedSnippet?: string;
   recommendation: string;
+}
+
+export interface DocumentBatchProgress {
+  totalPagesOrSlides: number;
+  successfullyProcessedPages: number;
+  pagesCurrentlyProcessing: number[];
+  failedPages: number[];
+  remainingPages: number;
+  overallCompletionPercentage: number;
+  batchSize: number;
+  currentBatchIndex: number;
+  totalBatches: number;
+  isComplete: boolean;
+  statusMessage: string;
+  unreadablePages?: number[];
+  pageStatuses?: Record<number, 'success' | 'processing' | 'failed' | 'unreadable'>;
 }
 
 export interface ExtractionQualityReport {
@@ -514,6 +530,7 @@ export interface AcademicDocument {
   meaningPreservation: MeaningPreservationReport;
   notes?: DetailedNotesSuite;
   worked?: WorkedExamplesSuite;
+  batchProgress?: DocumentBatchProgress;
   lastStudiedAt?: string;
   studyProgressPercent?: number;
 }

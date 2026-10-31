@@ -6,6 +6,7 @@ import {
 import { ExtractionQualityEngine } from './extractionQualityEngine';
 import { RealExtractor, RealExtractionResult } from './realExtractor';
 import { DocumentUnderstandingService, DocumentUnderstandingResult } from './documentUnderstandingService';
+import { BatchProcessingEngine, DocumentBatchProgress, CompletenessVerificationResult } from './batchProcessingEngine';
 
 export interface ComprehensiveExtractionResult {
   sections: ExtractedSectionRecord[];
@@ -16,6 +17,8 @@ export interface ComprehensiveExtractionResult {
   warnings: string[];
   understanding: DocumentUnderstandingResult;
   extractionConfidence: number; // Optical and syntactic extraction reliability (NOT factual correctness)
+  batchProgress?: DocumentBatchProgress;
+  completeness?: CompletenessVerificationResult;
 }
 
 export class ExtractionService {
@@ -117,6 +120,34 @@ export class ExtractionService {
           examples: [],
           uncertainSymbols: s.uncertainSymbols
         }));
+      } else if (fileType === 'docx') {
+        const isLegacyDoc = originalFileName.toLowerCase().endsWith('.doc') && !originalFileName.toLowerCase().endsWith('.docx');
+        const docxRes = isLegacyDoc
+          ? RealExtractor.extractLegacyDoc(filePath, originalFileName)
+          : RealExtractor.extractDocx(filePath, originalFileName);
+        warnings.push(...docxRes.warnings);
+        pageCount = docxRes.pageCount;
+        totalWordCount = docxRes.wordCount;
+        baseConfidence = 97;
+        rawSections = docxRes.sections.map((s, idx) => ({
+          id: `sec-docx-${documentId}-${idx + 1}`,
+          documentId,
+          pageNumber: s.pageNumber,
+          slideNumber: s.slideNumber,
+          chapterTitle: /^(?:chapter|unit|module|part)\s+(\d+|[ivxlcdm]+)/i.test(s.title) ? s.title : undefined,
+          title: s.title,
+          content: s.content,
+          equations: (s.equations || []).map((e, eqIdx) => ({
+            latex: e.latex,
+            label: e.label || `Formula (${eqIdx + 1})`,
+            meaning: e.meaning || `Extracted formula from ${s.title}`
+          })),
+          tables: s.tables,
+          definitions: [],
+          conditions: s.conditions || [],
+          examples: [],
+          uncertainSymbols: s.uncertainSymbols
+        }));
       }
     }
 
@@ -149,6 +180,40 @@ export class ExtractionService {
       hasScannedMarkers
     );
 
+    // 3. Batch Completeness Verification
+    const completeness = BatchProcessingEngine.verifyCompleteness(
+      pageCount,
+      finalSections,
+      understanding.unreadablePages || [],
+      []
+    );
+
+    if (!completeness.isFullyComplete) {
+      if (completeness.unreadablePages.length > 0) {
+        warnings.push(`Unreadable or smudged pages identified on: [${completeness.unreadablePages.join(', ')}]. Content cannot be recognized without manual review.`);
+      }
+      if (completeness.missingPages.length > 0) {
+        warnings.push(`Extraction notice: Missing pages detected [${completeness.missingPages.join(', ')}]. Document cannot be marked fully complete.`);
+      }
+    }
+
+    const processedPagesCount = Math.min(pageCount, completeness.verifiedPageCount || finalSections.length);
+    const totalBatches = Math.max(1, Math.ceil(pageCount / BatchProcessingEngine.DEFAULT_BATCH_SIZE));
+    const batchProgress: DocumentBatchProgress = {
+      totalPagesOrSlides: pageCount,
+      successfullyProcessedPages: processedPagesCount,
+      pagesCurrentlyProcessing: [],
+      failedPages: completeness.missingPages,
+      remainingPages: Math.max(0, pageCount - processedPagesCount),
+      overallCompletionPercentage: Math.min(100, Math.round((processedPagesCount / Math.max(1, pageCount)) * 100)),
+      batchSize: BatchProcessingEngine.DEFAULT_BATCH_SIZE,
+      currentBatchIndex: totalBatches,
+      totalBatches,
+      isComplete: completeness.isFullyComplete,
+      statusMessage: completeness.statusMessage,
+      unreadablePages: completeness.unreadablePages
+    };
+
     // Merge warnings
     const combinedWarnings = Array.from(new Set([...warnings, ...qualityReport.diagnostics.map(d => d.message)]));
 
@@ -160,7 +225,9 @@ export class ExtractionService {
       qualityReport,
       warnings: combinedWarnings,
       understanding,
-      extractionConfidence: baseConfidence
+      extractionConfidence: baseConfidence,
+      batchProgress,
+      completeness
     };
   }
 
@@ -201,6 +268,30 @@ export class ExtractionService {
       hasScannedMarkers
     );
 
+    const completeness = BatchProcessingEngine.verifyCompleteness(
+      pageCount,
+      sections,
+      understanding.unreadablePages || [],
+      []
+    );
+
+    const processedPagesCount = Math.min(pageCount, completeness.verifiedPageCount || sections.length);
+    const totalBatches = Math.max(1, Math.ceil(pageCount / BatchProcessingEngine.DEFAULT_BATCH_SIZE));
+    const batchProgress: DocumentBatchProgress = {
+      totalPagesOrSlides: pageCount,
+      successfullyProcessedPages: processedPagesCount,
+      pagesCurrentlyProcessing: [],
+      failedPages: completeness.missingPages,
+      remainingPages: Math.max(0, pageCount - processedPagesCount),
+      overallCompletionPercentage: Math.min(100, Math.round((processedPagesCount / Math.max(1, pageCount)) * 100)),
+      batchSize: BatchProcessingEngine.DEFAULT_BATCH_SIZE,
+      currentBatchIndex: totalBatches,
+      totalBatches,
+      isComplete: completeness.isFullyComplete,
+      statusMessage: completeness.statusMessage,
+      unreadablePages: completeness.unreadablePages
+    };
+
     return {
       sections,
       pageCount,
@@ -209,13 +300,18 @@ export class ExtractionService {
       qualityReport,
       warnings: qualityReport.diagnostics.map(d => d.message),
       understanding,
-      extractionConfidence: 95
+      extractionConfidence: 95,
+      batchProgress,
+      completeness
     };
   }
 
   // --- PDF Text Division ---
   private static extractPdfText(documentId: string, rawText: string): ExtractedSectionRecord[] {
-    const rawParagraphs = rawText.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+    const rawParagraphs = rawText
+      .split(/(?:\n\s*\n|\n\s*(?=(?:Chapter|Unit|Module|Part|\d+\.)\s+[A-Za-z0-9]))/i)
+      .map(p => p.trim())
+      .filter(Boolean);
     const sections: ExtractedSectionRecord[] = [];
 
     let currentTitle = '1. Introduction & Overview';
@@ -224,9 +320,38 @@ export class ExtractionService {
 
     for (let i = 0; i < rawParagraphs.length; i++) {
       const p = rawParagraphs[i];
+      const lines = p.split('\n').map(l => l.trim()).filter(Boolean);
+      const firstLine = lines[0] || '';
+      const isFirstLineHeading =
+        firstLine.startsWith('#') ||
+        /^(\d+(\.\d+)*\s+[A-Z])/.test(firstLine) ||
+        /^(?:chapter|unit|module|part)\s+(\d+|[ivxlcdm]+)/i.test(firstLine) ||
+        (firstLine.length < 65 && !firstLine.endsWith('.') && firstLine.includes(' '));
+
+      if (isFirstLineHeading && lines.length > 1) {
+        if (currentContent.length > 0) {
+          sections.push(
+            this.buildSectionRecord(
+              `sec-pdf-${documentId}-${sections.length + 1}`,
+              documentId,
+              pageNum,
+              undefined,
+              currentTitle,
+              currentContent.join('\n\n')
+            )
+          );
+          currentContent = [];
+          if (sections.length % 2 === 0) pageNum++;
+        }
+        currentTitle = firstLine.replace(/^#+\s*/, '');
+        currentContent.push(lines.slice(1).join('\n'));
+        continue;
+      }
+
       const isHeading =
         p.startsWith('#') ||
         /^(\d+(\.\d+)*\s+[A-Z])/.test(p) ||
+        /^(?:chapter|unit|module|part)\s+(\d+|[ivxlcdm]+)/i.test(p) ||
         (p.length < 65 && !p.endsWith('.') && p.includes(' '));
 
       if (isHeading) {
