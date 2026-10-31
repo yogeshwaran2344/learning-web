@@ -18,7 +18,9 @@ export type NavigationPage =
   | 'saved'
   | 'lecturer'
   | 'settings'
-  | 'upload';
+  | 'upload'
+  | 'compare'
+  | 'graph';
 
 export type StudioTab =
   | 'topics'
@@ -29,7 +31,10 @@ export type StudioTab =
   | 'worked'
   | 'flashcards'
   | 'audio'
-  | 'quiz';
+  | 'quiz'
+  | 'whiteboard'
+  | 'podcast'
+  | 'search';
 
 export type LearningFormat =
   | StudioTab
@@ -647,4 +652,167 @@ export interface IntegrationSuiteResult {
   scorePercent: number;
   executedAt: string;
   checks: IntegrationCheckItem[];
+}
+
+// ---------------------------------------------------------------------------
+// Distinctive Feature 1: AI Interactive Whiteboard
+// ---------------------------------------------------------------------------
+export interface WhiteboardStep {
+  stepNumber: number;
+  title: string;
+  explanation: string;
+  formulaHighlight?: string;
+}
+
+export interface WhiteboardVisualNode {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  type: 'input' | 'process' | 'decision' | 'output' | 'state';
+  description?: string;
+  color?: string;
+}
+
+export interface WhiteboardConnection {
+  from: string;
+  to: string;
+  label?: string;
+}
+
+export interface WhiteboardModel {
+  id: string;
+  topicTitle: string;
+  centralConcept: string;
+  category: string;
+  schematicType: 'flowchart' | 'hierarchy' | 'cycle' | 'layers' | 'equations';
+  steps: WhiteboardStep[];
+  governingFormulas: {
+    latex: string;
+    label: string;
+    variables: { symbol: string; meaning: string }[];
+  }[];
+  visualNodes: WhiteboardVisualNode[];
+  visualConnections: WhiteboardConnection[];
+  sourceCitation: SourceCitation;
+}
+
+// ---------------------------------------------------------------------------
+// Distinctive Feature 2: AI Study Podcast (Two-Speaker Conversational Lessons)
+// ---------------------------------------------------------------------------
+export interface PodcastDialogueTurn {
+  id: string;
+  speaker: 'host' | 'cohost';
+  speakerName: string;
+  avatar: string;
+  text: string;
+  timestampSec: number;
+  citation?: SourceCitation;
+  emotion?: 'curious' | 'insightful' | 'emphatic' | 'humorous';
+}
+
+export interface ChapterPodcast {
+  id: string;
+  documentId: string;
+  chapterTitle: string;
+  durationEstimateSec: number;
+  dialogueTurns: PodcastDialogueTurn[];
+  keyTopicsDiscussed: string[];
+  takeaways: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Distinctive Feature 3: AI Document Comparison
+// ---------------------------------------------------------------------------
+export interface DocumentComparisonResult {
+  docA: { id: string; title: string; category: string; pageCount: number };
+  docB: { id: string; title: string; category: string; pageCount: number };
+  summaryComparison: string;
+  sharedConcepts: {
+    name: string;
+    description: string;
+    citationA: SourceCitation;
+    citationB: SourceCitation;
+  }[];
+  uniqueToDocA: {
+    name: string;
+    description: string;
+    citation: SourceCitation;
+  }[];
+  uniqueToDocB: {
+    name: string;
+    description: string;
+    citation: SourceCitation;
+  }[];
+  conflictingOrDivergentPoints: {
+    topic: string;
+    docAPerspective: string;
+    docBPerspective: string;
+    resolution: string;
+  }[];
+  matrixRows: {
+    concept: string;
+    docAValue: string;
+    docBValue: string;
+    status: 'identical' | 'divergent' | 'complementary';
+  }[];
+}
+
+// ---------------------------------------------------------------------------
+// Distinctive Feature 4: Intelligent Semantic Document Search
+// ---------------------------------------------------------------------------
+export interface SemanticSearchResult {
+  id: string;
+  documentId: string;
+  documentTitle: string;
+  pageNumber: number;
+  sectionTitle: string;
+  matchedText: string;
+  relevanceScore: number; // 0 to 100
+  relevanceReason: string;
+  matchedConcepts: string[];
+  citation: SourceCitation;
+}
+
+// ---------------------------------------------------------------------------
+// Distinctive Feature 5: Smart Document Annotations
+// ---------------------------------------------------------------------------
+export interface DocumentAnnotation {
+  id: string;
+  documentId: string;
+  pageNumber: number;
+  type: 'highlight' | 'bookmark' | 'note';
+  text?: string;
+  color?: 'yellow' | 'green' | 'blue' | 'pink';
+  noteComment?: string;
+  createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Distinctive Feature 6: Cross-Document Knowledge Graph
+// ---------------------------------------------------------------------------
+export interface CrossDocGraphNode {
+  id: string;
+  documentId: string;
+  documentTitle: string;
+  label: string;
+  category: string;
+  pageNumber: number;
+  summary: string;
+  citation: SourceCitation;
+}
+
+export interface CrossDocGraphEdge {
+  id: string;
+  sourceId: string;
+  targetId: string;
+  relationshipType: 'prerequisite' | 'applies' | 'contrasts' | 'shares_formula' | 'extends';
+  label: string;
+  description: string;
+}
+
+export interface CrossDocumentKnowledgeGraphData {
+  nodes: CrossDocGraphNode[];
+  edges: CrossDocGraphEdge[];
+  documentsCovered: { id: string; title: string; count: number }[];
 }

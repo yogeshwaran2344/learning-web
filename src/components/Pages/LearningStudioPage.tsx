@@ -27,7 +27,10 @@ import {
   FolderTree,
   AlertTriangle,
   Send,
-  HelpCircle
+  HelpCircle,
+  PenTool,
+  Radio,
+  Search
 } from 'lucide-react';
 import {
   AcademicDocument,
@@ -47,6 +50,9 @@ import { WorkedExamplesView } from '../Workspace/WorkedExamplesView';
 import { FlashcardView } from '../Workspace/FlashcardView';
 import { AudioLessonView } from '../Workspace/AudioLessonView';
 import { PracticeQuizView } from '../Workspace/PracticeQuizView';
+import { InteractiveWhiteboardView } from '../Workspace/InteractiveWhiteboardView';
+import { StudyPodcastView } from '../Workspace/StudyPodcastView';
+import { IntelligentDocumentSearchView } from '../Workspace/IntelligentDocumentSearchView';
 import { TopicExplorerView } from '../Workspace/TopicExplorerView';
 import { GeneratorControlBar } from '../Workspace/GeneratorControlBar';
 import { ExplainThisModal } from '../Workspace/ExplainThisModal';
@@ -219,7 +225,10 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
     { id: 'worked', number: '05', label: 'Worked Examples', tooltip: 'Step-by-step mathematical calculations and derivations', icon: <FlaskConical className="w-4 h-4" />, color: 'text-emerald-500' },
     { id: 'flashcards', number: '06', label: 'Flashcards', tooltip: 'Spaced repetition flashcards with mastery tracking', icon: <Layers className="w-4 h-4" />, color: 'text-purple-500' },
     { id: 'quiz', number: '07', label: 'Practice Quiz', tooltip: 'Diagnostic quiz with explanations and source citations', icon: <Award className="w-4 h-4" />, color: 'text-amber-500' },
-    { id: 'audio', number: '08', label: 'Audio Lessons', tooltip: 'Narrated spoken lesson with chapter navigation', icon: <Headphones className="w-4 h-4" />, color: 'text-emerald-500' }
+    { id: 'audio', number: '08', label: 'Audio Lessons', tooltip: 'Narrated spoken lesson with chapter navigation', icon: <Headphones className="w-4 h-4" />, color: 'text-emerald-500' },
+    { id: 'whiteboard', number: '09', label: 'AI Whiteboard', tooltip: 'Interactive whiteboard explaining concepts visually with diagrams, equations, and flowcharts', icon: <PenTool className="w-4 h-4" />, color: 'text-purple-500' },
+    { id: 'podcast', number: '10', label: 'Study Podcast', tooltip: 'Two-speaker conversational audio lessons between Dr. Maya & Leo', icon: <Radio className="w-4 h-4" />, color: 'text-emerald-500' },
+    { id: 'search', number: '11', label: 'Semantic Search', tooltip: 'Search by meaning and conceptual intent with source citations', icon: <Search className="w-4 h-4" />, color: 'text-blue-500' }
   ];
 
   const handleTabKeyDown = (e: React.KeyboardEvent, index: number) => {
@@ -1344,6 +1353,33 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
                     initialTopicId={selectedTopicId || activeTopicId}
                     onNavigateToCitation={handleCitationClick}
                     onSaveItem={onSaveItem}
+                  />
+                )}
+
+                {/* 09 AI Interactive Whiteboard */}
+                {activeTab === 'whiteboard' && (
+                  <InteractiveWhiteboardView
+                    document={document}
+                    initialTopicId={selectedTopicId || activeTopicId}
+                    onNavigateToCitation={handleCitationClick}
+                  />
+                )}
+
+                {/* 10 AI Study Podcast */}
+                {activeTab === 'podcast' && (
+                  <StudyPodcastView
+                    document={document}
+                    initialTopicId={selectedTopicId || activeTopicId}
+                    onNavigateToCitation={handleCitationClick}
+                  />
+                )}
+
+                {/* 11 Semantic Document Search */}
+                {activeTab === 'search' && (
+                  <IntelligentDocumentSearchView
+                    document={document}
+                    allDocuments={allDocuments || [document]}
+                    onNavigateToCitation={handleCitationClick}
                   />
                 )}
               </div>

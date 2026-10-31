@@ -33,7 +33,8 @@ import {
   Lightbulb,
   GraduationCap
 } from 'lucide-react';
-import { AcademicDocument, SourceCitation, ExtractionDiagnosticWarning } from '../../types';
+import { AcademicDocument, SourceCitation, ExtractionDiagnosticWarning, DocumentAnnotation } from '../../types';
+import { AnnotationService } from '../../services/annotationService';
 import { StructuredContentRenderer } from './StructuredContentRenderer';
 import { NeuronAnatomyDiagram } from './NeuronAnatomyDiagram';
 
@@ -66,6 +67,45 @@ export const OriginalDocumentView: React.FC<OriginalDocumentViewProps> = ({
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [rotationDegrees, setRotationDegrees] = useState<number>(0);
   const [activeAnnotationTool, setActiveAnnotationTool] = useState<'none' | 'note' | 'highlight' | 'underline'>('none');
+  const [annotations, setAnnotations] = useState<DocumentAnnotation[]>(() => AnnotationService.getAnnotations(document.id));
+
+  useEffect(() => {
+    setAnnotations(AnnotationService.getAnnotations(document.id));
+  }, [document.id]);
+
+  const handleAddHighlight = (color: 'yellow' | 'green' | 'blue' | 'pink' = 'yellow') => {
+    if (!selectedText) return;
+    const newAnno = AnnotationService.addAnnotation(document.id, {
+      pageNumber: selectedPageNumber || currentPage,
+      type: 'highlight',
+      text: selectedText,
+      color
+    });
+    setAnnotations(prev => [...prev, newAnno]);
+    setSelectionPosition(null);
+  };
+
+  const handleAddBookmark = () => {
+    const newAnno = AnnotationService.addAnnotation(document.id, {
+      pageNumber: currentPage,
+      type: 'bookmark',
+      noteComment: `Bookmark: Page ${currentPage} (${selectedSectionTitle || `Section ${currentPage}`})`
+    });
+    setAnnotations(prev => [...prev, newAnno]);
+  };
+
+  const handleAddNote = () => {
+    const comment = window.prompt(`Add study note for Page ${selectedPageNumber || currentPage}:`, selectedText ? `Note on: "${selectedText.slice(0, 40)}..."` : '');
+    if (!comment) return;
+    const newAnno = AnnotationService.addAnnotation(document.id, {
+      pageNumber: selectedPageNumber || currentPage,
+      type: 'note',
+      text: selectedText || undefined,
+      noteComment: comment
+    });
+    setAnnotations(prev => [...prev, newAnno]);
+    setSelectionPosition(null);
+  };
 
   const sections = document.sections || [];
   const totalPages = document.pageCount || Math.max(1, sections.length);
@@ -159,19 +199,41 @@ export const OriginalDocumentView: React.FC<OriginalDocumentViewProps> = ({
       onMouseUp={handleMouseUp}
       className="h-full flex flex-col bg-[#0b1120] text-slate-100 transition-colors select-text relative overflow-hidden"
     >
-      {/* Floating Explain This Tooltip */}
+      {/* Floating Smart Annotation & Explain Tooltip */}
       {selectionPosition && (
-        <button
-          onClick={() => {
-            if (onExplainSelection) onExplainSelection(selectedText, undefined, selectedPageNumber, selectedSectionTitle);
-            setSelectionPosition(null);
-          }}
-          className="fixed z-50 px-3.5 py-1.5 rounded-full bg-blue-600 hover:bg-blue-500 text-white shadow-2xl text-xs font-semibold flex items-center space-x-1.5 -translate-x-1/2 -translate-y-full transition-all cursor-pointer border border-white/20 active:scale-95 animate-fadeIn"
+        <div
+          className="fixed z-50 p-1.5 rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl flex items-center space-x-1.5 -translate-x-1/2 -translate-y-full transition-all animate-fadeIn select-none"
           style={{ left: selectionPosition.x, top: selectionPosition.y }}
         >
-          <Lightbulb className="w-3.5 h-3.5 text-amber-300" />
-          <span>Explain This</span>
-        </button>
+          <button
+            onClick={() => {
+              if (onExplainSelection) onExplainSelection(selectedText, undefined, selectedPageNumber, selectedSectionTitle);
+              setSelectionPosition(null);
+            }}
+            className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center space-x-1 cursor-pointer transition-colors shadow-xs"
+          >
+            <Lightbulb className="w-3.5 h-3.5 text-amber-300" />
+            <span>Explain with AI</span>
+          </button>
+
+          <button
+            onClick={() => handleAddHighlight('yellow')}
+            className="px-2.5 py-1.5 rounded-xl bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 text-xs font-semibold flex items-center space-x-1 cursor-pointer transition-colors"
+            title="Highlight in Yellow"
+          >
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+            <span>Highlight</span>
+          </button>
+
+          <button
+            onClick={handleAddNote}
+            className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center space-x-1 cursor-pointer transition-colors"
+            title="Add Note to this text"
+          >
+            <MessageSquare className="w-3.5 h-3.5 text-purple-400" />
+            <span>Note</span>
+          </button>
+        </div>
       )}
 
       {/* PDF Viewer Dark Header Bar (matching Learning Cortex screenshot) */}
@@ -211,6 +273,20 @@ export const OriginalDocumentView: React.FC<OriginalDocumentViewProps> = ({
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
+
+          {/* Bookmark Button */}
+          <button
+            onClick={handleAddBookmark}
+            className={`p-1.5 rounded-lg border text-xs transition-colors cursor-pointer flex items-center gap-1 ${
+              annotations.some(a => a.type === 'bookmark' && a.pageNumber === currentPage)
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold'
+                : 'hover:bg-slate-800 text-slate-400 hover:text-white border-transparent'
+            }`}
+            title="Bookmark Page"
+          >
+            <Bookmark className="w-3.5 h-3.5" />
+            <span className="hidden md:inline text-[10px]">Bookmark</span>
+          </button>
 
           {onSwitchToTeacher && (
             <button

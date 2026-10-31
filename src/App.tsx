@@ -26,6 +26,8 @@ import { SourceVerificationPage } from './components/Pages/SourceVerificationPag
 import { SavedMaterialsPage } from './components/Pages/SavedMaterialsPage';
 import { LecturerWorkspacePage } from './components/Pages/LecturerWorkspacePage';
 import { SettingsPage } from './components/Pages/SettingsPage';
+import { DocumentComparisonPage } from './components/Pages/DocumentComparisonPage';
+import { CrossDocumentKnowledgeGraphPage } from './components/Pages/CrossDocumentKnowledgeGraphPage';
 
 // Modals
 import { AccessibilityModal } from './components/AccessibilityModal';
@@ -504,6 +506,52 @@ export function App() {
               onSelectDocument={(doc) => setActiveDocument(doc)}
               onNavigateToCitation={handleNavigateToCitation}
               onNavigate={(page) => setCurrentPage(page as NavigationPage)}
+            />
+          )}
+
+          {currentPage === 'compare' && (
+            <DocumentComparisonPage
+              documents={documents}
+              onNavigateToStudio={(docId, pageNumber) => {
+                const target = documents.find(d => d.id === docId);
+                if (target) {
+                  setActiveDocument(target);
+                  setCurrentPage('studio');
+                  if (pageNumber) {
+                    setActiveCitation({
+                      id: `cite-jump-${Date.now()}`,
+                      documentId: docId,
+                      pageNumber,
+                      sectionTitle: `Page ${pageNumber}`,
+                      exactQuote: `Page ${pageNumber} content`
+                    });
+                  }
+                }
+              }}
+              onNavigateToCitation={handleNavigateToCitation}
+            />
+          )}
+
+          {currentPage === 'graph' && (
+            <CrossDocumentKnowledgeGraphPage
+              documents={documents}
+              onNavigateToStudio={(docId, pageNumber) => {
+                const target = documents.find(d => d.id === docId);
+                if (target) {
+                  setActiveDocument(target);
+                  setCurrentPage('studio');
+                  if (pageNumber) {
+                    setActiveCitation({
+                      id: `cite-jump-${Date.now()}`,
+                      documentId: docId,
+                      pageNumber,
+                      sectionTitle: `Page ${pageNumber}`,
+                      exactQuote: `Page ${pageNumber} content`
+                    });
+                  }
+                }
+              }}
+              onNavigateToCitation={handleNavigateToCitation}
             />
           )}
 
