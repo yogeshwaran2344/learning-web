@@ -1034,7 +1034,7 @@ Curve C must be strictly simple (non-self-intersecting) and traversed counter-cl
   },
   {
     id: 'doc-os-scheduling',
-    title: 'Operating Systems: CPU Scheduling & Performance Metrics',
+    title: 'Operating Systems: Process Concept & CPU Scheduling',
     author: 'Silberschatz, Galvin & Gagne',
     year: '2026',
     category: 'Computer Science',
@@ -1042,14 +1042,64 @@ Curve C must be strictly simple (non-self-intersecting) and traversed counter-cl
     uploadDate: '2026-10-30',
     processingStatus: 'ready',
     extractionStatus: 'ready',
-    pageCount: 2,
-    wordCount: 1420,
-    summary: 'Detailed examination of CPU Scheduling algorithms including Shortest Job First, First-Come First-Served, and step-by-step Turnaround Time and Waiting Time derivations.',
+    pageCount: 59,
+    wordCount: 18450,
+    summary: 'Comprehensive 59-page university lecture deck and textbook covering Process Concepts, Process States, PCB, Context Switching, and CPU Scheduling algorithms with step-by-step Turnaround and Waiting Time derivations.',
     sections: [
       {
         id: 'sec-os-1',
-        title: 'CPU Scheduling – Example',
+        title: 'Process Concept',
         pageNumber: 1,
+        content: `What is a Process?\nA process is simply a program that is currently running on a computer.\n\nThink of it this way:\nWhen you open Chrome, your computer creates a process to run it. When you open another application, that application also runs as a process.\n\nImportant things to understand:\n- A process is a program in execution.\n- Each process has its own current state.\n- The CPU keeps track of its execution.\n- A process uses memory while running.\n\nRemember this:\nProgram = Instructions stored on a computer.\nProcess = Those instructions currently executing.`,
+        definitions: [
+          { term: 'Process', definition: 'A program in execution, with associated resources, registers, and memory state.' },
+          { term: 'Program', definition: 'A passive entity, such as a file containing a list of instructions stored on disk.' }
+        ],
+        conditions: [
+          'A process requires memory (code, data, stack, heap) and CPU time to execute.'
+        ]
+      },
+      {
+        id: 'sec-os-2',
+        title: 'Process States & State Transitions',
+        pageNumber: 2,
+        content: `As a process executes, it changes state. The state of a process is defined in part by the current activity of that process.\n\nFive Principle Process States:\n1. New: The process is being created.\n2. Running: Instructions are being executed on the CPU.\n3. Waiting: The process is waiting for some event to occur (such as an I/O completion or reception of a signal).\n4. Ready: The process is waiting to be assigned to a processor.\n5. Terminated: The process has finished execution.\n\nState transitions occur deterministically via scheduler dispatch, I/O requests, and interrupts. Only one process can be running on any processor core at any instant.`,
+        conditions: [
+          'At most one process can occupy the Running state per physical CPU core at any time.'
+        ]
+      },
+      {
+        id: 'sec-os-3',
+        title: 'Process Control Block (PCB)',
+        pageNumber: 3,
+        content: `Each process is represented in the operating system by a Process Control Block (PCB)—also called a task control block.\n\nKey PCB Elements:\n- Process State: New, ready, running, waiting, or halted.\n- Program Counter: Indicates the address of the next instruction to be executed for this process.\n- CPU Registers: Accumulators, index registers, stack pointers, and general-purpose registers.\n- CPU-Scheduling Information: Process priority, pointers to scheduling queues.\n- Memory-Management Information: Value of base and limit registers, page tables.\n- Accounting Information: Amount of CPU used, time limits, account numbers.\n- I/O Status Information: List of I/O devices allocated, list of open files.`,
+        definitions: [
+          { term: 'Process Control Block', definition: 'Repository for any information that may vary from process to process, enabling state saving and restoring during context switching.' }
+        ]
+      },
+      {
+        id: 'sec-os-4',
+        title: 'Program vs Process Comparison',
+        pageNumber: 4,
+        content: `A program by itself is not a process. A program is a passive entity, such as a file containing a list of instructions stored on disk (often called an executable file). In contrast, a process is an active entity, with a program counter specifying the next instruction to execute and a set of associated resources.\n\nComparison Table:\nFeature | Program | Process\nNature | Passive entity stored on disk | Active entity executing in memory\nLocation | Secondary storage (SSD / HDD) | Main memory (RAM) & CPU\nResource Usage | Consumes disk space only | Consumes CPU cycles, memory, and I/O\nLifetime | Permanent until deleted | Temporary; terminated after execution\nMultiplicity | Single file on storage | Multiple processes can run from one program`,
+        tables: [
+          {
+            caption: 'Program vs Process Architectural Comparison',
+            headers: ['Feature', 'Program', 'Process'],
+            rows: [
+              ['Nature', 'Passive entity stored on disk', 'Active entity executing in memory'],
+              ['Location', 'Secondary storage (SSD / HDD)', 'Main memory (RAM) & CPU'],
+              ['Resource Usage', 'Consumes disk space only', 'Consumes CPU cycles, memory, and I/O'],
+              ['Lifetime', 'Permanent until deleted', 'Temporary; terminated after execution'],
+              ['Multiplicity', 'Single file on storage', 'Multiple processes can run from one program']
+            ]
+          }
+        ]
+      },
+      {
+        id: 'sec-os-5',
+        title: 'CPU Scheduling & Average Waiting Time Calculation',
+        pageNumber: 5,
         content: `CPU Scheduling – Example\n\nConsider the following set of 5 processes arriving at the ready queue with their respective arrival times and burst times:\n\nProcess | Arrival Time | Burst Time\nP1 | 0 | 5\nP2 | 1 | 3\nP3 | 2 | 1\nP4 | 3 | 5\nP5 | 4 | 2\n\nThe scheduler allocates CPU resources non-preemptively based on arrival order and shortest remaining bursts.\n\nTurnaround time calculations:\nTurnaround Time (TAT) = Completion Time - Arrival Time\nP1: 5 - 0 = 5\nP2: 8 - 1 = 7\nP3: 9 - 2 = 7\nP4: 14 - 3 = 11\nP5: 16 - 4 = 12\n\nAverage turnaround time = (5 + 7 + 7 + 11 + 12) / 5 = 8.4 ms\n\nWaiting time calculations:\nWaiting Time (WT) = Turnaround Time - Burst Time\nP1: 5 - 5 = 0\nP2: 7 - 3 = 4\nP3: 7 - 1 = 6\nP4: 11 - 5 = 6\nP5: 12 - 2 = 10\n\nAverage waiting time = (0 + 4 + 6 + 6 + 10) / 5 = 5.2 ms\n\nAverage Waiting Time\n\nGiven:\n- P1 = 4 ms\n- P2 = 6 ms\n- P3 = 8 ms\n\nCalculation:\n\\[\n\\text{Average}=\\frac{4+6+8}{3}\n\\]\n\n\\[\n=\\frac{18}{3}=6\\text{ ms}\n\\]\n\nFinal answer: 6 ms`,
         tables: [
           {
@@ -1078,15 +1128,6 @@ Curve C must be strictly simple (non-self-intersecting) and traversed counter-cl
         ],
         conditions: [
           'Arrival times and burst times must be non-negative real numbers (AT >= 0, BT > 0).'
-        ]
-      },
-      {
-        id: 'sec-os-2',
-        title: 'Preemptive vs Non-Preemptive Scheduling Invariants',
-        pageNumber: 2,
-        content: `Under non-preemptive scheduling, once the CPU has been allocated to a process, the process holds the CPU until it terminates or switches to the waiting state. In contrast, preemptive scheduling permits higher-priority tasks to interrupt executing threads.\n\nThe governing invariant guarantees that total CPU utilization U <= 1.0, and no process suffers starvation when aging mechanisms are enforced.`,
-        conditions: [
-          'CPU utilization invariant: sum(BT_i / Period_i) <= 1.0'
         ]
       }
     ],

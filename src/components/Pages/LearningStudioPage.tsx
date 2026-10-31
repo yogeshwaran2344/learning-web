@@ -22,7 +22,8 @@ import {
   Download,
   Settings,
   MessageSquare,
-  Loader2
+  Loader2,
+  GraduationCap
 } from 'lucide-react';
 import {
   AcademicDocument,
@@ -34,6 +35,7 @@ import {
   FormatVerificationResult
 } from '../../types';
 import { OriginalDocumentView } from '../Workspace/OriginalDocumentView';
+import { PageWiseTeacherView } from '../Workspace/PageWiseTeacherView';
 import { ConceptMapView } from '../Workspace/ConceptMapView';
 import { FlashcardView } from '../Workspace/FlashcardView';
 import { AudioLessonView } from '../Workspace/AudioLessonView';
@@ -74,6 +76,7 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
   const [isSplitView, setIsSplitView] = useState<boolean>(true);
   const [highlightedCitation, setHighlightedCitation] = useState<SourceCitation | null>(activeCitation || null);
   const [rightPanelMode, setRightPanelMode] = useState<'chat' | 'formats'>('chat');
+  const [leftPanelMode, setLeftPanelMode] = useState<'teacher' | 'original'>('teacher');
   const [fullContextEnabled, setFullContextEnabled] = useState<boolean>(true);
 
   // Synchronize incoming activeCitation from ContextPanel / App
@@ -166,7 +169,7 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
   };
 
   const tabs: { id: StudioTab; number: string; label: string; tooltip: string; icon: React.ReactNode; color: string }[] = [
-    { id: 'original', number: '01', label: 'Original', tooltip: 'Original PDF/Document text with source highlighting', icon: <FileText className="w-4 h-4" />, color: 'text-slate-500' },
+    { id: 'original', number: '01', label: 'AI Teacher', tooltip: 'Personal AI Teacher: Page-wise explanation of every page', icon: <GraduationCap className="w-4 h-4" />, color: 'text-blue-500' },
     { id: 'map', number: '02', label: 'Concept Map', tooltip: 'Hierarchical knowledge graph and prerequisite relationships', icon: <Network className="w-4 h-4" />, color: 'text-blue-500' },
     { id: 'simplified', number: '03', label: 'Simplified Explanation', tooltip: 'Plain-language explanation with real-world analogies', icon: <Lightbulb className="w-4 h-4" />, color: 'text-amber-500' },
     { id: 'notes', number: '04', label: 'Detailed Notes', tooltip: 'Exhaustive notes with definitions, equations, and conditions', icon: <BookOpen className="w-4 h-4" />, color: 'text-indigo-500' },
@@ -682,7 +685,7 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
 
       {/* Main Studio Body: Resizable Split View (Document Viewer on Left, Format on Right) */}
       <div ref={mainContainerRef} className="flex-1 flex overflow-hidden relative select-none">
-        {/* Left: Original Source View (Occupies ~65-70% width default, resizable) */}
+        {/* Left: AI Teacher Page-Wise View or Original Source View (Occupies ~65-70% width default, resizable) */}
         {(isSplitView || activeTab === 'original') && (
           <div
             style={{
@@ -690,12 +693,25 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
             }}
             className="h-full overflow-hidden transition-all duration-75 flex flex-col shrink-0 border-r border-slate-200 dark:border-slate-800"
           >
-            <OriginalDocumentView
-              document={document}
-              highlightedCitation={highlightedCitation}
-              onClearHighlight={() => setHighlightedCitation(null)}
-              onExplainSelection={handleOpenExplain}
-            />
+            {leftPanelMode === 'teacher' ? (
+              <PageWiseTeacherView
+                document={document}
+                initialPage={highlightedCitation?.pageNumber || 1}
+                onNavigateToCitation={handleCitationClick}
+                onOpenAskAi={() => {
+                  setRightPanelMode('chat');
+                }}
+                onSwitchToOriginal={() => setLeftPanelMode('original')}
+              />
+            ) : (
+              <OriginalDocumentView
+                document={document}
+                highlightedCitation={highlightedCitation}
+                onClearHighlight={() => setHighlightedCitation(null)}
+                onExplainSelection={handleOpenExplain}
+                onSwitchToTeacher={() => setLeftPanelMode('teacher')}
+              />
+            )}
           </div>
         )}
 

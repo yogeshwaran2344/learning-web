@@ -21,6 +21,7 @@ import { AcademicDocument, AppLanguage, DocumentFileType } from '../../types';
 import { ApiClient } from '../../services/apiClient';
 import { DocumentProcessor } from '../../services/documentProcessor';
 import { StorageService } from '../../services/storageService';
+import { PageTeacherService } from '../../services/pageTeacherService';
 
 interface UploadMaterialPageProps {
   onDocumentCreated: (doc: AcademicDocument) => void;
@@ -161,6 +162,9 @@ Condition: Dimensions of x and F must match or be projected via shortcut matrix 
       await new Promise(r => setTimeout(r, 400));
 
       const backendDoc = res.document;
+      if (!backendDoc.pageWiseExplanations || backendDoc.pageWiseExplanations.length === 0) {
+        backendDoc.pageWiseExplanations = PageTeacherService.generateAllPageExplanations(backendDoc);
+      }
       const extraction = res.extraction;
       const isReviewNeeded = extraction?.qualityReport?.userStatus === 'needs_review' ||
         fileType === 'scanned_notes' ||
@@ -182,15 +186,14 @@ Condition: Dimensions of x and F must match or be projected via shortcut matrix 
         onDocumentCreated(backendDoc);
       }
     } catch (e: any) {
-      console.error('[UploadMaterialPage] Real upload error:', e);
-      setLifecycleState('failed');
-      const is502OrOffline = e.message?.includes('502') || e.message?.includes('Failed to fetch') || e.message?.includes('NetworkError') || e.message?.includes('ECONNREFUSED');
-      if (is502OrOffline) {
-        setErrorMessage(
-          'Backend API server on port 5001 is offline or unreachable (Status 502 Bad Gateway). Please run `npm run dev:all` in your terminal to start both frontend and backend, or click "Process with Client-Side Engine" below.'
-        );
-      } else {
-        setErrorMessage(e.message || 'Upload failed: The server could not process the document. Please check the file format and try again.');
+      console.warn('[UploadMaterialPage] Server upload error, attempting seamless fallback so student is never blocked:', e);
+      // Auto-fallback to client-side processor so students never get blocked by 502 or 401
+      try {
+        await handleClientFallbackProcess();
+        return;
+      } catch (fallbackErr: any) {
+        setLifecycleState('failed');
+        setErrorMessage(fallbackErr.message || e.message || 'Processing failed.');
       }
     }
   };
@@ -212,6 +215,7 @@ Condition: Dimensions of x and F must match or be projected via shortcut matrix 
 
     const cleanTitle = docTitle || (selectedFile ? selectedFile.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ') : fileName) || 'Uploaded Academic Document';
     const processedDoc = DocumentProcessor.processText(cleanTitle, textToProcess, author || 'Academic Author', category);
+    processedDoc.pageWiseExplanations = PageTeacherService.generateAllPageExplanations(processedDoc);
 
     setLifecycleState('verifying');
     await new Promise(r => setTimeout(r, 400));

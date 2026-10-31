@@ -82,6 +82,47 @@ export interface DocumentSection {
   uncertainSymbols?: string[];
 }
 
+export type PageContentType = 'theory' | 'numerical' | 'diagram' | 'comparison' | 'continuation' | 'unreadable';
+
+export interface PageWiseExplanation {
+  pageNumber: number;
+  topicTitle: string;
+  contentType: PageContentType;
+  status?: 'explained' | 'needs_review' | 'unreadable';
+  shortExplanation: string; // 4-6 crisp sentences
+  detailedExplanation: string; // expanded breakdown with practical examples
+  whatIsIt: string; // "What is [Concept]?"
+  thinkOfItThisWay: string; // Relatable real-world analogy
+  importantThingsToUnderstand: string[]; // 3-5 bulleted principles
+  rememberThis: {
+    rule: string;
+    keyDifference?: string;
+  };
+  numericalDetails?: {
+    problemStatement: string;
+    givenValues: { parameter: string; value: string }[];
+    formulaUsed: string;
+    calculationSteps: { stepNumber: number; description: string; mathExpr?: string }[];
+    finalAnswer: string;
+  };
+  diagramDetails?: {
+    diagramTitle: string;
+    components: { name: string; role: string }[];
+    workflowSteps: string[];
+  };
+  comparisonDetails?: {
+    comparisonTitle: string;
+    headers: string[]; // e.g. ["Feature", "Program", "Process"]
+    rows: string[][];
+    contrastSummary: string;
+  };
+  isContinuation?: boolean;
+  continuationOfTopic?: string;
+  isUnreadableOrBlank?: boolean;
+  unreadableReason?: string;
+  sourceCitation: SourceCitation;
+}
+
 export interface ConceptNode {
   id: string;
   label: string;
@@ -196,6 +237,7 @@ export interface AcademicDocument {
   sections: DocumentSection[];
   conceptMap: ConceptMapData;
   explanations: ExplanationLevel[];
+  pageWiseExplanations?: PageWiseExplanation[];
   flashcards: Flashcard[];
   audioLesson: AudioLesson;
   meaningPreservation: MeaningPreservationReport;

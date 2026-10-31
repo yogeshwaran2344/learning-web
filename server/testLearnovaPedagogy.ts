@@ -17,6 +17,8 @@ import { ExplainThisService } from './services/explainThisService';
 import { MeaningPreservationEngine } from './services/meaningPreservationEngine';
 import { DomainGroundingEngine } from './services/domainGroundingEngine';
 import { ExtractedSectionRecord } from './db/schema';
+import { PageTeacherService } from '../src/services/pageTeacherService';
+import { SAMPLE_DOCUMENTS } from '../src/data/sampleDocuments';
 
 // Test harness
 let totalTests = 0;
@@ -912,6 +914,122 @@ async function runPedagogySuite() {
     'Step 12.6: Meaningful activity tracking: Topics completed, Quiz performance, Difficult concepts, Flashcards drilled, Revision history',
     meaningfulMetrics.every(m => m !== undefined && m !== null),
     `Metrics verified: ${progressRecord?.topicsCompleted} topics, ${progressRecord?.averageQuizScore}% quiz avg, ${progressRecord?.difficultConceptsCount} difficult concepts, ${progressRecord?.flashcardsReviewed} flashcards drilled.`
+  );
+
+  // =============================================================
+  // STEP 13: PERSONAL AI TEACHER & PAGE-WISE LEARNING ARCHITECTURE
+  // =============================================================
+  console.log('\n--- STEP 13: PERSONAL AI TEACHER & PAGE-WISE LEARNING ARCHITECTURE ---');
+
+  // 13.1 Administrative Noise Removal
+  const noisyCollegeText = `
+    K.S. INSTITUTE OF TECHNOLOGY, BANGALORE
+    Department of Computer Science & Engineering
+    Approved by AICTE, Affiliated to VTU, Belagavi
+    Course Code: CS8391 - Principles of Operating Systems
+    Semester: V | Batch: 2024-2028 | Faculty In-Charge: Dr. Sharma
+    Internal Assessment Test - I (Model Exam)
+    Page 1 of 59
+
+    Process Concept:
+    A process is fundamentally a program in execution. It represents the dynamic execution of passive code.
+  `;
+  const sanitizedText = PageTeacherService.sanitizeAdministrativeContent(noisyCollegeText);
+  assertTest(
+    'Step 13.1: Complete sanitization of administrative noise, college names, department names, course codes & footer stamps',
+    !sanitizedText.includes('INSTITUTE OF TECHNOLOGY') &&
+      !sanitizedText.includes('Department of Computer Science') &&
+      !sanitizedText.includes('Approved by AICTE') &&
+      !sanitizedText.includes('Course Code: CS8391') &&
+      !sanitizedText.includes('Semester: V') &&
+      !sanitizedText.includes('Page 1 of 59') &&
+      sanitizedText.includes('A process is fundamentally a program in execution'),
+    'Administrative boilerplate cleanly stripped; genuine academic content preserved.'
+  );
+
+  // 13.2 5-Part Pedagogical Structure on Page 1 (Process Concept)
+  const osDoc = SAMPLE_DOCUMENTS.find(d => d.id === 'doc-os-scheduling')!;
+  const page1Explanation = PageTeacherService.generatePageExplanation(osDoc, 1);
+  assertTest(
+    'Step 13.2: Page 1 structured 5-part AI Teacher explanation: What is it, Everyday analogy, Key points, Summary rule, and Page citation',
+    page1Explanation.pageNumber === 1 &&
+      page1Explanation.status === 'explained' &&
+      page1Explanation.topicTitle.toLowerCase().includes('process') &&
+      page1Explanation.whatIsIt.length > 20 &&
+      page1Explanation.thinkOfItThisWay.length > 20 &&
+      page1Explanation.importantThingsToUnderstand.length >= 3 &&
+      (typeof page1Explanation.rememberThis === 'string' ? page1Explanation.rememberThis.length > 10 : page1Explanation.rememberThis.rule.length > 10) &&
+      page1Explanation.sourceCitation.pageNumber === 1,
+    `Page 1 Explanation: "${page1Explanation.topicTitle}" with analogy: "${page1Explanation.thinkOfItThisWay.substring(0, 60)}..."`
+  );
+
+  // 13.3 Content-Adaptive Classification: Theory, Numerical, Diagram, Comparison & Unreadable
+  const page2Exp = PageTeacherService.generatePageExplanation(osDoc, 2); // Process States (theory/diagram)
+  const page3Exp = PageTeacherService.generatePageExplanation(osDoc, 3); // PCB (diagram)
+  const page4Exp = PageTeacherService.generatePageExplanation(osDoc, 4); // Program vs Process (comparison)
+  const page5Exp = PageTeacherService.generatePageExplanation(osDoc, 5); // Average Waiting Time (numerical)
+
+  assertTest(
+    'Step 13.3: Content-Adaptive Classification across Page 1-5 (Theory, Diagram, Comparison, Numerical)',
+    page1ExpContentTypeMatches(page1Explanation.contentType) &&
+      page3Exp.contentType === 'diagram' &&
+      page3Exp.diagramDetails !== undefined &&
+      page3Exp.diagramDetails.components.length >= 3 &&
+      page4Exp.contentType === 'comparison' &&
+      page4Exp.comparisonDetails !== undefined &&
+      page4Exp.comparisonDetails.rows.length >= 3 &&
+      page5Exp.contentType === 'numerical' &&
+      page5Exp.numericalDetails !== undefined &&
+      page5Exp.numericalDetails.givenValues.length >= 2,
+    `Adaptive types verified: P1(${page1Explanation.contentType}), P3(diagram: ${page3Exp.diagramDetails?.components.length} comps), P4(comparison: ${page4Exp.comparisonDetails?.rows.length} rows), P5(numerical: ${page5Exp.numericalDetails?.calculationSteps.length} steps).`
+  );
+
+  function page1ExpContentTypeMatches(type: string): boolean {
+    return type === 'theory';
+  }
+
+  // 13.4 Numerical Page Detailed Mathematical Derivations & Highlighted Answer
+  const numDetails = page5Exp.numericalDetails;
+  assertTest(
+    'Step 13.4: Numerical pages render Given Values, Formulas, Step-by-Step Derivations & Final Highlighted Answer',
+    numDetails !== undefined &&
+      numDetails.givenValues.some(g => g.parameter?.includes('P1') || JSON.stringify(g).includes('P1')) &&
+      numDetails.calculationSteps.length >= 2 &&
+      numDetails.finalAnswer.length > 3,
+    `Numerical Derivation: Formula "${numDetails?.formulaUsed}", Final Answer: "${numDetails?.finalAnswer}"`
+  );
+
+  // 13.5 Unreadable / Corrupted Page Transparent Flagging (Zero Hallucination)
+  const unreadableDoc = {
+    ...osDoc,
+    sections: [
+      {
+        id: 'sec-corrupt',
+        title: 'Corrupted Slide',
+        pageNumber: 1,
+        content: '?? ## %% ~~ blur scan illegible',
+        uncertainSymbols: ['?', '%', '#', '~', '!', '@']
+      }
+    ]
+  };
+  const unreadableExplanation = PageTeacherService.generatePageExplanation(unreadableDoc, 1);
+  assertTest(
+    'Step 13.5: Unreadable or low-contrast pages clearly flagged without hallucinating or inventing content',
+    unreadableExplanation.contentType === 'unreadable' &&
+      unreadableExplanation.status === 'needs_review' &&
+      unreadableExplanation.unreadableReason !== undefined,
+    `Unreadable page handled safely: "${unreadableExplanation.unreadableReason}"`
+  );
+
+  // 13.6 Exhaustive 59-Page Document Individual Explanations Generation
+  const all59Explanations = PageTeacherService.generateAllPageExplanations(osDoc);
+  assertTest(
+    'Step 13.6: Exhaustive page-wise explanation generation across all 59 pages of Operating Systems material',
+    all59Explanations.length === 59 &&
+      all59Explanations.every(p => p.pageNumber >= 1 && p.pageNumber <= 59) &&
+      all59Explanations.every(p => p.sourceCitation.pageNumber === p.pageNumber) &&
+      all59Explanations.every(p => !p.whatIsIt.includes('INSTITUTE OF TECHNOLOGY')),
+    `Successfully generated individual, clean explanations for all ${all59Explanations.length} pages.`
   );
 
   // Summary

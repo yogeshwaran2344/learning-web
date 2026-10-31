@@ -30,7 +30,8 @@ import {
   Underline as UnderlineIcon,
   Undo2,
   PlusCircle,
-  Lightbulb
+  Lightbulb,
+  GraduationCap
 } from 'lucide-react';
 import { AcademicDocument, SourceCitation, ExtractionDiagnosticWarning } from '../../types';
 import { StructuredContentRenderer } from './StructuredContentRenderer';
@@ -41,13 +42,15 @@ interface OriginalDocumentViewProps {
   highlightedCitation?: SourceCitation | null;
   onClearHighlight?: () => void;
   onExplainSelection?: (text: string, context?: string, pageNumber?: number, sectionTitle?: string) => void;
+  onSwitchToTeacher?: () => void;
 }
 
 export const OriginalDocumentView: React.FC<OriginalDocumentViewProps> = ({
   document,
   highlightedCitation,
   onClearHighlight,
-  onExplainSelection
+  onExplainSelection,
+  onSwitchToTeacher
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const activeHighlightRef = useRef<HTMLDivElement>(null);
@@ -208,6 +211,17 @@ export const OriginalDocumentView: React.FC<OriginalDocumentViewProps> = ({
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
+
+          {onSwitchToTeacher && (
+            <button
+              onClick={onSwitchToTeacher}
+              className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              title="Switch to Page-Wise AI Teacher explanation"
+            >
+              <GraduationCap className="w-3.5 h-3.5" />
+              <span>AI Teacher</span>
+            </button>
+          )}
         </div>
 
         {/* Center & Right: Zoom & Tool Icons */}
