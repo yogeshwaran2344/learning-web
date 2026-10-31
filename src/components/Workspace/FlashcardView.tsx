@@ -67,6 +67,14 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
   const [markedDifficult, setMarkedDifficult] = useState<Set<string>>(new Set());
   const [cardRatings, setCardRatings] = useState<Record<string, 'easy' | 'medium' | 'difficult'>>({});
   const [showDifficultOnly, setShowDifficultOnly] = useState<boolean>(false);
+  const [isAdaptiveMode, setIsAdaptiveMode] = useState<boolean>(false);
+  const [cardLapseStats, setCardLapseStats] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem(`learnova_card_lapses_${documentId}`);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return {};
+  });
   const [viewMode, setViewMode] = useState<'study' | 'quiz'>('study');
   const [quizSelection, setQuizSelection] = useState<number | null>(null);
 
@@ -76,15 +84,20 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
     }
   }, [initialTopicId]);
 
-  // Sync deck when selected topic changes
+  // Sync deck when selected topic or adaptive mode changes (Feature 7)
   useEffect(() => {
-    const targetDeck = selectedTopicId === 'overall'
+    let targetDeck = selectedTopicId === 'overall'
       ? overallDeck
       : (topicDecks[selectedTopicId] || overallDeck);
+
+    if (isAdaptiveMode) {
+      targetDeck = [...targetDeck].sort((a, b) => (cardLapseStats[b.id] || 0) - (cardLapseStats[a.id] || 0));
+    }
+
     setDeck(targetDeck);
     setCurrentIndex(0);
     setIsFlipped(false);
-  }, [selectedTopicId, topicDecks, overallDeck]);
+  }, [selectedTopicId, topicDecks, overallDeck, isAdaptiveMode]);
 
   const activeCards = useMemo(() => {
     if (showDifficultOnly) {
@@ -150,6 +163,21 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
     setCardRatings(prev => ({ ...prev, [currentCard.id]: rating }));
 
     if (rating === 'difficult') {
+      const newLapseCount = (cardLapseStats[currentCard.id] || 0) + 1;
+      const updatedLapses = { ...cardLapseStats, [currentCard.id]: newLapseCount };
+      setCardLapseStats(updatedLapses);
+      try {
+        localStorage.setItem(`learnova_card_lapses_${documentId}`, JSON.stringify(updatedLapses));
+      } catch (e) {}
+
+      // Adaptive queue re-injection (Feature 7): Re-insert difficult card 3 cards ahead for spaced reinforcement
+      setDeck(prev => {
+        const next = [...prev];
+        const insertPos = Math.min(next.length, currentIndex + 3);
+        next.splice(insertPos, 0, currentCard);
+        return next;
+      });
+
       setMarkedDifficult(prev => new Set(prev).add(currentCard.id));
       onUpdateMastery(documentId, currentCard.id, 0); // unlearned
     } else if (rating === 'medium') {
@@ -211,6 +239,23 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
           >
             <Shuffle className="w-3.5 h-3.5" />
             <span>Shuffle</span>
+          </button>
+
+          {/* Adaptive Review (Weakest Cards First) */}
+          <button
+            onClick={() => {
+              setIsAdaptiveMode(!isAdaptiveMode);
+              setCurrentIndex(0);
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              isAdaptiveMode
+                ? 'bg-purple-600 text-white shadow-sm'
+                : 'border border-purple-300 dark:border-purple-700/60 text-purple-700 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/30'
+            }`}
+            title="Automatically prioritize cards based on how frequently you answer incorrectly"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Adaptive Order {isAdaptiveMode && '(Weakest First)'}</span>
           </button>
 
           {/* Revisit Difficult Cards Filter */}
@@ -358,6 +403,11 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
                   <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] font-semibold text-slate-600 dark:text-slate-300">
                     {currentCard?.category?.toUpperCase() || 'CORE'}
                   </span>
+                  {(cardLapseStats[currentCard?.id || ''] || 0) > 0 && (
+                    <span className="px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-[10px] font-bold text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800" title="This card was missed or marked difficult">
+                      ⚠️ Struggled {cardLapseStats[currentCard.id]}x
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-1.5">

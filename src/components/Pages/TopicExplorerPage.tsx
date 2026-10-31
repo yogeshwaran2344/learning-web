@@ -33,7 +33,8 @@ import {
   Info,
   ExternalLink,
   GitBranch,
-  FolderInput
+  FolderInput,
+  Clock
 } from 'lucide-react';
 import {
   AcademicDocument,
@@ -135,6 +136,49 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
 
   // Learn Selected Topics Format Selector Modal
   const [isLearnSelectedModalOpen, setIsLearnSelectedModalOpen] = useState(false);
+
+  // Topic Learning Progress State (Feature 3)
+  type TopicProgressStatus = 'not_started' | 'in_progress' | 'completed';
+
+  const [topicProgress, setTopicProgress] = useState<Record<string, TopicProgressStatus>>(() => {
+    try {
+      const saved = localStorage.getItem(`learnova_progress_${document.id}`);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return {};
+  });
+
+  const updateTopicProgress = (topicId: string, status: TopicProgressStatus) => {
+    setTopicProgress(prev => {
+      const next = { ...prev, [topicId]: status };
+      try {
+        localStorage.setItem(`learnova_progress_${document.id}`, JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  const handleCycleProgress = (topicId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const current = topicProgress[topicId] || 'not_started';
+    const nextStatus: TopicProgressStatus =
+      current === 'not_started' ? 'in_progress' :
+      current === 'in_progress' ? 'completed' : 'not_started';
+    updateTopicProgress(topicId, nextStatus);
+  };
+
+  const handleMarkSelectedCompleted = () => {
+    setTopicProgress(prev => {
+      const next = { ...prev };
+      selectedTopicIds.forEach(id => {
+        next[id] = 'completed';
+      });
+      try {
+        localStorage.setItem(`learnova_progress_${document.id}`, JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
 
   const syncHierarchyUpdate = (newHierarchy: DocumentTopicHierarchy) => {
     setHierarchy(newHierarchy);
@@ -342,6 +386,11 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
 
   const totalFilteredTopics = filteredChapters.reduce((acc, c) => acc + c.topics.length, 0);
 
+  const allTopicsList = hierarchy.chapters.flatMap(c => c.topics);
+  const completedTopicsCount = allTopicsList.filter(t => topicProgress[t.id] === 'completed').length;
+  const inProgressTopicsCount = allTopicsList.filter(t => topicProgress[t.id] === 'in_progress').length;
+  const progressPercent = allTopicsList.length > 0 ? Math.round((completedTopicsCount / allTopicsList.length) * 100) : 0;
+
   return (
     <div className="p-6 md:p-8 max-w-6xl mx-auto space-y-6 select-none animate-fadeIn">
       {/* 2.1 Top Banner: Explore Your Topics & Document Analysed Status */}
@@ -390,6 +439,50 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
               <span>Learn Selected ({selectedTopicIds.size})</span>
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Learning Progress Summary Bar (Feature 3) */}
+      <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2.5 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+              Learning Mastery Progress:
+            </span>
+            <span className="text-xs font-bold text-blue-600 dark:text-blue-400">
+              {completedTopicsCount} of {allTopicsList.length} Topics Mastered ({progressPercent}%)
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs flex-wrap">
+            <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-semibold border border-emerald-200 dark:border-emerald-800">
+              ✅ {completedTopicsCount} Mastered
+            </span>
+            <span className="px-2.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-semibold border border-blue-200 dark:border-blue-800">
+              ⏳ {inProgressTopicsCount} In Progress
+            </span>
+            <span className="px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-semibold">
+              ⚪ {allTopicsList.length - completedTopicsCount - inProgressTopicsCount} Not Started
+            </span>
+            {selectedTopicIds.size > 0 && (
+              <button
+                type="button"
+                onClick={handleMarkSelectedCompleted}
+                className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] transition cursor-pointer"
+                title="Mark all selected topics as mastered"
+              >
+                Mark Selected Mastered
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Visual Progress Bar */}
+        <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+          <div
+            className="bg-gradient-to-r from-blue-500 to-emerald-500 h-full rounded-full transition-all duration-500"
+            style={{ width: `${progressPercent}%` }}
+          />
         </div>
       </div>
 
@@ -446,7 +539,12 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
             const isChapterSelected = chapterTopicIds.length > 0 && chapterTopicIds.every(id => selectedTopicIds.has(id));
             const isChapterPartiallySelected = !isChapterSelected && chapterTopicIds.some(id => selectedTopicIds.has(id));
 
-            return (
+            const allTopicsList = hierarchy.chapters.flatMap(c => c.topics);
+  const completedTopicsCount = allTopicsList.filter(t => topicProgress[t.id] === 'completed').length;
+  const inProgressTopicsCount = allTopicsList.filter(t => topicProgress[t.id] === 'in_progress').length;
+  const progressPercent = allTopicsList.length > 0 ? Math.round((completedTopicsCount / allTopicsList.length) * 100) : 0;
+
+  return (
               <div
                 key={chapter.id}
                 className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden transition-all"
@@ -534,7 +632,12 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                           ? 'Comparison'
                           : 'Theory');
 
-                      return (
+                      const allTopicsList = hierarchy.chapters.flatMap(c => c.topics);
+  const completedTopicsCount = allTopicsList.filter(t => topicProgress[t.id] === 'completed').length;
+  const inProgressTopicsCount = allTopicsList.filter(t => topicProgress[t.id] === 'in_progress').length;
+  const progressPercent = allTopicsList.length > 0 ? Math.round((completedTopicsCount / allTopicsList.length) * 100) : 0;
+
+  return (
                         <div
                           key={topic.id}
                           className={`p-5 transition-colors ${
@@ -612,8 +715,38 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                               )}
                             </div>
 
-                            {/* Right Action: Learn This Topic Button (2.6) */}
-                            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                            {/* Right Action: Progress Status Pill & Learn This Topic Button */}
+                            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center flex-wrap">
+                              <button
+                                type="button"
+                                onClick={(e) => handleCycleProgress(topic.id, e)}
+                                className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+                                  (topicProgress[topic.id] || 'not_started') === 'completed'
+                                    ? 'bg-emerald-50 dark:bg-emerald-950/50 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
+                                    : (topicProgress[topic.id] || 'not_started') === 'in_progress'
+                                    ? 'bg-blue-50 dark:bg-blue-950/50 border-blue-300 dark:border-blue-800 text-blue-700 dark:text-blue-300'
+                                    : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
+                                }`}
+                                title="Click to cycle progress: Not Started -> In Progress -> Mastered"
+                              >
+                                {(topicProgress[topic.id] || 'not_started') === 'completed' ? (
+                                  <>
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                                    <span>Mastered</span>
+                                  </>
+                                ) : (topicProgress[topic.id] || 'not_started') === 'in_progress' ? (
+                                  <>
+                                    <Clock className="w-3.5 h-3.5 text-blue-500" />
+                                    <span>In Progress</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className="w-2 h-2 rounded-full bg-slate-400" />
+                                    <span>Not Started</span>
+                                  </>
+                                )}
+                              </button>
+
                               <button
                                 onClick={() => onLearnTopic(topic)}
                                 className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
@@ -1161,7 +1294,12 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                 <div className="mt-1 max-h-48 overflow-y-auto space-y-1.5 p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
                   {splitTopicData.topic.subtopics.map(sub => {
                     const isSelected = selectedSubtopicIdsToSplit.has(sub.id);
-                    return (
+                    const allTopicsList = hierarchy.chapters.flatMap(c => c.topics);
+  const completedTopicsCount = allTopicsList.filter(t => topicProgress[t.id] === 'completed').length;
+  const inProgressTopicsCount = allTopicsList.filter(t => topicProgress[t.id] === 'in_progress').length;
+  const progressPercent = allTopicsList.length > 0 ? Math.round((completedTopicsCount / allTopicsList.length) * 100) : 0;
+
+  return (
                       <label
                         key={sub.id}
                         className="flex items-center gap-2 p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 cursor-pointer text-xs"

@@ -11,7 +11,10 @@ import {
   Copy,
   Check,
   ShieldCheck,
-  FileQuestion
+  FileQuestion,
+  Eye,
+  HelpCircle,
+  Send
 } from 'lucide-react';
 import {
   AcademicDocument,
@@ -33,6 +36,48 @@ export const WorkedExamplesView: React.FC<WorkedExamplesViewProps> = ({
   onNavigateToCitation
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [isInteractiveMode, setIsInteractiveMode] = useState<boolean>(true);
+  const [revealedStepMap, setRevealedStepMap] = useState<Record<string, number>>({});
+  const [userStepInput, setUserStepInput] = useState<Record<string, string>>({});
+  const [stepCheckFeedback, setStepCheckFeedback] = useState<Record<string, { isCorrect: boolean; msg: string }>>({});
+
+  const getRevealedStepsCount = (exId: string): number => {
+    return revealedStepMap[exId] !== undefined ? revealedStepMap[exId] : 1;
+  };
+
+  const handleRevealNextStep = (exId: string, totalSteps: number) => {
+    setRevealedStepMap(prev => ({
+      ...prev,
+      [exId]: Math.min(totalSteps, (prev[exId] !== undefined ? prev[exId] : 1) + 1)
+    }));
+  };
+
+  const handleCheckIntermediateStep = (exId: string, stepNumber: number, expectedSnippet?: string) => {
+    const key = `${exId}_${stepNumber}`;
+    const userVal = (userStepInput[key] || '').trim();
+    if (!userVal) return;
+
+    const userNum = parseFloat(userVal.replace(/[^0-9.-]/g, ''));
+    const expectedNum = expectedSnippet ? parseFloat(expectedSnippet.replace(/[^0-9.-]/g, '')) : NaN;
+
+    let isCorrect = false;
+    if (!isNaN(userNum) && !isNaN(expectedNum)) {
+      const diff = Math.abs(userNum - expectedNum);
+      isCorrect = diff < 0.1 || (expectedNum !== 0 && diff / Math.abs(expectedNum) < 0.05);
+    } else if (expectedSnippet) {
+      isCorrect = userVal.toLowerCase().includes(expectedSnippet.toLowerCase().slice(0, 5));
+    } else {
+      isCorrect = userVal.length >= 2;
+    }
+
+    setStepCheckFeedback(prev => ({
+      ...prev,
+      [key]: {
+        isCorrect,
+        msg: isCorrect ? '✓ Calculation verified! Great work.' : 'Almost! Check the formula terms or reveal the worked derivation below.'
+      }
+    }));
+  };
 
   const suite: WorkedExamplesSuite = useMemo(() => {
     return DetailedNotesService.generateWorkedExamplesSuite(document);
@@ -103,8 +148,33 @@ export const WorkedExamplesView: React.FC<WorkedExamplesViewProps> = ({
           </p>
         </div>
 
-        {/* Quick Count Badge */}
+        {/* Interactive Mode vs Full Solution Toggle (Feature 9) */}
         <div className="flex items-center gap-2">
+          <div className="flex items-center p-0.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => setIsInteractiveMode(true)}
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                isInteractiveMode
+                  ? 'bg-emerald-600 text-white font-bold shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              Interactive Practice
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsInteractiveMode(false)}
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                !isInteractiveMode
+                  ? 'bg-slate-700 text-white font-bold shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              Full Solution View
+            </button>
+          </div>
+
           <span className="px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs font-bold text-emerald-700 dark:text-emerald-300">
             {suite.examples.length} Solved Problem{suite.examples.length !== 1 ? 's' : ''}
           </span>
@@ -236,62 +306,120 @@ export const WorkedExamplesView: React.FC<WorkedExamplesViewProps> = ({
 
             {/* Step-by-Step Solution Derivations */}
             <div className="space-y-3">
-              <div className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                <Calculator className="w-4 h-4 text-emerald-500" />
-                <span>Rigorous Step-by-Step Derivation & Intermediate Operations:</span>
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Calculator className="w-4 h-4 text-emerald-500" />
+                  <span>Rigorous Step-by-Step Derivation & Intermediate Operations:</span>
+                </div>
+                {isInteractiveMode && (
+                  <span className="text-[11px] font-bold text-emerald-400">
+                    Step {Math.min(ex.solutionSteps.length, getRevealedStepsCount(ex.id))} of {ex.solutionSteps.length}
+                  </span>
+                )}
               </div>
 
               <div className="space-y-3">
-                {ex.solutionSteps.map((step) => (
-                  <div
-                    key={step.stepNumber}
-                    className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2 text-xs font-sans"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-xs flex items-center justify-center shrink-0">
-                        {step.stepNumber}
-                      </span>
-                      <span className="font-bold text-slate-200">
-                        {step.statement}
-                      </span>
-                    </div>
+                {ex.solutionSteps.slice(0, isInteractiveMode ? getRevealedStepsCount(ex.id) : ex.solutionSteps.length).map((step) => {
+                  const stepKey = `${ex.id}_${step.stepNumber}`;
+                  const feedback = stepCheckFeedback[stepKey];
 
-                    {step.calculation && (
-                      <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 font-mono text-xs text-emerald-300 overflow-x-auto">
-                        {step.calculation}
+                  return (
+                    <div
+                      key={step.stepNumber}
+                      className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2 text-xs font-sans animate-fadeIn"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-xs flex items-center justify-center shrink-0">
+                          {step.stepNumber}
+                        </span>
+                        <span className="font-bold text-slate-200">
+                          {step.statement}
+                        </span>
                       </div>
-                    )}
 
-                    <div className="p-2 rounded-xl bg-slate-900/40 text-slate-400 text-[11px] leading-relaxed border-l-2 border-emerald-500 pl-3">
-                      <strong>Pedagogical Rationale:</strong> {step.rationale}
-                    </div>
+                      {/* Interactive Step Input (Feature 9) */}
+                      {isInteractiveMode && (
+                        <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2 my-2">
+                          <label className="text-[11px] font-semibold text-slate-300 block">
+                            Try calculating intermediate value for Step {step.stepNumber}:
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={userStepInput[stepKey] || ''}
+                              onChange={(e) => setUserStepInput(prev => ({ ...prev, [stepKey]: e.target.value }))}
+                              placeholder="e.g. 4.04 or derived value..."
+                              className="px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-slate-200 flex-1 outline-none focus:border-emerald-500"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleCheckIntermediateStep(ex.id, step.stepNumber, step.calculation || step.intermediateResult)}
+                              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs cursor-pointer transition shadow-xs"
+                            >
+                              Check Step
+                            </button>
+                          </div>
+                          {feedback && (
+                            <div className={`text-[11px] font-medium pt-1 ${feedback.isCorrect ? 'text-emerald-400' : 'text-amber-400'}`}>
+                              {feedback.msg}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
-                    {step.intermediateResult && (
-                      <div className="text-[11px] text-slate-300 font-semibold pt-1">
-                        ↳ <em>Outcome:</em> {step.intermediateResult}
+                      {step.calculation && (
+                        <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 font-mono text-xs text-emerald-300 overflow-x-auto">
+                          {step.calculation}
+                        </div>
+                      )}
+
+                      <div className="p-2 rounded-xl bg-slate-900/40 text-slate-400 text-[11px] leading-relaxed border-l-2 border-emerald-500 pl-3">
+                        <strong>Pedagogical Rationale:</strong> {step.rationale}
                       </div>
-                    )}
+
+                      {step.intermediateResult && (
+                        <div className="text-[11px] text-slate-300 font-semibold pt-1">
+                          ↳ <em>Outcome:</em> {step.intermediateResult}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Reveal Next Step Button (in Interactive Mode) */}
+                {isInteractiveMode && getRevealedStepsCount(ex.id) < ex.solutionSteps.length && (
+                  <div className="pt-2 flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => handleRevealNextStep(ex.id, ex.solutionSteps.length)}
+                      className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-emerald-600/30 transition cursor-pointer"
+                    >
+                      <Eye className="w-4 h-4" />
+                      <span>Reveal Step {getRevealedStepsCount(ex.id) + 1} of {ex.solutionSteps.length}</span>
+                    </button>
                   </div>
-                ))}
+                )}
               </div>
             </div>
 
-            {/* Final Answer Banner */}
-            <div className="p-5 rounded-2xl bg-gradient-to-r from-emerald-950/80 via-slate-950 to-emerald-950/80 border border-emerald-500/50 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="space-y-0.5 text-center sm:text-left">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
-                  Final Evaluated Result
-                </span>
-                <div className="text-base sm:text-lg font-black text-white">
-                  {ex.finalAnswer}
+            {/* Final Answer Banner (Unlocked when all steps completed or full solution view) */}
+            {(!isInteractiveMode || getRevealedStepsCount(ex.id) >= ex.solutionSteps.length) && (
+              <div className="p-5 rounded-2xl bg-gradient-to-r from-emerald-950/80 via-slate-950 to-emerald-950/80 border border-emerald-500/50 flex flex-col sm:flex-row items-center justify-between gap-4 animate-fadeIn">
+                <div className="space-y-0.5 text-center sm:text-left">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+                    Final Evaluated Result
+                  </span>
+                  <div className="text-base sm:text-lg font-black text-white">
+                    {ex.finalAnswer}
+                  </div>
+                </div>
+
+                <div className="px-3 py-1.5 rounded-xl bg-emerald-950 border border-emerald-600/40 text-emerald-300 text-xs font-bold flex items-center gap-1.5 shrink-0">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span>Calculation Verified</span>
                 </div>
               </div>
-
-              <div className="px-3 py-1.5 rounded-xl bg-emerald-950 border border-emerald-600/40 text-emerald-300 text-xs font-bold flex items-center gap-1.5 shrink-0">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span>Calculation Verified</span>
-              </div>
-            </div>
+            )}
 
             {/* Mathematical Verification Checkpoint */}
             {ex.verification && (

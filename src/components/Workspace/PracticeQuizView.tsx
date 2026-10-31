@@ -55,8 +55,25 @@ export const PracticeQuizView: React.FC<PracticeQuizViewProps> = ({
   );
   const [selectedScopeId, setSelectedScopeId] = useState<string>(initialTopicId || 'all');
   const [difficulty, setDifficulty] = useState<'beginner' | 'intermediate' | 'advanced'>('intermediate');
+  const [isAdaptiveMode, setIsAdaptiveMode] = useState<boolean>(false);
   const [isQuizStarted, setIsQuizStarted] = useState<boolean>(true);
   const [retryQuestionsOnly, setRetryQuestionsOnly] = useState<QuizQuestion[] | null>(null);
+
+  // Performance-Adaptive Tracking (Feature 8)
+  const studentPerformance = useMemo(() => {
+    try {
+      const saved = localStorage.getItem(`learnova_quiz_perf_${document.id}`);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return { avgScore: 72, completedSessions: 0 };
+  }, [document.id]);
+
+  const effectiveDifficulty = useMemo(() => {
+    if (!isAdaptiveMode) return difficulty;
+    if (studentPerformance.avgScore >= 80) return 'advanced';
+    if (studentPerformance.avgScore < 60) return 'beginner';
+    return 'intermediate';
+  }, [isAdaptiveMode, difficulty, studentPerformance.avgScore]);
 
   React.useEffect(() => {
     if (initialTopicId) {
@@ -93,10 +110,10 @@ export const PracticeQuizView: React.FC<PracticeQuizViewProps> = ({
     return { type: 'document', title: document.title };
   }, [selectedScopeType, selectedScopeId, availableTopics, availableChapters, document.title]);
 
-  // Questions generator
+  // Questions generator (adapted to student performance)
   const baseQuestions: QuizQuestion[] = useMemo(() => {
-    return AssessmentService.generateQuizQuestions(document, currentScope, difficulty);
-  }, [document, currentScope, difficulty]);
+    return AssessmentService.generateQuizQuestions(document, currentScope, effectiveDifficulty);
+  }, [document, currentScope, effectiveDifficulty]);
 
   const activeQuestions = retryQuestionsOnly || baseQuestions;
 
@@ -147,6 +164,19 @@ export const PracticeQuizView: React.FC<PracticeQuizViewProps> = ({
     const result = AssessmentService.evaluateQuiz(activeQuestions, mergedAnswers);
     setEvaluation(result);
     setIsSubmitted(true);
+
+    // Save individual performance history for adaptive calibration (Feature 8)
+    const updatedCount = (studentPerformance.completedSessions || 0) + 1;
+    const newAvg = Math.round(
+      (((studentPerformance.avgScore || 70) * (studentPerformance.completedSessions || 0)) + result.percentage) / updatedCount
+    );
+    try {
+      localStorage.setItem(`learnova_quiz_perf_${document.id}`, JSON.stringify({
+        avgScore: newAvg,
+        completedSessions: updatedCount,
+        lastScore: result.percentage
+      }));
+    } catch (e) {}
   };
 
   const handleRestartQuiz = () => {
@@ -238,6 +268,24 @@ export const PracticeQuizView: React.FC<PracticeQuizViewProps> = ({
               ))}
             </select>
           </div>
+
+          {/* Performance-Adaptive Mastery Toggle (Feature 8) */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsAdaptiveMode(!isAdaptiveMode);
+              handleRestartQuiz();
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              isAdaptiveMode
+                ? 'bg-purple-600 text-white shadow-sm ring-2 ring-purple-400'
+                : 'border border-purple-300 dark:border-purple-700/60 text-purple-700 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/30'
+            }`}
+            title="Automatically calibrate difficulty based on your individual performance"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Adaptive Performance {isAdaptiveMode ? `(${effectiveDifficulty.toUpperCase()})` : 'Off'}</span>
+          </button>
 
           {/* Difficulty Selector */}
           <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-semibold">

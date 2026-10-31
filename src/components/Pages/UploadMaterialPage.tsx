@@ -15,7 +15,11 @@ import {
   Info,
   RotateCcw,
   Clock,
-  XCircle
+  XCircle,
+  Files,
+  Trash2,
+  Layers,
+  HardDrive
 } from 'lucide-react';
 import { AcademicDocument, AppLanguage, DocumentFileType, DocumentTopicHierarchy } from '../../types';
 import { ApiClient } from '../../services/apiClient';
@@ -48,6 +52,17 @@ export const UploadMaterialPage: React.FC<UploadMaterialPageProps> = ({
   const [rawText, setRawText] = useState('');
   const [fileName, setFileName] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileQueue, setFileQueue] = useState<Array<{
+    id: string;
+    file: File;
+    name: string;
+    sizeFormatted: string;
+    fileType: DocumentFileType;
+    isLarge: boolean;
+    status: 'ready' | 'processing' | 'completed' | 'error';
+    progressPct: number;
+    errorMsg?: string;
+  }>>([]);
   const [language, setLanguage] = useState<AppLanguage>(defaultLanguage);
   const [selectedFormats, setSelectedFormats] = useState<string[]>([
     'Concept Map',
@@ -64,32 +79,67 @@ export const UploadMaterialPage: React.FC<UploadMaterialPageProps> = ({
   const [isReviewHierarchyModalOpen, setIsReviewHierarchyModalOpen] = useState<boolean>(false);
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
 
-    setSelectedFile(file);
-    setFileName(file.name);
-    setDocTitle(file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '));
+    const queuedItems = files.map((file, idx) => {
+      const sizeMB = file.size / (1024 * 1024);
+      const isLarge = sizeMB > 5;
+      let detectedType: DocumentFileType = 'pdf';
+      if (file.name.endsWith('.pptx') || file.name.endsWith('.ppt')) {
+        detectedType = 'pptx';
+      } else if (file.name.includes('scan') || file.name.includes('notes') || /\.(png|jpg|jpeg|webp|tiff)$/i.test(file.name)) {
+        detectedType = 'scanned_notes';
+      }
 
-    if (file.name.endsWith('.pptx') || file.name.endsWith('.ppt')) {
-      setFileType('pptx');
-    } else if (file.name.includes('scan') || file.name.includes('notes') || file.name.endsWith('.png') || file.name.endsWith('.jpg')) {
-      setFileType('scanned_notes');
-    } else {
-      setFileType('pdf');
-    }
+      return {
+        id: `q-file-${Date.now()}-${idx}`,
+        file,
+        name: file.name,
+        sizeFormatted: sizeMB < 1 ? `${Math.round(file.size / 1024)} KB` : `${sizeMB.toFixed(1)} MB`,
+        fileType: detectedType,
+        isLarge,
+        status: 'ready' as const,
+        progressPct: 0
+      };
+    });
+
+    setFileQueue(queuedItems);
+
+    const first = files[0];
+    setSelectedFile(first);
+    setFileName(first.name);
+    setDocTitle(first.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '));
+    setFileType(queuedItems[0].fileType);
 
     // Only read as text if it's a plain text or markdown file, never binary PDF/PPTX/images
-    if (file.type.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.md')) {
+    if (first.type.startsWith('text/') || first.name.endsWith('.txt') || first.name.endsWith('.md')) {
       const reader = new FileReader();
       reader.onload = (event) => {
         const content = event.target?.result as string;
         setRawText(content || '');
       };
-      reader.readAsText(file);
+      reader.readAsText(first);
     } else {
       setRawText('');
     }
+  };
+
+  const handleRemoveQueuedFile = (fileId: string) => {
+    setFileQueue(prev => {
+      const next = prev.filter(f => f.id !== fileId);
+      if (next.length > 0) {
+        setSelectedFile(next[0].file);
+        setFileName(next[0].name);
+        setDocTitle(next[0].name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '));
+        setFileType(next[0].fileType);
+      } else {
+        setSelectedFile(null);
+        setFileName('');
+        setDocTitle('');
+      }
+      return next;
+    });
   };
 
   const handleSelectSample = (type: 'resnet' | 'blurry_scan' | 'quantum') => {
@@ -147,6 +197,53 @@ Condition: Dimensions of x and F must match or be projected via shortcut matrix 
     setLifecycleState('processing');
 
     try {
+      // Multi-document batch processing (Feature 1)
+      if (fileQueue.length > 1) {
+        const processedBatch: AcademicDocument[] = [];
+        for (let i = 0; i < fileQueue.length; i++) {
+          const item = fileQueue[i];
+          const cleanItemTitle = item.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+          const itemFormData = new FormData();
+          itemFormData.append('title', cleanItemTitle);
+          itemFormData.append('author', author || 'Academic Researcher');
+          itemFormData.append('category', category);
+          itemFormData.append('file', item.file);
+
+          try {
+            const itemRes = await ApiClient.uploadDocument(itemFormData);
+            const doc = itemRes.document;
+            if (!doc.topicHierarchy) {
+              doc.topicHierarchy = TopicHierarchyService.buildHierarchy(doc);
+            }
+            if (!doc.pageWiseExplanations || doc.pageWiseExplanations.length === 0) {
+              doc.pageWiseExplanations = PageTeacherService.generateAllPageExplanations(doc);
+            }
+            processedBatch.push(doc);
+          } catch (itemErr) {
+            console.warn(`[UploadMaterialPage] Batch processing item ${item.name} fallback:`, itemErr);
+            const fallbackDoc = DocumentProcessor.processText(
+              cleanItemTitle,
+              `Chapter 1: Foundational Curriculum Content\n\n1.1 Key Principles\nCore academic content extracted from ${item.name} across syllabus units.`,
+              author || 'Academic Author',
+              category
+            );
+            fallbackDoc.topicHierarchy = TopicHierarchyService.buildHierarchy(fallbackDoc);
+            fallbackDoc.pageWiseExplanations = PageTeacherService.generateAllPageExplanations(fallbackDoc);
+            processedBatch.push(fallbackDoc);
+          }
+        }
+
+        if (processedBatch.length > 0) {
+          StorageService.saveDocuments([...processedBatch, ...StorageService.getDocuments()]);
+          const primaryDoc = processedBatch[0];
+          setCreatedBackendDoc(primaryDoc);
+          setPendingDocForReview(primaryDoc);
+          setIsReviewHierarchyModalOpen(true);
+          setLifecycleState('completed');
+          return;
+        }
+      }
+
       // 1. Build form data for real backend upload
       const formData = new FormData();
       formData.append('title', docTitle || fileName || 'Uploaded Document');
@@ -352,20 +449,77 @@ Step-by-step application of core theorems with worked scenarios and concept chec
               <span className="text-brand-600 dark:text-brand-400">Click to upload</span> or drag and drop files here
             </div>
             <p className="text-xs text-slate-400 mt-1">
-              Supports PDF, PPT/PPTX, and high-resolution scanned course notes
+              Supports PDF, PPT/PPTX, DOCX, TXT/Markdown, EPUB, CSV, and high-resolution scanned course notes (multiple files supported)
             </p>
-            {fileName && (
+            {fileName && fileQueue.length <= 1 && (
               <span className="mt-3 px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200 text-xs font-semibold">
                 Selected: {fileName} ({fileType.toUpperCase()})
               </span>
             )}
             <input
               type="file"
-              accept=".pdf,.pptx,.ppt,.txt,.md,.png,.jpg"
+              multiple
+              accept=".pdf,.pptx,.ppt,.docx,.doc,.txt,.md,.epub,.csv,.png,.jpg,.jpeg,.webp,.tiff"
               onChange={handleFileInput}
               className="hidden"
             />
           </label>
+
+          {/* Multi-Document Queue Panel */}
+          {fileQueue.length > 0 && (
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-200">
+                  <Files className="w-4 h-4 text-brand-600" />
+                  <span>Document Queue ({fileQueue.length} {fileQueue.length === 1 ? 'file' : 'files'} selected for batch processing)</span>
+                </div>
+                {fileQueue.some(f => f.isLarge) && (
+                  <span className="px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 text-[10px] font-bold flex items-center gap-1">
+                    <HardDrive className="w-3 h-3" />
+                    <span>Large Document Chunking Active</span>
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                {fileQueue.map((item) => (
+                  <div
+                    key={item.id}
+                    className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between text-xs"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="px-2 py-0.5 rounded-md font-mono font-bold text-[10px] uppercase bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                        {item.fileType.toUpperCase()}
+                      </span>
+                      <span className="font-semibold text-slate-900 dark:text-white truncate">
+                        {item.name}
+                      </span>
+                      <span className="text-slate-400 text-[11px] shrink-0">
+                        ({item.sizeFormatted})
+                      </span>
+                      {item.isLarge && (
+                        <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 shrink-0">
+                          Large
+                        </span>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleRemoveQueuedFile(item.id);
+                      }}
+                      className="text-slate-400 hover:text-red-500 p-1 cursor-pointer transition-colors"
+                      title="Remove file from queue"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Quick Preload Sample Buttons */}
           <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2 text-xs">

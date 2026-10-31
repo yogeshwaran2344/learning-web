@@ -42,11 +42,60 @@ export const DetailedNotesView: React.FC<DetailedNotesViewProps> = ({
   onNavigateToCitation,
   onSaveNotes
 }) => {
+  type LengthPreset = 'concise' | 'standard' | 'exhaustive';
+  const [lengthPreset, setLengthPreset] = useState<LengthPreset>('standard');
   const [mode, setMode] = useState<'short' | 'detailed'>('detailed');
+  const [depthFilters, setDepthFilters] = useState({
+    definitions: true,
+    equations: true,
+    diagrams: true,
+    tables: true,
+    conditions: true,
+    examPoints: true
+  });
   const [selectedTopicId, setSelectedTopicId] = useState<string>(initialTopicId || 'all');
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editText, setEditText] = useState<string>('');
   const [saveSuccessNotice, setSaveSuccessNotice] = useState<string | null>(null);
+
+  const handleSelectLengthPreset = (preset: LengthPreset) => {
+    setLengthPreset(preset);
+    if (preset === 'concise') {
+      setMode('short');
+      setDepthFilters({
+        definitions: true,
+        equations: false,
+        diagrams: false,
+        tables: false,
+        conditions: false,
+        examPoints: true
+      });
+    } else if (preset === 'standard') {
+      setMode('detailed');
+      setDepthFilters({
+        definitions: true,
+        equations: true,
+        diagrams: true,
+        tables: false,
+        conditions: true,
+        examPoints: true
+      });
+    } else {
+      setMode('detailed');
+      setDepthFilters({
+        definitions: true,
+        equations: true,
+        diagrams: true,
+        tables: true,
+        conditions: true,
+        examPoints: true
+      });
+    }
+  };
+
+  const toggleDepthFilter = (key: keyof typeof depthFilters) => {
+    setDepthFilters(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   useEffect(() => {
     if (initialTopicId) {
@@ -173,32 +222,6 @@ export const DetailedNotesView: React.FC<DetailedNotesViewProps> = ({
 
         {/* Action Controls */}
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* Mode Switcher: Short vs Detailed */}
-          <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-semibold">
-            <button
-              onClick={() => setMode('short')}
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                mode === 'short'
-                  ? 'bg-indigo-600 text-white font-bold shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-              title="Concise bullet points & exam cheat sheet"
-            >
-              Short Notes
-            </button>
-            <button
-              onClick={() => setMode('detailed')}
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                mode === 'detailed'
-                  ? 'bg-indigo-600 text-white font-bold shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-              title="Comprehensive explanations & step-by-step breakdown"
-            >
-              Detailed Notes
-            </button>
-          </div>
-
           {/* Export to Markdown */}
           <button
             onClick={handleDownloadMarkdown}
@@ -217,6 +240,136 @@ export const DetailedNotesView: React.FC<DetailedNotesViewProps> = ({
           >
             <Printer className="w-3.5 h-3.5" />
             <span>Print / PDF</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Customizable Length & Depth Control Panel */}
+      <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/80 space-y-3">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          {/* Note Length Preset */}
+          <div className="space-y-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+              <Sliders className="w-3.5 h-3.5 text-indigo-500" />
+              <span>Notes Length & Depth Customizer:</span>
+            </span>
+            <div className="inline-flex items-center p-1 rounded-xl bg-slate-200/70 dark:bg-slate-900 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => handleSelectLengthPreset('concise')}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  lengthPreset === 'concise'
+                    ? 'bg-indigo-600 text-white font-bold shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                title="Fast revision focusing on essential definitions & exam checkpoints"
+              >
+                ⚡ Concise Summary
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelectLengthPreset('standard')}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  lengthPreset === 'standard'
+                    ? 'bg-indigo-600 text-white font-bold shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                title="Balanced textbook notes with definitions, formulas & diagrams"
+              >
+                📖 Standard Notes
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelectLengthPreset('exhaustive')}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  lengthPreset === 'exhaustive'
+                    ? 'bg-indigo-600 text-white font-bold shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                title="Full academic coverage including all derivations, comparison tables & conditions"
+              >
+                🔬 Exhaustive In-Depth
+              </button>
+            </div>
+          </div>
+
+          <div className="text-[11px] text-slate-500 dark:text-slate-400">
+            {lengthPreset === 'concise' && 'Concise Mode: Fast revision focusing on essential definitions & exam tips.'}
+            {lengthPreset === 'standard' && 'Standard Mode: Balanced notes with core definitions, formulas & diagrams.'}
+            {lengthPreset === 'exhaustive' && 'Exhaustive Mode: Deep dive with full derivations, comparison tables & conditions.'}
+          </div>
+        </div>
+
+        {/* Content Depth Granular Toggles */}
+        <div className="pt-2 border-t border-slate-200/80 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mr-1">
+            Toggle Content Depth:
+          </span>
+          <button
+            type="button"
+            onClick={() => toggleDepthFilter('definitions')}
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all border cursor-pointer ${
+              depthFilters.definitions
+                ? 'bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700 font-bold'
+                : 'bg-white dark:bg-slate-900 text-slate-400 border-slate-200 dark:border-slate-800'
+            }`}
+          >
+            {depthFilters.definitions ? '✓ ' : '+ '}Definitions
+          </button>
+          <button
+            type="button"
+            onClick={() => toggleDepthFilter('equations')}
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all border cursor-pointer ${
+              depthFilters.equations
+                ? 'bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700 font-bold'
+                : 'bg-white dark:bg-slate-900 text-slate-400 border-slate-200 dark:border-slate-800'
+            }`}
+          >
+            {depthFilters.equations ? '✓ ' : '+ '}Formulas & Equations
+          </button>
+          <button
+            type="button"
+            onClick={() => toggleDepthFilter('diagrams')}
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all border cursor-pointer ${
+              depthFilters.diagrams
+                ? 'bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700 font-bold'
+                : 'bg-white dark:bg-slate-900 text-slate-400 border-slate-200 dark:border-slate-800'
+            }`}
+          >
+            {depthFilters.diagrams ? '✓ ' : '+ '}Diagrams & Schematics
+          </button>
+          <button
+            type="button"
+            onClick={() => toggleDepthFilter('tables')}
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all border cursor-pointer ${
+              depthFilters.tables
+                ? 'bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700 font-bold'
+                : 'bg-white dark:bg-slate-900 text-slate-400 border-slate-200 dark:border-slate-800'
+            }`}
+          >
+            {depthFilters.tables ? '✓ ' : '+ '}Comparison Tables
+          </button>
+          <button
+            type="button"
+            onClick={() => toggleDepthFilter('conditions')}
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all border cursor-pointer ${
+              depthFilters.conditions
+                ? 'bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700 font-bold'
+                : 'bg-white dark:bg-slate-900 text-slate-400 border-slate-200 dark:border-slate-800'
+            }`}
+          >
+            {depthFilters.conditions ? '✓ ' : '+ '}Conditions & Exceptions
+          </button>
+          <button
+            type="button"
+            onClick={() => toggleDepthFilter('examPoints')}
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all border cursor-pointer ${
+              depthFilters.examPoints
+                ? 'bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700 font-bold'
+                : 'bg-white dark:bg-slate-900 text-slate-400 border-slate-200 dark:border-slate-800'
+            }`}
+          >
+            {depthFilters.examPoints ? '✓ ' : '+ '}Exam Checkpoints
           </button>
         </div>
       </div>
@@ -377,7 +530,7 @@ export const DetailedNotesView: React.FC<DetailedNotesViewProps> = ({
               </div>
 
               {/* 2. Definitions Box */}
-              {sec.definitions && sec.definitions.length > 0 && (
+              {depthFilters.definitions && sec.definitions && sec.definitions.length > 0 && (
                 <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2 text-xs">
                   <div className="font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider text-[10px] flex items-center gap-1">
                     <CheckCircle2 className="w-3.5 h-3.5 text-indigo-500" />
@@ -425,7 +578,7 @@ export const DetailedNotesView: React.FC<DetailedNotesViewProps> = ({
               </div>
 
               {/* 4. Formulas and Equations (Preserved with derivations) */}
-              {sec.equations && sec.equations.length > 0 && (
+              {depthFilters.equations && sec.equations && sec.equations.length > 0 && (
                 <div className="p-4 rounded-2xl bg-slate-100 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 space-y-2 text-xs">
                   <div className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
                     <Sigma className="w-3.5 h-3.5 text-indigo-500" />
@@ -452,7 +605,7 @@ export const DetailedNotesView: React.FC<DetailedNotesViewProps> = ({
               )}
 
               {/* 5. Diagrams and Component Working */}
-              {sec.diagrams && sec.diagrams.length > 0 && (
+              {depthFilters.diagrams && sec.diagrams && sec.diagrams.length > 0 && (
                 <div className="p-4 rounded-2xl bg-purple-50/40 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-900/60 space-y-2 text-xs">
                   <div className="font-bold text-purple-800 dark:text-purple-300 uppercase tracking-wider text-[10px]">
                     Diagram Schematic & Component Working:
@@ -477,7 +630,7 @@ export const DetailedNotesView: React.FC<DetailedNotesViewProps> = ({
               )}
 
               {/* 6. Tables and Comparisons */}
-              {sec.tables && sec.tables.length > 0 && (
+              {depthFilters.tables && sec.tables && sec.tables.length > 0 && (
                 <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2 text-xs overflow-x-auto">
                   {sec.tables.map((t, tIdx) => (
                     <div key={tIdx} className="space-y-2">
@@ -516,7 +669,7 @@ export const DetailedNotesView: React.FC<DetailedNotesViewProps> = ({
               )}
 
               {/* 7. Conditions & Exceptions */}
-              {sec.conditionsAndExceptions && sec.conditionsAndExceptions.length > 0 && (
+              {depthFilters.conditions && sec.conditionsAndExceptions && sec.conditionsAndExceptions.length > 0 && (
                 <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-900 dark:text-amber-200 space-y-1">
                   <span className="font-bold uppercase tracking-wider text-[10px] block">
                     Important Conditions & Exceptions:
@@ -530,7 +683,7 @@ export const DetailedNotesView: React.FC<DetailedNotesViewProps> = ({
               )}
 
               {/* 8. Exam Revision Checkpoint */}
-              {sec.examRevisionPoints && sec.examRevisionPoints.length > 0 && (
+              {depthFilters.examPoints && sec.examRevisionPoints && sec.examRevisionPoints.length > 0 && (
                 <div className="p-4 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900/60 space-y-1.5 text-xs">
                   <span className="font-bold text-indigo-900 dark:text-indigo-300 uppercase tracking-wider text-[10px] flex items-center gap-1">
                     <Sparkles className="w-3.5 h-3.5 text-indigo-500" />

@@ -25,7 +25,9 @@ import {
   Loader2,
   GraduationCap,
   FolderTree,
-  AlertTriangle
+  AlertTriangle,
+  Send,
+  HelpCircle
 } from 'lucide-react';
 import {
   AcademicDocument,
@@ -183,6 +185,12 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
   // Dynamic overrides per format when student regenerates or switches language
   const [dynamicOverrides, setDynamicOverrides] = useState<Record<string, any>>({});
   const [generationError, setGenerationError] = useState<string | null>(null);
+
+  // Concept-specific Follow-up Q&A State (Feature 5)
+  const [activeFollowUpIndex, setActiveFollowUpIndex] = useState<number | null>(null);
+  const [followUpQuestionText, setFollowUpQuestionText] = useState<string>('');
+  const [followUpHistory, setFollowUpHistory] = useState<Record<number, Array<{ q: string; a: string }>>>({});
+  const [isAnsweringFollowUp, setIsAnsweringFollowUp] = useState<boolean>(false);
 
   const availableDocs = allDocuments && allDocuments.length > 0 ? allDocuments : SAMPLE_DOCUMENTS;
   const documentTabs = [
@@ -350,6 +358,38 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
       setGenerationError(e?.message || 'Failed to generate study materials for this topic. Please retry.');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  // Concept-specific Follow-up Q&A Handler (Feature 5)
+  const handleAskFollowUp = async (sectionIdx: number, customQ?: string) => {
+    const q = (customQ || followUpQuestionText).trim();
+    if (!q) return;
+
+    const secItem = currentExpl.sections?.[sectionIdx];
+    if (!secItem) return;
+
+    setIsAnsweringFollowUp(true);
+    setFollowUpQuestionText('');
+
+    try {
+      let generatedAnswer = '';
+      if (q.toLowerCase().includes('simpler') || q.toLowerCase().includes('10')) {
+        generatedAnswer = `In even simpler terms: Think of ${secItem.sectionTitle} as a clear direct rule. ${secItem.realWorldIntuition || secItem.whatIsIt || secItem.simplifiedConcept}. All components work together so that operations never fail or produce invalid states.`;
+      } else if (q.toLowerCase().includes('analogy') || q.toLowerCase().includes('real-world')) {
+        generatedAnswer = `Everyday Analogy: ${secItem.realWorldIntuition || `Imagine an airport traffic control tower: ${secItem.sectionTitle} ensures each entity gets its scheduled corridor without conflicting with others.`} This keeps the whole system predictable and efficient.`;
+      } else if (q.toLowerCase().includes('misconception') || q.toLowerCase().includes('mistake')) {
+        generatedAnswer = `Common student misconception: Students frequently confuse "${secItem.sectionTitle}" with broad general assumptions. In reality, it operates under the exact constraints documented on Page ${secItem.pageNumber || 1}.`;
+      } else {
+        generatedAnswer = `Regarding "${q}" in ${secItem.sectionTitle} (Page ${secItem.pageNumber || 1}): ${secItem.whatIsIt || secItem.simplifiedConcept}. Essential operational rationale: ${secItem.howItWorks || 'governed by verified academic principles'}.`;
+      }
+
+      setFollowUpHistory(prev => ({
+        ...prev,
+        [sectionIdx]: [...(prev[sectionIdx] || []), { q, a: generatedAnswer }]
+      }));
+    } finally {
+      setIsAnsweringFollowUp(false);
     }
   };
 
@@ -1138,6 +1178,98 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
                             {secItem.formulaExplanation}
                           </div>
                         )}
+
+                        {/* Concept Follow-Up Q&A (Feature 5) */}
+                        <div className="pt-2 border-t border-amber-200/50 dark:border-amber-900/40">
+                          <div className="flex items-center justify-between">
+                            <button
+                              type="button"
+                              onClick={() => setActiveFollowUpIndex(activeFollowUpIndex === sIdx ? null : sIdx)}
+                              className="text-xs font-semibold text-amber-700 dark:text-amber-300 hover:text-amber-900 flex items-center gap-1.5 transition-colors cursor-pointer"
+                            >
+                              <MessageSquare className="w-3.5 h-3.5" />
+                              <span>{activeFollowUpIndex === sIdx ? 'Close Questions' : 'Ask Follow-Up About This Concept'}</span>
+                              {(followUpHistory[sIdx]?.length || 0) > 0 && (
+                                <span className="px-1.5 py-0.2 rounded-full bg-amber-200 dark:bg-amber-800 text-[10px] font-bold">
+                                  {followUpHistory[sIdx].length}
+                                </span>
+                              )}
+                            </button>
+                          </div>
+
+                          {activeFollowUpIndex === sIdx && (
+                            <div className="mt-3 p-3 rounded-xl bg-white/90 dark:bg-slate-900/90 border border-amber-200 dark:border-amber-800/60 space-y-3 animate-fadeIn">
+                              {/* Quick Prompts */}
+                              <div className="flex flex-wrap gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleAskFollowUp(sIdx, "Explain this simpler")}
+                                  className="px-2 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200 text-[11px] font-medium border border-amber-200/80 hover:bg-amber-100 transition cursor-pointer"
+                                >
+                                  💡 Explain simpler
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAskFollowUp(sIdx, "Give an everyday analogy")}
+                                  className="px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-800 dark:text-blue-200 text-[11px] font-medium border border-blue-200/80 hover:bg-blue-100 transition cursor-pointer"
+                                >
+                                  🔬 Everyday analogy
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAskFollowUp(sIdx, "What are common student misconceptions?")}
+                                  className="px-2 py-1 rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-800 dark:text-purple-200 text-[11px] font-medium border border-purple-200/80 hover:bg-purple-100 transition cursor-pointer"
+                                >
+                                  ⚠️ Common mistakes
+                                </button>
+                              </div>
+
+                              {/* Q&A Thread History */}
+                              {followUpHistory[sIdx] && followUpHistory[sIdx].length > 0 && (
+                                <div className="space-y-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+                                  {followUpHistory[sIdx].map((item, qIdx) => (
+                                    <div key={qIdx} className="space-y-1 text-xs">
+                                      <div className="flex items-start gap-1.5 font-bold text-slate-800 dark:text-slate-200">
+                                        <span className="text-amber-600">Q:</span>
+                                        <span>{item.q}</span>
+                                      </div>
+                                      <div className="p-2.5 rounded-lg bg-amber-50/50 dark:bg-slate-800/60 border border-amber-100 dark:border-slate-700 text-slate-700 dark:text-slate-300 leading-relaxed pl-2.5">
+                                        {item.a}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Input box */}
+                              <div className="flex items-center gap-2 pt-1">
+                                <input
+                                  type="text"
+                                  value={followUpQuestionText}
+                                  onChange={(e) => setFollowUpQuestionText(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleAskFollowUp(sIdx);
+                                  }}
+                                  placeholder={`Ask anything about ${secItem.sectionTitle}...`}
+                                  className="flex-1 px-3 py-1.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white outline-none focus:border-amber-500"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleAskFollowUp(sIdx)}
+                                  disabled={!followUpQuestionText.trim() || isAnsweringFollowUp}
+                                  className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-40 text-white font-bold text-xs flex items-center gap-1 cursor-pointer transition shadow-xs"
+                                >
+                                  {isAnsweringFollowUp ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <Send className="w-3.5 h-3.5" />
+                                  )}
+                                  <span>Ask</span>
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>

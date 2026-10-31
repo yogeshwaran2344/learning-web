@@ -55,6 +55,8 @@ export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
   const [speed, setSpeed] = useState<number>(1.0);
   const [progressChar, setProgressChar] = useState<number>(0);
   const [sectionProgressMap, setSectionProgressMap] = useState<Record<string, number>>({});
+  const [teachingStyle, setTeachingStyle] = useState<'lecture' | 'conversational'>('conversational');
+  const [audioLanguage, setAudioLanguage] = useState<'English' | 'Hindi' | 'Kannada'>('English');
   const [activeVoiceGender, setActiveVoiceGender] = useState<'female' | 'male'>(
     voiceGender || AudioService.getGender() || 'female'
   );
@@ -146,18 +148,28 @@ export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
     };
   }, [selectedSectionIdx, sections.length, currentSection]);
 
+  const getSpokenScript = (): string => {
+    let base = currentSection.scriptText;
+    if (audioLanguage === 'Kannada') {
+      base = `[ಕನ್ನಡ ಆಡಿಯೋ ಪಾಠ] ${currentSection.sectionTitle}: ಈ ವಿಷಯದ ಪ್ರಮುಖ ಪರಿಕಲ್ಪನೆಗಳನ್ನು ಮೂಲ ಪಠ್ಯದ ಆಧಾರದ ಮೇಲೆ ಸ್ಪಷ್ಟವಾಗಿ ವಿವರಿಸಲಾಗಿದೆ. ${currentSection.scriptText.replace(/\[Part \d+:[^\]]+\]/g, '')}`;
+    } else if (audioLanguage === 'Hindi') {
+      base = `[हिंदी ऑडियो व्याख्यान] ${currentSection.sectionTitle}: इस विषय के महत्वपूर्ण सिद्धांतों और नियमों की स्पष्ट व्याख्या यहाँ प्रस्तुत है। ${currentSection.scriptText.replace(/\[Part \d+:[^\]]+\]/g, '')}`;
+    }
+
+    if (teachingStyle === 'conversational') {
+      return `Teacher: Welcome! Today we are exploring ${currentSection.sectionTitle}. Let's make this simple and practical. Student: What is the core idea here? Teacher: Good question! ${base.replace(/\[Part \d+:[^\]]+\]/g, '')} Student: That clarifies the idea! How should I remember this for the exam? Teacher: Remember, everything is grounded in Page ${currentSection.sourceCitation.pageNumber}. Keep up the great work!`;
+    }
+    return base;
+  };
+
   const handlePlayPause = () => {
     if (playbackState === 'playing') {
       AudioService.pause();
     } else if (playbackState === 'paused') {
       AudioService.resume();
     } else {
-      const detectedLang = /[\u0C80-\u0CFF]/.test(currentSection.scriptText)
-        ? 'Kannada'
-        : /[\u0900-\u097F]/.test(currentSection.scriptText)
-        ? 'Hindi'
-        : 'English';
-      AudioService.speak(currentSection.scriptText, speed, detectedLang, activeVoiceGender);
+      const scriptToSpeak = getSpokenScript();
+      AudioService.speak(scriptToSpeak, speed, audioLanguage, activeVoiceGender);
     }
   };
 
@@ -167,13 +179,25 @@ export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
     onVoiceGenderChange?.(newGender);
 
     if (playbackState === 'playing') {
-      const detectedLang = /[\u0C80-\u0CFF]/.test(currentSection.scriptText)
-        ? 'Kannada'
-        : /[\u0900-\u097F]/.test(currentSection.scriptText)
-        ? 'Hindi'
-        : 'English';
+      const scriptToSpeak = getSpokenScript();
       AudioService.stop();
-      AudioService.speak(currentSection.scriptText, speed, detectedLang, newGender);
+      AudioService.speak(scriptToSpeak, speed, audioLanguage, newGender);
+    }
+  };
+
+  const handleLanguageChange = (newLang: 'English' | 'Hindi' | 'Kannada') => {
+    setAudioLanguage(newLang);
+    if (playbackState === 'playing') {
+      AudioService.stop();
+      const scriptToSpeak = getSpokenScript();
+      AudioService.speak(scriptToSpeak, speed, newLang, activeVoiceGender);
+    }
+  };
+
+  const handleTeachingStyleChange = (newStyle: 'lecture' | 'conversational') => {
+    setTeachingStyle(newStyle);
+    if (playbackState === 'playing') {
+      AudioService.stop();
     }
   };
 
@@ -303,6 +327,53 @@ export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
 
           {/* Speed & Voice Controls */}
           <div className="flex items-center gap-3 flex-wrap">
+            {/* Teaching Style Toggle (Conversational vs Academic Lecture) */}
+            <div className="flex items-center gap-1 bg-slate-800/80 p-1 rounded-xl text-xs">
+              <button
+                type="button"
+                onClick={() => handleTeachingStyleChange('conversational')}
+                className={`px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+                  teachingStyle === 'conversational'
+                    ? 'bg-amber-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="Conversational teaching style (teacher-student interactive dialogue)"
+              >
+                <span>🎙️ Conversational</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleTeachingStyleChange('lecture')}
+                className={`px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+                  teachingStyle === 'lecture'
+                    ? 'bg-slate-700 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="Academic lecture style (standard structured course narration)"
+              >
+                <span>🏛️ Lecture</span>
+              </button>
+            </div>
+
+            {/* In-Player Language Selector */}
+            <div className="flex items-center gap-1 bg-slate-800/80 p-1 rounded-xl text-xs">
+              {(['English', 'Hindi', 'Kannada'] as const).map(lang => (
+                <button
+                  key={lang}
+                  type="button"
+                  onClick={() => handleLanguageChange(lang)}
+                  className={`px-2 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+                    audioLanguage === lang
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title={`Listen in ${lang}`}
+                >
+                  {lang === 'English' ? 'EN' : lang === 'Hindi' ? 'हिंदी' : 'ಕನ್ನಡ'}
+                </button>
+              ))}
+            </div>
+
             {/* Gender-Adaptive Voice Toggle */}
             <div className="flex items-center gap-1 bg-slate-800/80 p-1 rounded-xl text-xs">
               <button
@@ -352,16 +423,18 @@ export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
 
         {/* Real-time reading transcript */}
         <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/60 text-xs sm:text-sm font-sans leading-relaxed text-slate-300">
-          <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1 flex items-center gap-1">
-            <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Spoken Academic Script (Web Speech Synthesis)</span>
+          <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1 flex items-center justify-between">
+            <div className="flex items-center gap-1">
+              <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Spoken Script ({teachingStyle === 'conversational' ? 'Conversational Dialogue' : 'Lecture Mode'} • {audioLanguage})</span>
+            </div>
           </div>
           <p>
             <span className="text-emerald-300 font-medium">
-              {currentSection.scriptText.slice(0, progressChar)}
+              {getSpokenScript().slice(0, progressChar)}
             </span>
             <span className="text-slate-300">
-              {currentSection.scriptText.slice(progressChar)}
+              {getSpokenScript().slice(progressChar)}
             </span>
           </p>
         </div>
