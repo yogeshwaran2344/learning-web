@@ -66,6 +66,8 @@ interface LearningStudioPageProps {
   onUpdateFlashcardMastery: (docId: string, cardId: string, level: number) => void;
   onSaveItem: (item: SavedItem) => void;
   onOpenFeedback: () => void;
+  voiceGender?: 'female' | 'male';
+  onVoiceGenderChange?: (gender: 'female' | 'male') => void;
 }
 
 export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
@@ -78,7 +80,9 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
   onNavigateToCitation,
   onUpdateFlashcardMastery,
   onSaveItem,
-  onOpenFeedback
+  onOpenFeedback,
+  voiceGender,
+  onVoiceGenderChange
 }) => {
   const [activeTab, setActiveTab] = useState<StudioTab>(initialTab);
   const [isSplitView, setIsSplitView] = useState<boolean>(true);
@@ -1067,6 +1071,8 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
                 audioLesson={currentAudioLesson}
                 documentId={document.id}
                 onNavigateToCitation={handleCitationClick}
+                voiceGender={voiceGender}
+                onVoiceGenderChange={onVoiceGenderChange}
               />
             )}
 

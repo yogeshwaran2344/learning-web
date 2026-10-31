@@ -94,7 +94,8 @@ export class AuthService {
     email: string,
     password?: string,
     requestedRole: Role = 'student',
-    lecturerInviteKey?: string
+    lecturerInviteKey?: string,
+    gender: 'female' | 'male' = 'female'
   ): { user: UserRecord; token: string } {
     const normalizedEmail = email.toLowerCase().trim();
     const existing = Database.findUserByEmail(normalizedEmail);
@@ -127,6 +128,7 @@ export class AuthService {
       name: name.trim(),
       passwordHash,
       role: finalRole,
+      gender: (gender === 'male' || gender === 'female') ? gender : 'female',
       createdAt: new Date().toISOString()
     };
 

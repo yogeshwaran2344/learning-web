@@ -14,6 +14,8 @@ interface WorkspaceProps {
   onBackToDashboard: () => void;
   onUpdateFlashcardMastery: (docId: string, cardId: string, level: number) => void;
   onOpenFeedback: () => void;
+  voiceGender?: 'female' | 'male';
+  onVoiceGenderChange?: (gender: 'female' | 'male') => void;
 }
 
 export const Workspace: React.FC<WorkspaceProps> = ({
@@ -21,7 +23,9 @@ export const Workspace: React.FC<WorkspaceProps> = ({
   initialFormat = 'map',
   onBackToDashboard,
   onUpdateFlashcardMastery,
-  onOpenFeedback
+  onOpenFeedback,
+  voiceGender,
+  onVoiceGenderChange
 }) => {
   const [currentFormat, setCurrentFormat] = useState<LearningFormat>(initialFormat);
   const [isSplitView, setIsSplitView] = useState<boolean>(true);
@@ -98,6 +102,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({
               <AudioLessonView
                 audioLesson={document.audioLesson}
                 onNavigateToCitation={handleNavigateToCitation}
+                voiceGender={voiceGender}
+                onVoiceGenderChange={onVoiceGenderChange}
               />
             )}
 

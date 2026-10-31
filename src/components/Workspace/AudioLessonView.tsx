@@ -24,18 +24,32 @@ interface AudioLessonViewProps {
   audioLesson: AudioLesson;
   documentId?: string;
   onNavigateToCitation: (citation: SourceCitation) => void;
+  voiceGender?: 'female' | 'male';
+  onVoiceGenderChange?: (gender: 'female' | 'male') => void;
 }
 
 export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
   audioLesson,
   documentId,
-  onNavigateToCitation
+  onNavigateToCitation,
+  voiceGender,
+  onVoiceGenderChange
 }) => {
   const sections = Array.isArray(audioLesson?.sections) ? audioLesson.sections : [];
   const [selectedSectionIdx, setSelectedSectionIdx] = useState(0);
   const [playbackState, setPlaybackState] = useState<AudioState>('idle');
   const [speed, setSpeed] = useState<number>(1.0);
   const [progressChar, setProgressChar] = useState<number>(0);
+  const [activeVoiceGender, setActiveVoiceGender] = useState<'female' | 'male'>(
+    voiceGender || AudioService.getGender() || 'female'
+  );
+
+  useEffect(() => {
+    if (voiceGender && voiceGender !== activeVoiceGender) {
+      setActiveVoiceGender(voiceGender);
+      AudioService.setGender(voiceGender);
+    }
+  }, [voiceGender]);
 
   const currentSection = sections[selectedSectionIdx] || sections[0] || {
     id: 'sec-default',
@@ -82,7 +96,23 @@ export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
         : /[\u0900-\u097F]/.test(currentSection.scriptText)
         ? 'Hindi'
         : 'English';
-      AudioService.speak(currentSection.scriptText, speed, detectedLang);
+      AudioService.speak(currentSection.scriptText, speed, detectedLang, activeVoiceGender);
+    }
+  };
+
+  const handleVoiceGenderChange = (newGender: 'female' | 'male') => {
+    setActiveVoiceGender(newGender);
+    AudioService.setGender(newGender);
+    onVoiceGenderChange?.(newGender);
+
+    if (playbackState === 'playing') {
+      const detectedLang = /[\u0C80-\u0CFF]/.test(currentSection.scriptText)
+        ? 'Kannada'
+        : /[\u0900-\u097F]/.test(currentSection.scriptText)
+        ? 'Hindi'
+        : 'English';
+      AudioService.stop();
+      AudioService.speak(currentSection.scriptText, speed, detectedLang, newGender);
     }
   };
 
@@ -210,21 +240,52 @@ export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
             </button>
           </div>
 
-          {/* Speed Selection */}
-          <div className="flex items-center space-x-1 bg-slate-800/80 p-1 rounded-xl text-xs">
-            {[0.75, 1.0, 1.25, 1.5, 2.0].map((s) => (
+          {/* Speed & Voice Controls */}
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Gender-Adaptive Voice Toggle */}
+            <div className="flex items-center gap-1 bg-slate-800/80 p-1 rounded-xl text-xs">
               <button
-                key={s}
-                onClick={() => handleSpeedChange(s)}
-                className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
-                  speed === s
-                    ? 'bg-emerald-500 text-white shadow-sm'
+                type="button"
+                onClick={() => handleVoiceGenderChange('female')}
+                className={`px-3 py-1 rounded-lg font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  activeVoiceGender === 'female'
+                    ? 'bg-purple-600 text-white shadow-sm ring-1 ring-purple-400'
                     : 'text-slate-400 hover:text-white'
                 }`}
+                title="Girl / Female Teacher Voice Narration"
               >
-                {s}x
+                <span>👩 Girl's Voice</span>
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={() => handleVoiceGenderChange('male')}
+                className={`px-3 py-1 rounded-lg font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  activeVoiceGender === 'male'
+                    ? 'bg-blue-600 text-white shadow-sm ring-1 ring-blue-400'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="Guy / Male Teacher Voice Narration"
+              >
+                <span>👨 Guy's Voice</span>
+              </button>
+            </div>
+
+            {/* Speed Selection */}
+            <div className="flex items-center space-x-1 bg-slate-800/80 p-1 rounded-xl text-xs">
+              {[0.75, 1.0, 1.25, 1.5, 2.0].map((s) => (
+                <button
+                  key={s}
+                  onClick={() => handleSpeedChange(s)}
+                  className={`px-2.5 py-1 rounded-lg font-semibold transition-all ${
+                    speed === s
+                      ? 'bg-emerald-500 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {s}x
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 

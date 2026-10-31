@@ -7,9 +7,11 @@ import {
   SunMoon,
   Keyboard,
   Globe,
-  Check
+  Check,
+  Volume2
 } from 'lucide-react';
 import { UserPreferences } from '../types';
+import { AudioService } from '../services/audioService';
 
 interface AccessibilityModalProps {
   isOpen: boolean;
@@ -128,6 +130,44 @@ export const AccessibilityModal: React.FC<AccessibilityModalProps> = ({
                 }`}
               />
             </button>
+          </div>
+
+          {/* Voice Gender Setting */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+              <Volume2 className="w-4 h-4 text-purple-500" />
+              <span>Narration Voice (Girl / Guy)</span>
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  onUpdatePreferences({ voiceGender: 'female' });
+                  AudioService.setGender('female');
+                }}
+                className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 ${
+                  preferences.voiceGender === 'female'
+                    ? 'bg-purple-50 border-purple-500 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 ring-2 ring-purple-500/30'
+                    : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                }`}
+              >
+                <span>👩 Girl / Female Voice</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onUpdatePreferences({ voiceGender: 'male' });
+                  AudioService.setGender('male');
+                }}
+                className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 ${
+                  preferences.voiceGender === 'male'
+                    ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 ring-2 ring-blue-500/30'
+                    : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                }`}
+              >
+                <span>👨 Guy / Male Voice</span>
+              </button>
+            </div>
           </div>
 
           {/* Language Selection */}

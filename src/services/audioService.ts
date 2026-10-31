@@ -1,4 +1,5 @@
 export type AudioState = 'idle' | 'playing' | 'paused';
+export type VoiceGender = 'female' | 'male';
 
 export interface AudioListener {
   onStateChange?: (state: AudioState) => void;
@@ -7,12 +8,16 @@ export interface AudioListener {
   onError?: (err: any) => void;
 }
 
+const FEMALE_VOICE_REGEX = /(?:female|woman|girl|zira|jenny|aria|sonia|samantha|victoria|karen|moira|tessa|fiona|veena|lekha|heera|kalpana|swara|neerja|hazel|susan|catherine|stephanie|ayumi|kyoko|yuna|katja|monica|helena|paulina|laura|anna|alice)/i;
+const MALE_VOICE_REGEX = /(?:male|man|boy|david|mark|guy|george|alex|daniel|fred|oliver|ravi|hemant|rishi|madhav|aaron|arthur|richard|james|john|paul|brian|thomas|alva|diego|jorge|martin|stefan)/i;
+
 export class AudioService {
   private static synth: SpeechSynthesis | null = typeof window !== 'undefined' ? window.speechSynthesis : null;
   private static utterance: SpeechSynthesisUtterance | null = null;
   private static currentState: AudioState = 'idle';
   private static listeners: AudioListener[] = [];
   private static currentRate: number = 1.0;
+  private static currentGender: VoiceGender = 'female';
 
   static subscribe(listener: AudioListener): () => void {
     this.listeners.push(listener);
@@ -25,7 +30,20 @@ export class AudioService {
     return this.currentState;
   }
 
-  static speak(text: string, rate: number = 1.0, language: string = 'English'): void {
+  static setGender(gender: VoiceGender): void {
+    this.currentGender = gender;
+  }
+
+  static getGender(): VoiceGender {
+    return this.currentGender;
+  }
+
+  static speak(
+    text: string,
+    rate: number = 1.0,
+    language: string = 'English',
+    gender?: VoiceGender
+  ): void {
     if (!this.synth) {
       console.warn('SpeechSynthesis is not supported in this environment');
       return;
@@ -33,24 +51,51 @@ export class AudioService {
 
     this.stop();
     this.currentRate = rate;
+    const activeGender: VoiceGender = gender || this.currentGender || 'female';
 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = rate;
-    utterance.pitch = 1.0;
+    // Acoustic calibration:
+    // Girl / Female voice pitch: 1.20 (bright, youthful, clear female teacher tone)
+    // Guy / Male voice pitch: 0.85 (deep, warm, resonant male teacher tone)
+    utterance.pitch = activeGender === 'female' ? 1.2 : 0.85;
 
     const targetLang = language === 'Kannada' ? 'kn-IN' : language === 'Hindi' ? 'hi-IN' : 'en-US';
     utterance.lang = targetLang;
 
-    // Try finding a natural matching voice
+    // Retrieve system voices and select the best gender-matching voice
     const voices = this.synth.getVoices();
     const prefix = targetLang.split('-')[0];
-    const matchingVoice = voices.find(v => v.lang.startsWith(prefix));
-    const naturalVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Neural') || v.name.includes('Google') || v.name.includes('Samantha')));
-    
-    if (matchingVoice) {
-      utterance.voice = matchingVoice;
-    } else if (naturalVoice && targetLang.startsWith('en')) {
-      utterance.voice = naturalVoice;
+    const langVoices = voices.filter(v => v.lang.toLowerCase().startsWith(prefix.toLowerCase()));
+
+    let chosenVoice: SpeechSynthesisVoice | null = null;
+
+    if (activeGender === 'female') {
+      // 1. Language-matched female voice
+      chosenVoice = langVoices.find(v => FEMALE_VOICE_REGEX.test(v.name) && !MALE_VOICE_REGEX.test(v.name)) || null;
+      // 2. Any English female voice if target is English
+      if (!chosenVoice && targetLang.startsWith('en')) {
+        chosenVoice = voices.find(v => v.lang.startsWith('en') && FEMALE_VOICE_REGEX.test(v.name)) || null;
+      }
+      // 3. Fallback to any language-matched voice
+      if (!chosenVoice) {
+        chosenVoice = langVoices[0] || null;
+      }
+    } else {
+      // 1. Language-matched male voice
+      chosenVoice = langVoices.find(v => MALE_VOICE_REGEX.test(v.name) && !FEMALE_VOICE_REGEX.test(v.name)) || null;
+      // 2. Any English male voice if target is English
+      if (!chosenVoice && targetLang.startsWith('en')) {
+        chosenVoice = voices.find(v => v.lang.startsWith('en') && MALE_VOICE_REGEX.test(v.name)) || null;
+      }
+      // 3. Fallback to any language-matched voice
+      if (!chosenVoice) {
+        chosenVoice = langVoices[0] || null;
+      }
+    }
+
+    if (chosenVoice) {
+      utterance.voice = chosenVoice;
     }
 
     utterance.onstart = () => {

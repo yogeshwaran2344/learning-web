@@ -24,13 +24,8 @@ export class ApiClient {
   }
 
   static getToken(): string | null {
-    if (!this.token) {
-      this.token = localStorage.getItem('learnova_auth_token') || localStorage.getItem('learnlens_auth_token');
-    }
-    // Auto-bind default student session if token is missing
     if (!this.token && typeof window !== 'undefined') {
-      this.token = 'token_demo_pooja_session';
-      localStorage.setItem('learnova_auth_token', this.token);
+      this.token = localStorage.getItem('learnova_auth_token') || localStorage.getItem('learnlens_auth_token');
     }
     return this.token;
   }
@@ -61,11 +56,12 @@ export class ApiClient {
     email: string,
     password?: string,
     role: string = 'student',
-    lecturerInviteKey?: string
+    lecturerInviteKey?: string,
+    gender: 'female' | 'male' = 'female'
   ): Promise<{ user: any; token: string }> {
     const data = await this.request<{ user: any; token: string }>('/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ name, email, password, role, lecturerInviteKey })
+      body: JSON.stringify({ name, email, password, role, lecturerInviteKey, gender })
     });
     if (data.token) {
       this.setToken(data.token);
@@ -107,50 +103,13 @@ export class ApiClient {
     });
 
     if (!res.ok) {
-      // Auto-recover from 401 if session expired or lost
-      if (res.status === 401 && typeof window !== 'undefined') {
-        console.warn('[ApiClient] 401 session expired or invalid. Auto-recovering student session...');
-        try {
-          let loginRes = await fetch(`${API_BASE}/auth/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: 'pooja@university.edu', password: 'student123' })
-          });
-          if (!loginRes.ok) {
-            loginRes = await fetch(`${API_BASE}/auth/login`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email: 'alex.rivera@university.edu', password: 'student123' })
-            });
-          }
-          if (loginRes.ok) {
-            const loginData = await loginRes.json();
-            if (loginData?.token) {
-              this.setToken(loginData.token);
-              // Retry with fresh token
-              const retryHeaders = {
-                ...headers,
-                'Authorization': `Bearer ${loginData.token}`
-              };
-              const retryRes = await fetch(`${API_BASE}${endpoint}`, {
-                ...options,
-                headers: retryHeaders
-              });
-              if (retryRes.ok) {
-                return retryRes.json();
-              }
-            }
-          }
-        } catch (recoverErr) {
-          console.warn('[ApiClient] Auto-reauthentication attempt failed:', recoverErr);
-        }
-      }
-
       if (res.status === 401) {
         this.logout();
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('learnova_auth_required'));
         }
+        const err = await res.json().catch(() => ({ error: 'Authentication required. Please sign in.' }));
+        throw new Error(err.error || 'Authentication required. Please sign in to your academic account.');
       }
       const err = await res.json().catch(() => ({ error: res.statusText }));
       throw new Error(err.error || `Request failed with status ${res.status}`);

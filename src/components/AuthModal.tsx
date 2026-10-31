@@ -33,6 +33,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [role, setRole] = useState<'student' | 'lecturer'>('student');
+  const [gender, setGender] = useState<'female' | 'male'>('female');
   const [inviteKey, setInviteKey] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -54,7 +55,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           email.trim(),
           password,
           role,
-          role === 'lecturer' ? inviteKey.trim() : undefined
+          role === 'lecturer' ? inviteKey.trim() : undefined,
+          gender
         );
         onSuccess(res.user);
       }
@@ -129,7 +131,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Alex Rivera"
+                  placeholder="e.g. Priya Sharma"
                   className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs focus:ring-2 focus:ring-brand-500 outline-none"
                 />
               </div>
@@ -202,6 +204,39 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
               </div>
 
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Audio Narration Voice & Gender
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setGender('female')}
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                      gender === 'female'
+                        ? 'bg-purple-50 border-purple-500 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 ring-2 ring-purple-500/30'
+                        : 'border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>👩 Girl / Female Voice</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGender('male')}
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                      gender === 'male'
+                        ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 ring-2 ring-blue-500/30'
+                        : 'border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>👨 Guy / Male Voice</span>
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Controls the AI teacher voice used for all your audio lessons and spoken explanations.
+                </p>
+              </div>
+
               {role === 'lecturer' && (
                 <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
@@ -235,73 +270,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </button>
         </form>
 
-        {/* 1-Click Quick Demo Sign In */}
-        <div className="mt-4 pt-3.5 border-t border-slate-100 dark:border-slate-800 space-y-2">
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center">
-            One-Click Instant Sign In
-          </div>
-          <div className="grid grid-cols-3 gap-1.5">
-            <button
-              type="button"
-              disabled={isLoading}
-              onClick={async () => {
-                setIsLoading(true);
-                setErrorMessage('');
-                try {
-                  const res = await ApiClient.login('pooja@university.edu', 'student123');
-                  onSuccess(res.user);
-                } catch (e: any) {
-                  setErrorMessage(e.message || 'Login failed');
-                } finally {
-                  setIsLoading(false);
-                }
-              }}
-              className="py-2 px-2 rounded-xl bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 text-[11px] font-bold transition-all text-center cursor-pointer"
-            >
-              🎓 Student (Pooja)
-            </button>
-            <button
-              type="button"
-              disabled={isLoading}
-              onClick={async () => {
-                setIsLoading(true);
-                setErrorMessage('');
-                try {
-                  const res = await ApiClient.login('alex.rivera@university.edu', 'student123');
-                  onSuccess(res.user);
-                } catch (e: any) {
-                  setErrorMessage(e.message || 'Login failed');
-                } finally {
-                  setIsLoading(false);
-                }
-              }}
-              className="py-2 px-2 rounded-xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-[11px] font-bold transition-all text-center cursor-pointer"
-            >
-              🎓 Student (Alex)
-            </button>
-            <button
-              type="button"
-              disabled={isLoading}
-              onClick={async () => {
-                setIsLoading(true);
-                setErrorMessage('');
-                try {
-                  const res = await ApiClient.login('prof.ramesh@iisc.ac.in', 'lecturer123');
-                  onSuccess(res.user);
-                } catch (e: any) {
-                  setErrorMessage(e.message || 'Login failed');
-                } finally {
-                  setIsLoading(false);
-                }
-              }}
-              className="py-2 px-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[11px] font-bold transition-all text-center cursor-pointer"
-            >
-              👨‍🏫 Faculty
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400 text-center flex items-center justify-center gap-1.5">
+        <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400 text-center flex items-center justify-center gap-1.5">
           <ShieldCheck className="w-4 h-4 text-emerald-500" />
           <span>Encrypted Password Authentication & Account Isolation</span>
         </div>

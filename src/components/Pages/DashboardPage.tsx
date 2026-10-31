@@ -49,7 +49,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   onSelectDocument,
   onNavigate,
   onOpenUpload,
-  userName = 'Alex',
+  userName = 'Learner',
   language = 'English',
   onLanguageChange
 }) => {

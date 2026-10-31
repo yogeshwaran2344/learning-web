@@ -34,6 +34,7 @@ export interface UserRecord {
   name: string;
   passwordHash?: string;
   role: Role;
+  gender?: 'female' | 'male';
   createdAt: string;
 }
 

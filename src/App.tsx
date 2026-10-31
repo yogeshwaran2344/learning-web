@@ -35,6 +35,7 @@ import { ExtractionBenchmarkModal } from './components/ExtractionBenchmarkModal'
 import { IntegrationTestModal } from './components/IntegrationTestModal';
 import { SystemTestTrackerModal } from './components/SystemTestTrackerModal';
 import { AuthModal } from './components/AuthModal';
+import { AudioService } from './services/audioService';
 
 export function App() {
   const [currentPage, setCurrentPage] = useState<NavigationPage>('dashboard');
@@ -64,6 +65,14 @@ export function App() {
 
   // Initialize data on mount
   useEffect(() => {
+    // Synchronize initial audio voice gender from saved preferences
+    AudioService.setGender(preferences.voiceGender || 'female');
+
+    const handleAuthRequired = () => {
+      setIsAuthOpen(true);
+    };
+    window.addEventListener('learnova_auth_required', handleAuthRequired);
+
     async function loadInitialData() {
       const isBackendLive = await ApiClient.checkHealth();
       const token = ApiClient.getToken();
@@ -76,6 +85,10 @@ export function App() {
             setIsAuthOpen(false);
             if (user.role && user.role !== preferences.role) {
               setPreferences(prev => ({ ...prev, role: user.role }));
+            }
+            if (user.gender) {
+              setPreferences(prev => ({ ...prev, voiceGender: user.gender }));
+              AudioService.setGender(user.gender);
             }
             const [backendDocs, backendSaved, backendCourses] = await Promise.all([
               ApiClient.getDocuments(),
@@ -104,13 +117,25 @@ export function App() {
     }
 
     loadInitialData();
+
+    return () => {
+      window.removeEventListener('learnova_auth_required', handleAuthRequired);
+    };
   }, []);
 
   const handleLoginSuccess = async (user: any) => {
     setCurrentUser(user);
     setIsAuthOpen(false);
+    const prefUpdates: Partial<UserPreferences> = {};
     if (user.role) {
-      handleUpdatePreferences({ role: user.role });
+      prefUpdates.role = user.role;
+    }
+    if (user.gender) {
+      prefUpdates.voiceGender = user.gender;
+      AudioService.setGender(user.gender);
+    }
+    if (Object.keys(prefUpdates).length > 0) {
+      handleUpdatePreferences(prefUpdates);
     }
     try {
       const [backendDocs, backendSaved, backendCourses] = await Promise.all([
@@ -333,7 +358,7 @@ export function App() {
               onSelectDocument={handleSelectDocument}
               onNavigate={(page) => setCurrentPage(page)}
               onOpenUpload={() => setCurrentPage('upload')}
-              userName={currentUser?.name || (preferences.role === 'student' ? 'Alex' : 'Prof. Ramesh')}
+              userName={currentUser?.name || (preferences.role === 'student' ? 'Student' : 'Faculty')}
               language={preferences.preferredLanguage}
               onLanguageChange={(lang) => handleUpdatePreferences({ preferredLanguage: lang })}
             />
@@ -355,6 +380,7 @@ export function App() {
               onDocumentCreated={handleDocumentCreated}
               onCancel={() => setCurrentPage('documents')}
               defaultLanguage={preferences.preferredLanguage}
+              onOpenAuth={() => setIsAuthOpen(true)}
             />
           )}
 
@@ -420,6 +446,8 @@ export function App() {
                 onUpdateFlashcardMastery={handleUpdateFlashcardMastery}
                 onSaveItem={handleSaveItem}
                 onOpenFeedback={() => setIsFeedbackOpen(true)}
+                voiceGender={preferences.voiceGender}
+                onVoiceGenderChange={(g) => handleUpdatePreferences({ voiceGender: g })}
               />
             ) : (
               <div className="p-12 text-center space-y-4">

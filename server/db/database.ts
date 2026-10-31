@@ -63,6 +63,7 @@ export class Database {
         name TEXT NOT NULL,
         passwordHash TEXT,
         role TEXT NOT NULL,
+        gender TEXT DEFAULT 'female',
         createdAt TEXT NOT NULL
       );
 
@@ -79,6 +80,12 @@ export class Database {
     // Migration helper: add passwordHash column if users table was created previously without it
     try {
       this.db.exec('ALTER TABLE users ADD COLUMN passwordHash TEXT');
+    } catch (e) {
+      // Column already exists, safe to ignore
+    }
+
+    try {
+      this.db.exec("ALTER TABLE users ADD COLUMN gender TEXT DEFAULT 'female'");
     } catch (e) {
       // Column already exists, safe to ignore
     }
@@ -423,10 +430,10 @@ export class Database {
       return;
     }
 
-    const stmt = this.db.prepare('INSERT OR IGNORE INTO users (id, email, name, passwordHash, role, createdAt) VALUES (?, ?, ?, ?, ?, ?)');
-    stmt.run('usr-student-1', 'alex.rivera@university.edu', 'Alex Rivera', 'sha256:student123', 'student', '2026-10-01T10:00:00Z');
-    stmt.run('usr-student-pooja', 'pooja@university.edu', 'Pooja', 'sha256:student123', 'student', '2026-10-01T10:00:00Z');
-    stmt.run('usr-lecturer-1', 'prof.ramesh@iisc.ac.in', 'Prof. Ramesh K.', 'sha256:lecturer123', 'lecturer', '2026-09-15T09:00:00Z');
+    const stmt = this.db.prepare('INSERT OR IGNORE INTO users (id, email, name, passwordHash, role, gender, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    stmt.run('usr-student-1', 'alex.rivera@university.edu', 'Alex Rivera', 'sha256:student123', 'student', 'male', '2026-10-01T10:00:00Z');
+    stmt.run('usr-student-pooja', 'pooja@university.edu', 'Pooja', 'sha256:student123', 'student', 'female', '2026-10-01T10:00:00Z');
+    stmt.run('usr-lecturer-1', 'prof.ramesh@iisc.ac.in', 'Prof. Ramesh K.', 'sha256:lecturer123', 'lecturer', 'male', '2026-09-15T09:00:00Z');
 
     // Seed persistent 365-day demo session so development/testing never gets blocked by missing sessions
     try {
@@ -502,8 +509,8 @@ export class Database {
   static createUser(user: UserRecord): UserRecord {
     this.init();
     if (this.db) {
-      const stmt = this.db.prepare('INSERT OR REPLACE INTO users (id, email, name, passwordHash, role, createdAt) VALUES (?, ?, ?, ?, ?, ?)');
-      stmt.run(user.id, user.email, user.name, user.passwordHash || null, user.role, user.createdAt);
+      const stmt = this.db.prepare('INSERT OR REPLACE INTO users (id, email, name, passwordHash, role, gender, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)');
+      stmt.run(user.id, user.email, user.name, user.passwordHash || null, user.role, user.gender || 'female', user.createdAt);
     }
     return user;
   }

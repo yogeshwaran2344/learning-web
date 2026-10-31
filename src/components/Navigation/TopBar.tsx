@@ -230,7 +230,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             </div>
             <div className="hidden lg:block text-left">
               <div className="text-xs font-bold text-slate-900 dark:text-white leading-tight">
-                {currentUser.name || (currentUser.role === 'student' ? 'Alex Rivera' : 'Prof. Ramesh')}
+                {currentUser.name || (currentUser.role === 'student' ? 'Student' : 'Faculty')}
               </div>
               <div className="text-[10px] text-slate-400 capitalize">
                 {currentUser.role || role} Account

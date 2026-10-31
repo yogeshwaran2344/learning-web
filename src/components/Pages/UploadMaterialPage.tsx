@@ -29,6 +29,7 @@ interface UploadMaterialPageProps {
   onDocumentCreated: (doc: AcademicDocument) => void;
   onCancel: () => void;
   defaultLanguage?: AppLanguage;
+  onOpenAuth?: () => void;
 }
 
 // Section 7.3: Standardized operational lifecycle states
@@ -37,7 +38,8 @@ type ProcessingLifecycleState = 'select' | 'queued' | 'processing' | 'verifying'
 export const UploadMaterialPage: React.FC<UploadMaterialPageProps> = ({
   onDocumentCreated,
   onCancel,
-  defaultLanguage = 'English'
+  defaultLanguage = 'English',
+  onOpenAuth
 }) => {
   const [docTitle, setDocTitle] = useState('');
   const [author, setAuthor] = useState('');
@@ -418,7 +420,7 @@ Step-by-step application of core theorems with worked scenarios and concept chec
                 type="text"
                 value={author}
                 onChange={(e) => setAuthor(e.target.value)}
-                placeholder="e.g. Prof. Ramesh (IISc)"
+                placeholder="e.g. Department Faculty or Course Instructor"
                 className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs focus:ring-2 focus:ring-brand-500 focus:outline-none"
               />
             </div>
@@ -631,32 +633,29 @@ Step-by-step application of core theorems with worked scenarios and concept chec
           </div>
 
           {/* Diagnostic Box for 401 / Authentication Required */}
-          {(errorMessage?.includes('Authentication credentials') || errorMessage?.includes('401') || errorMessage?.includes('token')) && (
+          {(errorMessage?.includes('Authentication credentials') || errorMessage?.includes('401') || errorMessage?.includes('token') || errorMessage?.includes('sign in')) && (
             <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-left space-y-2 text-xs shadow-xs">
               <div className="font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
                 <AlertTriangle className="w-4 h-4 text-amber-600" />
-                <span>Session Expired or Login Required</span>
+                <span>Authentication Required</span>
               </div>
               <p className="text-amber-800 dark:text-amber-300">
-                Your authenticated session has expired. Click below to instantly log in as the active demo student and resume upload, or process locally.
+                You must be signed in to your academic account to upload and process study materials.
               </p>
               <div className="pt-1 flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={async () => {
-                    try {
-                      const res = await ApiClient.login('alex.rivera@university.edu', 'student123');
-                      if (res?.user) {
-                        setErrorMessage(null);
-                        handleStartProcessing();
-                      }
-                    } catch (err: any) {
-                      setErrorMessage(err.message || 'Login failed.');
+                  onClick={() => {
+                    if (onOpenAuth) {
+                      onOpenAuth();
+                    } else if (typeof window !== 'undefined') {
+                      window.dispatchEvent(new CustomEvent('learnova_auth_required'));
                     }
                   }}
-                  className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                  className="px-3.5 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
                 >
-                  ⚡ One-Click Student Login & Retry
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Sign In to Account</span>
                 </button>
               </div>
             </div>

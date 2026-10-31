@@ -1,5 +1,14 @@
 export type Role = 'student' | 'lecturer';
 
+export interface UserAccount {
+  id: string;
+  email: string;
+  name: string;
+  role: Role;
+  gender?: 'female' | 'male';
+  createdAt?: string;
+}
+
 export type NavigationPage =
   | 'dashboard'
   | 'documents'

@@ -5,14 +5,14 @@ import { AuthService } from '../services/authService';
 export class AuthController {
   static register(req: AuthenticatedRequest, res: Response) {
     try {
-      const { name, email, password, role, lecturerInviteKey } = req.body;
+      const { name, email, password, role, lecturerInviteKey, gender } = req.body;
       if (!email || !name) {
         return res.status(400).json({ error: 'Name and email are required.' });
       }
       if (!password || typeof password !== 'string' || password.trim().length < 10) {
         return res.status(400).json({ error: 'Password must be at least 10 characters long and contain uppercase, lowercase, and numbers/symbols.' });
       }
-      const result = AuthService.register(name, email, password, role, lecturerInviteKey);
+      const result = AuthService.register(name, email, password, role, lecturerInviteKey, gender);
       const { passwordHash, ...safeUser } = result.user;
       res.status(201).json({ user: safeUser, token: result.token });
     } catch (e: any) {
