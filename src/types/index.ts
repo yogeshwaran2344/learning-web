@@ -21,6 +21,7 @@ export type NavigationPage =
   | 'upload';
 
 export type StudioTab =
+  | 'topics'
   | 'original'
   | 'map'
   | 'simplified'

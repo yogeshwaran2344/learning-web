@@ -59,7 +59,7 @@ export class ConceptMapService {
         contextSnippet: `Overall document architecture overview for ${chapter.title}`
       };
 
-      const children: IntelligentConceptChild[] = chapter.topics.slice(0, 4).map((topic) => ({
+      const children: IntelligentConceptChild[] = chapter.topics.map((topic) => ({
         id: `child-${topic.id}`,
         label: topic.title.length > 28 ? topic.title.slice(0, 26) + '...' : topic.title,
         explanation: topic.description || `Core topic covering pages ${topic.pageRange[0]}–${topic.pageRange[1]} with ${topic.subtopics.length} verified subtopics.`,
@@ -624,7 +624,7 @@ export class ConceptMapService {
 
     // Branch 2: Subtopics & Architecture
     if (topic.subtopics && topic.subtopics.length > 0) {
-      const subtopicChildren: IntelligentConceptChild[] = topic.subtopics.slice(0, 4).map((sub, sIdx) => ({
+      const subtopicChildren: IntelligentConceptChild[] = topic.subtopics.map((sub, sIdx) => ({
         id: `ch-sub-${sub.id || sIdx}-${topic.id}`,
         label: sub.title.replace(/^Chapter \d+:\s*/i, '').slice(0, 26),
         explanation: `Subtopic on Page ${sub.pageRange[0]}: ${sub.title}. Preserves prerequisite relationships.`,

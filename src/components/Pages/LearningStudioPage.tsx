@@ -44,6 +44,7 @@ import { WorkedExamplesView } from '../Workspace/WorkedExamplesView';
 import { FlashcardView } from '../Workspace/FlashcardView';
 import { AudioLessonView } from '../Workspace/AudioLessonView';
 import { PracticeQuizView } from '../Workspace/PracticeQuizView';
+import { TopicExplorerView } from '../Workspace/TopicExplorerView';
 import { GeneratorControlBar } from '../Workspace/GeneratorControlBar';
 import { ExplainThisModal } from '../Workspace/ExplainThisModal';
 import { VerificationAuditModal } from '../Workspace/VerificationAuditModal';
@@ -128,8 +129,13 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
     setCurrentHierarchy(document.topicHierarchy || TopicHierarchyService.buildHierarchy(document));
   }, [document]);
 
-  const activeTopic = activeTopicId
-    ? currentHierarchy.chapters.flatMap(c => c.topics).find(t => t.id === activeTopicId)
+  const [selectedTopicId, setSelectedTopicId] = useState<string | undefined>(activeTopicId);
+  useEffect(() => {
+    if (activeTopicId) setSelectedTopicId(activeTopicId);
+  }, [activeTopicId]);
+
+  const activeTopic = (selectedTopicId || activeTopicId)
+    ? currentHierarchy.chapters.flatMap(c => c.topics).find(t => t.id === (selectedTopicId || activeTopicId))
     : null;
   const mainContainerRef = useRef<HTMLDivElement>(null);
   const tabsScrollRef = useRef<HTMLDivElement>(null);
@@ -195,6 +201,7 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
   };
 
   const tabs: { id: StudioTab; number: string; label: string; tooltip: string; icon: React.ReactNode; color: string }[] = [
+    { id: 'topics', number: '00', label: 'Topic Explorer', tooltip: 'Explore document structure, chapters, topics, and select individual learning units', icon: <FolderTree className="w-4 h-4" />, color: 'text-blue-500' },
     { id: 'original', number: '01', label: 'AI Teacher', tooltip: 'Personal AI Teacher: Page-wise explanation of every page', icon: <GraduationCap className="w-4 h-4" />, color: 'text-blue-500' },
     { id: 'map', number: '02', label: 'Concept Map', tooltip: 'Hierarchical knowledge graph and prerequisite relationships', icon: <Network className="w-4 h-4" />, color: 'text-blue-500' },
     { id: 'simplified', number: '03', label: 'Simplified Explanation', tooltip: 'Plain-language explanation with real-world analogies', icon: <Lightbulb className="w-4 h-4" />, color: 'text-amber-500' },
@@ -238,6 +245,28 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
     if (!isSplitView && activeTab !== 'original') {
       setIsSplitView(true);
     }
+  };
+
+  const handlePageClick = (pageNumber: number) => {
+    const matchingSection = document.sections?.find(s => s.pageNumber === pageNumber);
+    const citation: SourceCitation = matchingSection
+      ? {
+          id: `cite-page-${pageNumber}`,
+          documentId: document.id,
+          pageNumber,
+          sectionTitle: matchingSection.title || `Page ${pageNumber}`,
+          exactQuote: matchingSection.content.slice(0, 120),
+          contextSnippet: `Navigated from Topic Explorer`
+        }
+      : {
+          id: `cite-page-${pageNumber}`,
+          documentId: document.id,
+          pageNumber,
+          sectionTitle: `Page ${pageNumber}`,
+          exactQuote: `Page ${pageNumber}`,
+          contextSnippet: `Navigated from Topic Explorer`
+        };
+    handleCitationClick(citation);
   };
 
   const handleSaveSnippet = (title: string, content: string, cite?: SourceCitation) => {
@@ -503,16 +532,18 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {onOpenTopicExplorer && (
-              <button
-                onClick={onOpenTopicExplorer}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-800 flex items-center gap-1.5 transition-all self-start md:self-auto shadow-sm cursor-pointer"
-                title="Open dedicated Explore Your Topics view"
-              >
-                <FolderTree className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                <span>Explore Topics</span>
-              </button>
-            )}
+            <button
+              onClick={() => setActiveTab('topics')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all self-start md:self-auto shadow-sm cursor-pointer ${
+                activeTab === 'topics'
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-md ring-2 ring-blue-400/30'
+                  : 'bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-800'
+              }`}
+              title="Open dedicated Explore Your Topics view"
+            >
+              <FolderTree className="w-3.5 h-3.5" />
+              <span>Explore Topics</span>
+            </button>
 
             {/* Step 38: Export Package Button */}
             <button
@@ -842,15 +873,35 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
                         Pages {activeTopic.pageRange[0]}–{activeTopic.pageRange[1]}
                       </span>
                     </div>
-                    {onOpenTopicExplorer && (
                       <button
-                        onClick={onOpenTopicExplorer}
+                        onClick={() => setActiveTab('topics')}
                         className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors shadow-2xs shrink-0"
                       >
                         <FolderTree className="w-3.5 h-3.5" />
                         <span>Explore All Topics</span>
                       </button>
-                    )}
+                  </div>
+                )}
+
+                {/* 00 Topic Explorer */}
+                {activeTab === 'topics' && (
+                  <div className="h-full">
+                    <TopicExplorerView
+                      document={document}
+                      onLearnTopic={(topic, preferredFormat) => {
+                        setSelectedTopicId(topic.id);
+                        if (topic.sourceCitations && topic.sourceCitations[0]) {
+                          handleCitationClick(topic.sourceCitations[0]);
+                        }
+                        if (preferredFormat) {
+                          setActiveTab(preferredFormat);
+                        } else {
+                          setActiveTab('notes');
+                        }
+                      }}
+                      onNavigateToCitation={handleCitationClick}
+                      onNavigateToPage={handlePageClick}
+                    />
                   </div>
                 )}
 
@@ -859,7 +910,7 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
                   <ConceptMapView
                     conceptMap={currentConceptMap}
                     document={document}
-                    initialTopicId={activeTopicId}
+                    initialTopicId={selectedTopicId || activeTopicId}
                     onNavigateToCitation={handleCitationClick}
                   />
                 )}
@@ -1080,7 +1131,7 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
             {activeTab === 'notes' && (
               <DetailedNotesView
                 document={document}
-                initialTopicId={activeTopicId}
+                initialTopicId={selectedTopicId || activeTopicId}
                 onNavigateToCitation={handleCitationClick}
                 onSaveNotes={(updatedSuite) => {
                   (document as any).notes = updatedSuite;
@@ -1092,7 +1143,7 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
             {activeTab === 'worked' && (
               <WorkedExamplesView
                 document={document}
-                initialTopicId={activeTopicId}
+                initialTopicId={selectedTopicId || activeTopicId}
                 onNavigateToCitation={handleCitationClick}
               />
             )}
@@ -1103,7 +1154,7 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
                 documentId={document.id}
                 flashcards={currentFlashcards}
                 document={document}
-                initialTopicId={activeTopicId}
+                initialTopicId={selectedTopicId || activeTopicId}
                 onUpdateMastery={onUpdateFlashcardMastery}
                 onNavigateToCitation={handleCitationClick}
               />
@@ -1114,7 +1165,7 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
               <AudioLessonView
                 audioLesson={currentAudioLesson}
                 documentId={document.id}
-                initialTopicId={activeTopicId}
+                initialTopicId={selectedTopicId || activeTopicId}
                 onNavigateToCitation={handleCitationClick}
                 voiceGender={voiceGender}
                 onVoiceGenderChange={onVoiceGenderChange}
@@ -1125,7 +1176,7 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
                 {activeTab === 'quiz' && (
                   <PracticeQuizView
                     document={document}
-                    initialTopicId={activeTopicId}
+                    initialTopicId={selectedTopicId || activeTopicId}
                     onNavigateToCitation={handleCitationClick}
                     onSaveItem={onSaveItem}
                   />

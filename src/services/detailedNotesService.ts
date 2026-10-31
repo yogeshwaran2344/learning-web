@@ -161,7 +161,7 @@ export class DetailedNotesService {
       : `Topic ${displayNumber}: "${topic.title}" establishes the core mechanisms and theoretical models detailed on Pages ${topic.pageRange ? `${topic.pageRange[0]}–${topic.pageRange[1]}` : citation.pageNumber}.`;
 
     // 2. Definitions
-    const definitions = (topic.importantConcepts || []).slice(0, 4).map(term => ({
+    const definitions = (topic.importantConcepts || []).map(term => ({
       term,
       definition: `${term} is a foundational entity in ${topic.title} verified against original lecture citations on Page ${citation.pageNumber}.`,
       conditions: 'Requires verified state consistency and boundary condition adherence.'

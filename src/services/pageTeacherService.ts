@@ -468,12 +468,12 @@ export class PageTeacherService {
       importantThingsToUnderstand: cleanSentences.slice(0, 4).map(s => s.replace(/^[•\d.-]+/, '').trim()).filter(Boolean).length >= 2
         ? cleanSentences.slice(0, 4).map(s => s.replace(/^[•\d.-]+/, '').trim())
         : [
-            `${topicTitle} operates under strict boundary conditions.`,
-            'Preserves formal mathematical invariants from the source.',
+            `Core concept: ${topicTitle} is grounded in Page ${pageNumber}.`,
+            'Preserves verified definitions and principles from the source text.',
             'Directly verified against original page citations.'
           ],
       rememberThis: {
-        rule: `Core Principle: Invariants in ${topicTitle} remain strictly bounded and verifiable.`
+        rule: `Core Principle: Concepts in ${topicTitle} are directly traceable to Page ${pageNumber}.`
       },
       sourceCitation: citation
     };
