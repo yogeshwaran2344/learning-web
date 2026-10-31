@@ -34,7 +34,8 @@ export type StudioTab =
   | 'quiz'
   | 'whiteboard'
   | 'podcast'
-  | 'search';
+  | 'search'
+  | 'exam';
 
 export type LearningFormat =
   | StudioTab
@@ -832,4 +833,73 @@ export interface CrossDocumentKnowledgeGraphData {
   nodes: CrossDocGraphNode[];
   edges: CrossDocGraphEdge[];
   documentsCovered: { id: string; title: string; count: number }[];
+}
+
+// ---------------------------------------------------------------------------
+// Distinctive Feature 7: Predicted Exam Question Bank (5M, 7M, 8M, 10M)
+// ---------------------------------------------------------------------------
+export type ExamQuestionMarks = 5 | 7 | 8 | 10;
+
+export interface ExamQuestionItem {
+  id: string;
+  topicTitle: string;
+  marks: ExamQuestionMarks;
+  questionText: string;
+  expectedTimeMinutes: number;
+  targetWordCount: string;
+  questionType: 'conceptual' | 'derivation' | 'numerical' | 'architecture' | 'comparative' | 'case_study';
+  modelAnswer: {
+    introduction: string;
+    structuredSections: { heading: string; content: string; keyPoints?: string[] }[];
+    equationsOrFormulas?: { latex: string; explanation: string }[];
+    diagramDescription?: string;
+    diagramAsciiOrSteps?: string[];
+    workedCalculation?: { given: string; steps: string[]; finalResult: string };
+    summaryConclusion: string;
+  };
+  markingScheme: { criteria: string; marksAwarded: number }[];
+  examinerTip: string;
+  commonPitfallsToAvoid: string[];
+  sourceCitation: SourceCitation;
+}
+
+// ---------------------------------------------------------------------------
+// Distinctive Feature 8: Multi-File Unified Topic Deduplication & Master Catalog
+// ---------------------------------------------------------------------------
+export interface ConsolidatedTopicItem {
+  id: string;
+  topicName: string;
+  canonicalTitle: string;
+  mergedSummary: string;
+  isShared: boolean;
+  sharedDocumentCount: number;
+  sourceDocuments: {
+    docId: string;
+    docTitle: string;
+    pageNumber: number;
+    snippet: string;
+  }[];
+  contentType: 'theory' | 'numerical' | 'diagram' | 'formula' | 'mixed';
+  keyFormulas: string[];
+  uniqueAspects: Record<string, string>; // docId -> unique contribution from this file
+}
+
+export interface MultiDocumentComparisonResult {
+  id: string;
+  analyzedDocuments: { id: string; title: string; category: string; pageCount: number }[];
+  totalUniqueTopicsCount: number;
+  sharedTopicsCount: number;
+  exclusiveTopicsCount: number;
+  deduplicatedTopicCatalog: ConsolidatedTopicItem[];
+  exclusiveTopicsByDocument: Record<string, ConsolidatedTopicItem[]>;
+  divergencesAndGaps: {
+    topic: string;
+    documentTreatments: { docId: string; docTitle: string; depth: string; treatment: string }[];
+    synthesisRecommendation: string;
+  }[];
+  crossDocumentMatrix: {
+    topic: string;
+    coverageByDoc: Record<string, 'comprehensive' | 'moderate' | 'brief' | 'absent'>;
+    status: 'unanimous' | 'complementary' | 'exclusive' | 'divergent';
+  }[];
 }

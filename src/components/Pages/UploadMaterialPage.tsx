@@ -19,7 +19,8 @@ import {
   Files,
   Trash2,
   Layers,
-  HardDrive
+  HardDrive,
+  GitCompare
 } from 'lucide-react';
 import { AcademicDocument, AppLanguage, DocumentFileType, DocumentTopicHierarchy, DocumentBatchProgress } from '../../types';
 import { ApiClient } from '../../services/apiClient';
@@ -718,7 +719,8 @@ Step-by-step application of core theorems with worked scenarios and concept chec
                 'Worked Examples',
                 'Flashcards',
                 'Audio Lesson',
-                'Practice Quiz'
+                'Practice Quiz',
+                'Exam Questions (5M-10M)'
               ].map((fmt) => (
                 <label
                   key={fmt}
@@ -744,16 +746,25 @@ Step-by-step application of core theorems with worked scenarios and concept chec
           <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-200 dark:border-slate-800">
             <button
               onClick={onCancel}
-              className="px-5 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 font-semibold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="px-5 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 font-semibold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               onClick={handleStartProcessing}
               disabled={!rawText.trim() && !selectedFile}
-              className="px-6 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-40 text-white font-bold text-xs shadow-md shadow-brand-500/20 flex items-center gap-2 transition-all"
+              className={`px-6 py-2.5 rounded-xl disabled:opacity-40 text-white font-bold text-xs shadow-md flex items-center gap-2 transition-all cursor-pointer ${
+                fileQueue.length > 1
+                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-blue-500/20'
+                  : 'bg-brand-600 hover:bg-brand-700 shadow-brand-500/20'
+              }`}
             >
-              <span>Process Material & Verify</span>
+              {fileQueue.length > 1 && <GitCompare className="w-4 h-4" />}
+              <span>
+                {fileQueue.length > 1
+                  ? `Ingest & Compare ${fileQueue.length} Files (Deduplicated Syllabus)`
+                  : 'Process Material & Verify'}
+              </span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

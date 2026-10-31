@@ -45,7 +45,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'documents', label: 'My Documents', icon: FolderOpen },
     { id: 'topic-explorer', label: 'Topic Explorer', icon: FolderTree, badge: activeDocument?.topicHierarchy ? `${activeDocument.topicHierarchy.totalTopicsCount}` : undefined },
     { id: 'studio', label: 'Learning Studio', icon: Sparkles, badge: activeDocument ? 'Active' : undefined },
-    { id: 'compare', label: 'Doc Comparison', icon: GitCompare, badge: 'Diff' },
+    { id: 'compare', label: 'Multi-Doc Compare', icon: GitCompare, badge: 'Unified' },
     { id: 'graph', label: 'Knowledge Graph', icon: Network, badge: 'Cross-Doc' },
     { id: 'verification', label: 'Source Verification', icon: ShieldCheck, badge: 'Audit' },
     { id: 'saved', label: 'Saved Materials', icon: BookmarkCheck },

@@ -30,7 +30,8 @@ import {
   HelpCircle,
   PenTool,
   Radio,
-  Search
+  Search,
+  FileQuestion
 } from 'lucide-react';
 import {
   AcademicDocument,
@@ -53,6 +54,7 @@ import { PracticeQuizView } from '../Workspace/PracticeQuizView';
 import { InteractiveWhiteboardView } from '../Workspace/InteractiveWhiteboardView';
 import { StudyPodcastView } from '../Workspace/StudyPodcastView';
 import { IntelligentDocumentSearchView } from '../Workspace/IntelligentDocumentSearchView';
+import { ExamPredictorView } from '../Workspace/ExamPredictorView';
 import { TopicExplorerView } from '../Workspace/TopicExplorerView';
 import { GeneratorControlBar } from '../Workspace/GeneratorControlBar';
 import { ExplainThisModal } from '../Workspace/ExplainThisModal';
@@ -228,7 +230,8 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
     { id: 'audio', number: '08', label: 'Audio Lessons', tooltip: 'Narrated spoken lesson with chapter navigation', icon: <Headphones className="w-4 h-4" />, color: 'text-emerald-500' },
     { id: 'whiteboard', number: '09', label: 'AI Whiteboard', tooltip: 'Interactive whiteboard explaining concepts visually with diagrams, equations, and flowcharts', icon: <PenTool className="w-4 h-4" />, color: 'text-purple-500' },
     { id: 'podcast', number: '10', label: 'Study Podcast', tooltip: 'Two-speaker conversational audio lessons between Dr. Maya & Leo', icon: <Radio className="w-4 h-4" />, color: 'text-emerald-500' },
-    { id: 'search', number: '11', label: 'Semantic Search', tooltip: 'Search by meaning and conceptual intent with source citations', icon: <Search className="w-4 h-4" />, color: 'text-blue-500' }
+    { id: 'search', number: '11', label: 'Semantic Search', tooltip: 'Search by meaning and conceptual intent with source citations', icon: <Search className="w-4 h-4" />, color: 'text-blue-500' },
+    { id: 'exam', number: '12', label: 'Exam Questions (5M-10M)', tooltip: 'Predicted 5-marker, 7-marker, 8-marker, and 10-marker exam questions with complete model answers & marking schemes', icon: <FileQuestion className="w-4 h-4" />, color: 'text-amber-500' }
   ];
 
   const handleTabKeyDown = (e: React.KeyboardEvent, index: number) => {
@@ -1414,6 +1417,15 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
                   <IntelligentDocumentSearchView
                     document={document}
                     allDocuments={allDocuments || [document]}
+                    onNavigateToCitation={handleCitationClick}
+                  />
+                )}
+
+                {/* 12 Predicted Exam Questions (5M, 7M, 8M, 10M) */}
+                {activeTab === 'exam' && (
+                  <ExamPredictorView
+                    document={document}
+                    initialTopicId={selectedTopicId || activeTopicId}
                     onNavigateToCitation={handleCitationClick}
                   />
                 )}
