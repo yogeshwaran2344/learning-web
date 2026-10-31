@@ -778,7 +778,27 @@ export class AiGeneratorService {
     };
   }
 
-  // --- 6. Audio Lessons: Conversational Teaching Narration with Topic Pauses ---
+  // --- 6. Audio Lessons: Simplified Intuitive Subtopic Explanations ---
+  private static cleanAcademicTitle(rawTitle: string): string {
+    if (!rawTitle) return 'Academic Subtopic';
+    let cleaned = rawTitle.trim();
+    if (cleaned.includes('•')) {
+      const parts = cleaned.split('•');
+      const after = parts[parts.length - 1].trim();
+      if (after.length > 2) cleaned = after;
+    }
+    cleaned = cleaned.replace(/^(?:Section|Slide|Topic|Part|Unit|Module)\s*\d+[:.]?\s*/gi, '');
+    cleaned = cleaned.replace(/^\d+[\s.:-]+/, '');
+    cleaned = cleaned.replace(/\b\d{2}[A-Z]{2,6}\d{2,4}\b/gi, '');
+    cleaned = cleaned.replace(/(?:Department|Dept\.?|School|College)\s+of\s+[^,•\n]+(?:,\s*[A-Z]{2,10})?/gi, '');
+    cleaned = cleaned.replace(/\b(?:NHCE|VTU|AICTE|NBA|NAAC|UGC)\b/gi, '');
+    cleaned = cleaned.replace(/^[\s.:•–—\-]+|[\s.:•–—\-]+$/g, '').trim();
+    if (cleaned.length > 0 && cleaned === cleaned.toLowerCase()) {
+      cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+    }
+    return cleaned.length > 2 ? cleaned : rawTitle;
+  }
+
   private static generateAudioLesson(
     documentId: string,
     docTitle: string,
@@ -791,67 +811,58 @@ export class AiGeneratorService {
     // Generate independent audio lesson for EVERY topic across the entire document
     const audioSections = sections.map((sec, idx) => {
       let script = '';
-      const summarySentences = sec.content.split(/[.?!]\s+/).filter(s => s.trim().length > 15);
-      const mainConcept = summarySentences[0] || sec.content.slice(0, 180);
+      const cleanTitle = this.cleanAcademicTitle(sec.title);
+      const cleanBody = (sec.content || '')
+        .replace(/(?:Department|Dept\.?)\s+of\s+[^,•\n]+(?:,\s*[A-Z]{2,10})?/gi, '')
+        .replace(/\b\d{2}[A-Z]{2,6}\d{2,4}\b/gi, '')
+        .replace(/[•▪▫]/g, '')
+        .trim();
+      const summarySentences = cleanBody.split(/[.?!]\s+/).filter(s => s.trim().length > 15);
+      const mainConcept = summarySentences[0] || cleanBody.slice(0, 180);
       const mainCondition = sec.conditions?.[0] || (sec.equations?.[0] ? `Governed by: ${sec.equations[0].label || sec.equations[0].latex}` : `Key takeaway: ${mainConcept.slice(0, 120).trim()}`);
 
-      // 1. Introduction
-      const intro = idx === 0
-        ? `[Part 1: Introduction] Welcome to your LEARNOVA Audio Lesson on "${docTitle}". [PAUSE: 1s] Let's begin with Topic 1: "${sec.title}".`
-        : `[Part 1: Introduction] Moving to Topic ${idx + 1}: "${sec.title}". [TRANSITION] [PAUSE: 1s]`;
+      // 1. Core Intuitive Explanation
+      const explanation = `${cleanTitle}. In simple terms, ${mainConcept}. To easily understand this, think of it like an active system monitor: it tracks and coordinates system resources so operations remain orderly, time limits are respected, and no program overuses shared capacity.`;
 
-      // 2. Simple Explanation
-      const explanation = `[Part 2: Simple Intuitive Explanation] In this topic, the foundational principle establishes: ${mainConcept}. [PAUSE: 2s]`;
-
-      // 3. Important Definitions
+      // 2. Technical details & definitions
       let defsText = '';
       if (sec.definitions && sec.definitions.length > 0) {
         const defsSummary = sec.definitions.slice(0, 2).map(d => `${d.term} is defined as ${d.definition}`).join('. ');
-        defsText = ` [Part 3: Formal Technical Definitions] Key definitions to remember: ${defsSummary}. [PAUSE: 1s]`;
-      } else {
-        defsText = ` [Part 3: Formal Technical Definitions] Core concept to define: "${sec.title}" represents a verified curriculum unit grounded in source text. [PAUSE: 1s]`;
+        defsText = ` Specifically, ${defsSummary}.`;
       }
 
-      // 4. Relevant Examples
+      // 3. Examples
       let examplesText = '';
       if (sec.numericalProblems && sec.numericalProblems.length > 0) {
         const np = sec.numericalProblems[0];
-        examplesText = ` [Part 4: Real-World Examples] Consider this numerical problem from the text: ${np.problem.slice(0, 120)}. The final result evaluates to ${np.finalAnswer}. [PAUSE: 1s]`;
+        examplesText = ` Consider this calculation: ${np.problem.slice(0, 120)}, evaluating to ${np.finalAnswer}.`;
       } else if (sec.examples && sec.examples.length > 0) {
-        examplesText = ` [Part 4: Real-World Examples] For example: ${sec.examples[0].slice(0, 120)}. [PAUSE: 1s]`;
-      } else {
-        examplesText = ` [Part 4: Real-World Examples] Applied in experimental, industrial, and analytical scenarios across ${sec.title}. [PAUSE: 1s]`;
+        examplesText = ` For instance: ${sec.examples[0].slice(0, 120)}.`;
       }
 
-      // 5. Important Formulas or Core Principles
+      // 4. Important Formulas or Core Principles
       let formulaText = '';
       if (sec.equations && sec.equations.length > 0) {
-        formulaText = ` [Part 5: Governing Invariants & Formulation] The governing mathematical formulation is ${sec.equations[0].label || sec.equations[0].latex}. [PAUSE: 1s]`;
+        formulaText = ` The governing equation is ${sec.equations[0].label || sec.equations[0].latex}.`;
       } else if (sec.conditions && sec.conditions.length > 0) {
-        formulaText = ` [Part 5: Governing Invariants & Principles] Essential condition: ${sec.conditions[0]}. [PAUSE: 1s]`;
-      } else {
-        formulaText = ` [Part 5: Governing Invariants & Principles] Key principle: ${sec.content.slice(0, 120).trim()}. [PAUSE: 1s]`;
+        formulaText = ` An essential condition is: ${sec.conditions[0]}.`;
       }
 
-      // 6. Revision Summary
-      const summary = ` [Part 6: Examination Revision Summary] To summarize for exam revision: ${mainCondition}`;
+      // 5. Revision Summary
+      const summary = ` For exams, remember: ${mainCondition}.`;
 
-      script = `${intro} ${explanation}${defsText}${examplesText}${formulaText}${summary}`;
+      script = `${explanation}${defsText}${examplesText}${formulaText}${summary}`.trim();
 
       if (language === 'Kannada') {
         const knDefs = sec.definitions && sec.definitions.length > 0
           ? ` ಪ್ರಮುಖ ವ್ಯಾಖ್ಯಾನ: ${sec.definitions[0].term} - ${sec.definitions[0].definition.slice(0, 100)}.`
           : '';
-        script = idx === 0
-          ? `ಸ್ವಾಗತ. ಇದು LEARNOVA ${docTitle} ಕುರಿತ ಸಮಗ್ರ ಧ್ವನಿ ಪಾಠ. [PAUSE: 1s] ವಿಷಯ 1: ${sec.title}. ಲೇಖಕರು ಇಲ್ಲಿ ಮುಖ್ಯ ಅಡಿಪಾಯವನ್ನು ವಿವರಿಸುತ್ತಾರೆ: ${mainConcept.slice(0, 180)}.[PAUSE: 2s]${knDefs} [PAUSE: 1s] ನೆನಪಿನಲ್ಲಿಡಿ: ${mainCondition}`
-          : `ವಿಷಯ ${idx + 1}: ${sec.title}. [TRANSITION] [PAUSE: 1s] ಇಲ್ಲಿ ಮುಖ್ಯ ತತ್ವ: ${mainConcept.slice(0, 180)}.[PAUSE: 2s]${knDefs} [PAUSE: 1s] ಪರೀಕ್ಷೆಯ ಸಾರಾಂಶ: ${mainCondition}`;
+        script = `ವಿಷಯ ${idx + 1}: ${cleanTitle}. ಈ ವಿಷಯವನ್ನು ಸರಳವಾಗಿ ಅರ್ಥಮಾಡಿಕೊಳ್ಳೋಣ: ${mainConcept.slice(0, 180)}.${knDefs} ನೆನಪಿನಲ್ಲಿಡಿ: ${mainCondition}.`;
       } else if (language === 'Hindi') {
         const hiDefs = sec.definitions && sec.definitions.length > 0
           ? ` मुख्य परिभाषा: ${sec.definitions[0].term} - ${sec.definitions[0].definition.slice(0, 100)}।`
           : '';
-        script = idx === 0
-          ? `नमस्ते, LEARNOVA ऑडियो पाठ में आपका स्वागत है। विषय है "${docTitle}"। [PAUSE: 1s] विषय 1: ${sec.title}। लेखक बताते हैं: ${mainConcept.slice(0, 180)}। [PAUSE: 2s]${hiDefs} [PAUSE: 1s] मुख्य शर्त: ${mainCondition}`
-          : `विषय ${idx + 1}: ${sec.title}। [TRANSITION] [PAUSE: 1s] यहाँ मुख्य सिद्धांत: ${mainConcept.slice(0, 180)}। [PAUSE: 2s]${hiDefs} [PAUSE: 1s] परीक्षा सारांश: ${mainCondition}`;
+        script = `विषय ${idx + 1}: ${cleanTitle}। आइए इस विषय को सरल शब्दों में समझें: ${mainConcept.slice(0, 180)}।${hiDefs} परीक्षा के लिए मुख्य बिंदु: ${mainCondition}।`;
       }
 
       const citation: SourceCitationRecord = {
@@ -859,15 +870,15 @@ export class AiGeneratorService {
         documentId,
         pageNumber: sec.pageNumber || 1,
         slideNumber: sec.slideNumber,
-        sectionTitle: sec.title,
-        exactQuote: sec.content.slice(0, 140) + '...',
-        contextSnippet: sec.content.slice(0, 220)
+        sectionTitle: cleanTitle,
+        exactQuote: (cleanBody || sec.content).slice(0, 140) + '...',
+        contextSnippet: (cleanBody || sec.content).slice(0, 220)
       };
       citations.push(citation);
 
       return {
         id: `audio-sec-${idx + 1}`,
-        sectionTitle: `${idx + 1}. ${sec.title}`,
+        sectionTitle: `${idx + 1}. ${cleanTitle}`,
         durationSeconds: Math.max(30, Math.round(script.split(/\s+/).length / 2.5)),
         scriptText: script,
         sourceCitation: citation

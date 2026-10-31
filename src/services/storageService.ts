@@ -72,10 +72,38 @@ export class StorageService {
         verifiedByEngine: false,
         factChecks: []
       },
-      conceptMap: doc.conceptMap || {
+      conceptMap: doc.conceptMap ? {
+        ...doc.conceptMap,
+        nodes: Array.isArray(doc.conceptMap.nodes) ? doc.conceptMap.nodes : [{ id: 'core', label: doc.title || 'Core Concept', group: 'core' }],
+        links: Array.isArray(doc.conceptMap.links) ? doc.conceptMap.links : [],
+        edges: Array.isArray(doc.conceptMap.edges) ? doc.conceptMap.edges : [],
+        branches: Array.isArray((doc.conceptMap as any).branches) ? (doc.conceptMap as any).branches.map((b: any) => ({
+          ...b,
+          children: Array.isArray(b?.children) ? b.children : []
+        })) : []
+      } : {
         nodes: [{ id: 'core', label: doc.title || 'Core Concept', group: 'core' }],
-        links: []
+        links: [],
+        edges: [],
+        branches: []
       },
+      topicHierarchy: doc.topicHierarchy ? {
+        ...doc.topicHierarchy,
+        chapters: Array.isArray(doc.topicHierarchy.chapters) ? doc.topicHierarchy.chapters.map((c: any) => ({
+          ...c,
+          topics: Array.isArray(c?.topics) ? c.topics.map((t: any) => ({
+            ...t,
+            subtopics: Array.isArray(t?.subtopics) ? t.subtopics : [],
+            importantConcepts: Array.isArray(t?.importantConcepts) ? t.importantConcepts : [],
+            associatedEquations: Array.isArray(t?.associatedEquations) ? t.associatedEquations : [],
+            associatedDiagrams: Array.isArray(t?.associatedDiagrams) ? t.associatedDiagrams : [],
+            associatedTables: Array.isArray(t?.associatedTables) ? t.associatedTables : [],
+            associatedNumericalExamples: Array.isArray(t?.associatedNumericalExamples) ? t.associatedNumericalExamples : [],
+            associatedAlgorithms: Array.isArray(t?.associatedAlgorithms) ? t.associatedAlgorithms : [],
+            sourceCitations: Array.isArray(t?.sourceCitations) ? t.sourceCitations : []
+          })) : []
+        })) : []
+      } : undefined,
       audioLesson: (doc.audioLesson && Array.isArray(doc.audioLesson.sections) && doc.audioLesson.sections.length > 0)
         ? doc.audioLesson
         : {

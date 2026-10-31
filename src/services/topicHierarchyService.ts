@@ -10,6 +10,31 @@ import {
 import { PageTeacherService } from './pageTeacherService';
 
 export class TopicHierarchyService {
+  static cleanAcademicTitle(rawTitle: string): string {
+    if (!rawTitle) return 'Academic Section';
+    let cleaned = rawTitle.trim();
+    if (cleaned.includes('•')) {
+      const parts = cleaned.split('•');
+      const after = parts[parts.length - 1].trim();
+      if (after.length > 2) cleaned = after;
+    } else if (cleaned.includes(' - ') && /department|dept|course|[0-9]{2}[A-Z]{2,5}[0-9]{2}/i.test(cleaned)) {
+      const parts = cleaned.split(' - ');
+      const after = parts[parts.length - 1].trim();
+      if (after.length > 2) cleaned = after;
+    }
+    cleaned = cleaned.replace(/^(?:Section|Slide|Topic|Part|Unit|Module)\s*\d+[:.]?\s*/gi, '');
+    cleaned = cleaned.replace(/^\d+[\s.:-]+/, '');
+    cleaned = cleaned.replace(/\b\d{2}[A-Z]{2,6}\d{2,4}\b/gi, '');
+    cleaned = cleaned.replace(/\b[A-Z]{2,6}\d{2,4}\b/gi, '');
+    cleaned = cleaned.replace(/(?:Department|Dept\.?|School|College|Faculty)\s+of\s+[^,•\n]+(?:,\s*[A-Z]{2,10})?/gi, '');
+    cleaned = cleaned.replace(/\b(?:NHCE|VTU|AICTE|NBA|NAAC|UGC|Autonomous|Affiliated)\b/gi, '');
+    cleaned = cleaned.replace(/^[\s.:•–—\-]+|[\s.:•–—\-]+$/g, '').trim();
+    if (cleaned.length > 0 && cleaned === cleaned.toLowerCase()) {
+      cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+    }
+    return cleaned.length > 2 ? cleaned : rawTitle;
+  }
+
   /**
    * Requirement 1-7:
    * Build a verified, evidence-grounded DocumentTopicHierarchy from document sections.
@@ -28,12 +53,7 @@ export class TopicHierarchyService {
 
     // 1. Requirement 6: Sanitize administrative noise from all sections
     const cleanSections = rawSections.map(s => {
-      let sanitizedTitle = (s.title || '')
-        .replace(/^[ \t]*(?:Course Code|Subject Code|Course Name|Branch|Semester|Batch)\s*[:=-]?\s*[A-Za-z0-9/-]*\s*[-:–]\s*/i, '')
-        .replace(/^[ \t]*(?:Department of [A-Za-z\s&]+|School of [A-Za-z\s&]+)\s*[-:–]?\s*/i, '')
-        .replace(/\(Approved by AICTE\)/gi, '')
-        .replace(/\(Affiliated to [^)]+\)/gi, '')
-        .trim();
+      let sanitizedTitle = this.cleanAcademicTitle(s.title || '');
 
       const candidateSanitized = PageTeacherService.sanitizeAdministrativeContent(sanitizedTitle).trim();
       if (candidateSanitized.length > 2) {

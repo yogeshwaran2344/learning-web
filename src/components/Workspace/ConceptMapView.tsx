@@ -96,11 +96,12 @@ export const ConceptMapView: React.FC<ConceptMapViewProps> = ({
 
   // Determine currently active TopicConceptMap
   const activeMap: TopicConceptMap = useMemo(() => {
+    let raw: TopicConceptMap;
     if (!mapSuite) {
       // Fallback: build a mock TopicConceptMap from conceptMap
       const nodes = Array.isArray(conceptMap?.nodes) ? conceptMap.nodes : [];
       const edges = Array.isArray(conceptMap?.edges) ? conceptMap.edges : [];
-      return {
+      raw = {
         id: 'map-legacy',
         topicId: 'overall',
         topicTitle: 'Document Concept Map',
@@ -110,32 +111,61 @@ export const ConceptMapView: React.FC<ConceptMapViewProps> = ({
         nodes,
         edges
       };
+    } else if (activeTopicId === 'overall') {
+      raw = mapSuite.overallMap || {
+        id: 'map-overall',
+        topicId: 'overall',
+        topicTitle: 'Overall Map',
+        pageRange: [1, document?.pageCount || 1],
+        centralConcept: document?.title?.toUpperCase() || 'CORE CONCEPTS',
+        branches: [],
+        nodes: [],
+        edges: []
+      };
+    } else {
+      const topicMaps = Array.isArray(mapSuite.topicMaps) ? mapSuite.topicMaps : [];
+      const found = topicMaps.find(m => m.topicId === activeTopicId);
+      raw = found || mapSuite.overallMap || {
+        id: 'map-overall',
+        topicId: 'overall',
+        topicTitle: 'Overall Map',
+        pageRange: [1, document?.pageCount || 1],
+        centralConcept: document?.title?.toUpperCase() || 'CORE CONCEPTS',
+        branches: [],
+        nodes: [],
+        edges: []
+      };
     }
 
-    if (activeTopicId === 'overall') {
-      return mapSuite.overallMap;
-    }
-
-    const found = mapSuite.topicMaps.find(m => m.topicId === activeTopicId);
-    return found || mapSuite.overallMap;
+    return {
+      ...raw,
+      branches: Array.isArray(raw?.branches)
+        ? raw.branches.map(b => ({
+            ...b,
+            children: Array.isArray(b?.children) ? b.children : []
+          }))
+        : [],
+      nodes: Array.isArray(raw?.nodes) ? raw.nodes : [],
+      edges: Array.isArray(raw?.edges) ? raw.edges : []
+    };
   }, [mapSuite, activeTopicId, conceptMap, document]);
 
   // Initialize selected entity when active map changes
   useEffect(() => {
-    if (activeMap.branches.length > 0) {
+    if ((activeMap.branches || []).length > 0) {
       const firstBranch = activeMap.branches[0];
-      const firstChild = firstBranch.children[0];
+      const firstChild = (firstBranch?.children || [])[0];
       if (firstChild) {
         setSelectedEntity({
           id: firstChild.id,
           title: firstChild.label,
-          category: firstChild.category || firstBranch.category,
+          category: firstChild.category || firstBranch?.category || 'general',
           summary: firstChild.explanation,
           formula: firstChild.formula,
           importance: firstChild.isImportant ? 'High Priority' : 'Core Concept',
           sourceCitation: firstChild.sourceCitation
         });
-      } else {
+      } else if (firstBranch) {
         setSelectedEntity({
           id: firstBranch.id,
           title: firstBranch.label,
@@ -144,7 +174,7 @@ export const ConceptMapView: React.FC<ConceptMapViewProps> = ({
           sourceCitation: firstBranch.sourceCitation
         });
       }
-    } else if (activeMap.nodes.length > 0) {
+    } else if ((activeMap.nodes || []).length > 0) {
       const first = activeMap.nodes[0];
       setSelectedEntity({
         id: first.id,
@@ -372,7 +402,7 @@ export const ConceptMapView: React.FC<ConceptMapViewProps> = ({
         </div>
 
         {/* Topic Pills Switcher (Desktop) & Select (Mobile) */}
-        {mapSuite && mapSuite.topicMaps.length > 0 ? (
+        {mapSuite && (mapSuite.topicMaps || []).length > 0 ? (
           <div className="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-thin">
             {/* Overall Document Map */}
             <button

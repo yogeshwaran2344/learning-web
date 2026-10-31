@@ -146,7 +146,7 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
   }, [activeTopicId]);
 
   const activeTopic = (selectedTopicId || activeTopicId)
-    ? currentHierarchy.chapters.flatMap(c => c.topics).find(t => t.id === (selectedTopicId || activeTopicId))
+    ? (currentHierarchy?.chapters || []).flatMap(c => c?.topics || []).find(t => t.id === (selectedTopicId || activeTopicId))
     : null;
   const mainContainerRef = useRef<HTMLDivElement>(null);
   const tabsScrollRef = useRef<HTMLDivElement>(null);
@@ -835,7 +835,7 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
             title="Inspect and refine extracted Chapter & Topic hierarchy"
           >
             <FolderTree className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Topics ({currentHierarchy.chapters.length})</span>
+            <span className="hidden sm:inline">Topics ({(currentHierarchy?.chapters || []).length})</span>
           </button>
         </div>
       </div>

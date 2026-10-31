@@ -14,11 +14,89 @@ import {
   ShieldCheck,
   Bookmark,
   Download,
-  FileText
+  FileText,
+  Sparkles
 } from 'lucide-react';
 import { AudioLesson, SourceCitation } from '../../types';
 import { AudioService, AudioState } from '../../services/audioService';
 import { ApiClient } from '../../services/apiClient';
+
+/**
+ * Strips out slide numbers, course codes (e.g. 24AIM51, 18CS51),
+ * department headers (e.g. Department of AIML, NHCE), bullets and administrative noise.
+ */
+export function cleanSubtopicTitle(rawTitle: string): string {
+  if (!rawTitle) return 'Subtopic Overview';
+  let cleaned = rawTitle.trim();
+
+  // If bullet or dash separates course/dept banner from the actual subtopic:
+  // e.g. "4. Operating Systems 24AIM51. 4 Department of AIML, NHCE • Accounting information"
+  if (cleaned.includes('•')) {
+    const segments = cleaned.split('•');
+    const lastSeg = segments[segments.length - 1].trim();
+    if (lastSeg.length > 2) {
+      cleaned = lastSeg;
+    }
+  } else if (cleaned.includes(' - ') && /department|dept|course|[0-9]{2}[A-Z]{2,5}[0-9]{2}/i.test(cleaned)) {
+    const segments = cleaned.split(' - ');
+    const lastSeg = segments[segments.length - 1].trim();
+    if (lastSeg.length > 2) {
+      cleaned = lastSeg;
+    }
+  }
+
+  // Remove slide/section numbers like "4. ", "Section 4: ", "Slide 4: "
+  cleaned = cleaned.replace(/^(?:Section|Slide|Topic|Part|Unit|Module)\s*\d+[:.]?\s*/gi, '');
+  cleaned = cleaned.replace(/^\d+[\s.:-]+/, '');
+
+  // Remove course codes e.g. 24AIM51, 18CS51, 21CS33, BCS401, etc.
+  cleaned = cleaned.replace(/\b\d{2}[A-Z]{2,6}\d{2,4}\b/gi, '');
+  cleaned = cleaned.replace(/\b[A-Z]{2,6}\d{2,4}\b/gi, '');
+
+  // Remove department & college banners e.g. Department of AIML, NHCE
+  cleaned = cleaned.replace(/(?:Department|Dept\.?|School|College|Faculty)\s+of\s+[^,•\n]+(?:,\s*[A-Z]{2,10})?/gi, '');
+  cleaned = cleaned.replace(/\b(?:NHCE|VTU|AICTE|NBA|NAAC|UGC|Autonomous|Affiliated)\b/gi, '');
+
+  // Clean remaining stray punctuation and whitespace
+  cleaned = cleaned.replace(/^[\s.:•–—\-]+|[\s.:•–—\-]+$/g, '').trim();
+
+  // Capitalize properly if lowercase
+  if (cleaned.length > 0 && cleaned === cleaned.toLowerCase()) {
+    cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  }
+
+  return cleaned.length > 2 ? cleaned : rawTitle;
+}
+
+/**
+ * Removes institutional noise, slide repetition, and robotic dialogue markers
+ */
+export function cleanSpokenBody(rawText: string): string {
+  if (!rawText) return '';
+  let cleaned = rawText;
+
+  // 1. Remove robotic teacher/student dialogue tags
+  cleaned = cleaned.replace(/\b(?:Teacher|Student|Instructor|Learner)\s*:\s*/gi, '');
+  cleaned = cleaned.replace(/Good question!\s*/gi, '');
+  cleaned = cleaned.replace(/Welcome!\s*Today we are exploring[^.]*\./gi, '');
+  cleaned = cleaned.replace(/That clarifies the idea!\s*How should I remember this for the exam\?/gi, '');
+  cleaned = cleaned.replace(/Remember, everything is grounded in[^.]*\./gi, '');
+  cleaned = cleaned.replace(/Keep up the great work!/gi, '');
+
+  // 2. Remove Part tags and sound markers
+  cleaned = cleaned.replace(/\[Part \d+:[^\]]+\]/gi, '');
+  cleaned = cleaned.replace(/\[PAUSE:\s*[^\]]+\]/gi, '');
+  cleaned = cleaned.replace(/\[TRANSITION\]/gi, '');
+
+  // 3. Remove slide/section numbers and course codes
+  cleaned = cleaned.replace(/(?:Section|Slide)\s*\d+[:.]?\s*/gi, '');
+  cleaned = cleaned.replace(/\b\d{2}[A-Z]{2,6}\d{2,4}\b/gi, '');
+  cleaned = cleaned.replace(/(?:Department|Dept\.?|School|College|Faculty)\s+of\s+[^,•\n]+(?:,\s*[A-Z]{2,10})?/gi, '');
+  cleaned = cleaned.replace(/\b(?:NHCE|VTU|AICTE|NBA|NAAC|UGC)\b/gi, '');
+  cleaned = cleaned.replace(/[•▪▫]/g, '');
+
+  return cleaned.replace(/\s+/g, ' ').trim();
+}
 
 interface AudioLessonViewProps {
   audioLesson?: AudioLesson | null;
@@ -88,11 +166,12 @@ export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
       }
     }
   }, [initialTopicId, sections]);
+
   const [playbackState, setPlaybackState] = useState<AudioState>('idle');
   const [speed, setSpeed] = useState<number>(1.0);
   const [progressChar, setProgressChar] = useState<number>(0);
   const [sectionProgressMap, setSectionProgressMap] = useState<Record<string, number>>({});
-  const [teachingStyle, setTeachingStyle] = useState<'lecture' | 'conversational'>('conversational');
+  const [teachingStyle, setTeachingStyle] = useState<'simplified' | 'lecture'>('simplified');
   const [audioLanguage, setAudioLanguage] = useState<'English' | 'Hindi' | 'Kannada'>('English');
   const [activeVoiceGender, setActiveVoiceGender] = useState<'female' | 'male'>(
     voiceGender || AudioService.getGender() || 'female'
@@ -187,18 +266,26 @@ export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
   }, [selectedSectionIdx, sections.length, currentSection]);
 
   const getSpokenScript = (): string => {
-    let base = currentSection.scriptText || 'Academic lesson script.';
+    const cleanTitle = cleanSubtopicTitle(currentSection.sectionTitle || 'Subtopic Overview');
+    const cleanBody = cleanSpokenBody(currentSection.scriptText || 'Academic lesson content.');
+
     if (audioLanguage === 'Kannada') {
-      base = `[ಕನ್ನಡ ಆಡಿಯೋ ಪಾಠ] ${currentSection.sectionTitle}: ಈ ವಿಷಯದ ಪ್ರಮುಖ ಪರಿಕಲ್ಪನೆಗಳನ್ನು ಮೂಲ ಪಠ್ಯದ ಆಧಾರದ ಮೇಲೆ ಸ್ಪಷ್ಟವಾಗಿ ವಿವರಿಸಲಾಗಿದೆ. ${base.replace(/\[Part \d+:[^\]]+\]/g, '')}`;
+      return `[ಕನ್ನಡ ಆಡಿಯೋ ಪಾಠ] ${cleanTitle}. ಈ ವಿಷಯವನ್ನು ಸರಳವಾಗಿ ಅರ್ಥಮಾಡಿಕೊಳ್ಳೋಣ: ${cleanBody}. ನೆನಪಿನಲ್ಲಿಡಿ, ಇದು ಪರೀಕ್ಷೆಗೆ ಪ್ರಮುಖವಾದ ಪರಿಕಲ್ಪನೆಯಾಗಿದೆ.`;
     } else if (audioLanguage === 'Hindi') {
-      base = `[हिंदी ऑडियो व्याख्यान] ${currentSection.sectionTitle}: इस विषय के महत्वपूर्ण सिद्धांतों और नियमों की स्पष्ट व्याख्या यहाँ प्रस्तुत है। ${base.replace(/\[Part \d+:[^\]]+\]/g, '')}`;
+      return `[हिंदी ऑडियो व्याख्यान] ${cleanTitle}. आइए इस विषय को सरल शब्दों में समझें: ${cleanBody}. परीक्षा के दृष्टिकोण से यह एक अत्यंत महत्वपूर्ण विषय है।`;
     }
 
-    if (teachingStyle === 'conversational') {
-      const pageNum = currentSection.sourceCitation?.pageNumber || 1;
-      return `Teacher: Welcome! Today we are exploring ${currentSection.sectionTitle}. Let's make this simple and practical. Student: What is the core idea here? Teacher: Good question! ${base.replace(/\[Part \d+:[^\]]+\]/g, '')} Student: That clarifies the idea! How should I remember this for the exam? Teacher: Remember, everything is grounded in Page ${pageNum}. Keep up the great work!`;
+    if (teachingStyle === 'simplified') {
+      // Natural, direct, simplified subtopic explanation without teacher/student dialogue
+      const sentences = cleanBody.split(/(?<=[.?!])\s+/).filter(s => s.trim().length > 15);
+      const coreIdea = sentences[0] || cleanBody;
+      const details = sentences.slice(1, 3).join(' ') || 'This mechanism ensures reliable execution and systematic management.';
+
+      return `${cleanTitle}. In simple terms, ${coreIdea} Think of this like a real-time monitor: it tracks how system resources are utilized so that tasks remain orderly, time limits are respected, and no program causes a bottleneck. ${details} For exams, remember that ${cleanTitle} is essential for accurate resource tracking, fair scheduling, and system security.`;
     }
-    return base;
+
+    // In-depth Lecture mode: direct, clean academic presentation without roleplay tags
+    return `${cleanTitle}. Detailed examination: ${cleanBody}`;
   };
 
   const handlePlayPause = () => {
@@ -233,7 +320,7 @@ export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
     }
   };
 
-  const handleTeachingStyleChange = (newStyle: 'lecture' | 'conversational') => {
+  const handleTeachingStyleChange = (newStyle: 'simplified' | 'lecture') => {
     setTeachingStyle(newStyle);
     if (playbackState === 'playing') {
       AudioService.stop();
@@ -252,21 +339,33 @@ export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
 
   const handleSelectSection = (idx: number) => {
     AudioService.stop();
-    setSelectedSectionIdx(idx);
     setProgressChar(0);
+    setSelectedSectionIdx(idx);
+    setPlaybackState('idle');
+  };
+
+  const handleJump = (direction: 'forward' | 'backward') => {
+    const delta = direction === 'forward' ? 100 : -100;
+    const spoken = getSpokenScript();
+    const newChar = Math.max(0, Math.min(spoken.length, progressChar + delta));
+    setProgressChar(newChar);
+    if (playbackState === 'playing') {
+      AudioService.stop();
+      AudioService.speak(spoken.slice(newChar), speed, audioLanguage, activeVoiceGender);
+    }
   };
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-slate-900 p-6 space-y-6 overflow-y-auto">
-      {/* Top Banner */}
-      <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+    <div className="space-y-6 animate-fadeIn pb-12">
+      {/* Header Info */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
         <div className="flex items-center space-x-3">
-          <div className="p-2.5 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
+          <div className="p-3 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
             <Headphones className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-              {audioLesson?.title || 'Audio Lecture & Narration'}
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+              {audioLesson?.title || 'Audio Lessons & Spoken Narration'}
             </h2>
             <div className="flex items-center space-x-2 text-xs text-slate-500 dark:text-slate-400">
               <span className="flex items-center gap-1">
@@ -317,8 +416,11 @@ export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
             Section {selectedSectionIdx + 1} of {sections.length}
           </span>
           <h3 className="text-xl font-bold mt-1 text-slate-100">
-            {currentSection.sectionTitle}
+            {cleanSubtopicTitle(currentSection.sectionTitle)}
           </h3>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Original: {currentSection.sectionTitle}
+          </p>
         </div>
 
         {/* Player Controls & Speed */}
@@ -328,57 +430,74 @@ export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
             <button
               onClick={() => selectedSectionIdx > 0 && handleSelectSection(selectedSectionIdx - 1)}
               disabled={selectedSectionIdx === 0}
-              className="p-2 rounded-xl text-slate-400 hover:text-white disabled:opacity-30 hover:bg-slate-800 transition-colors"
-              title="Previous section"
+              className="p-2.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              title="Previous Topic"
             >
               <SkipBack className="w-5 h-5" />
             </button>
 
             <button
+              onClick={() => handleJump('backward')}
+              className="p-2 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition-all text-xs"
+              title="Rewind 10 seconds"
+            >
+              <Rewind className="w-4 h-4" />
+            </button>
+
+            <button
               onClick={handlePlayPause}
-              className="w-14 h-14 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30 transition-all transform hover:scale-105 active:scale-95"
-              title={playbackState === 'playing' ? 'Pause narration' : 'Play narration'}
+              className="p-4 rounded-full bg-emerald-500 hover:bg-emerald-400 text-white shadow-lg shadow-emerald-500/30 transition-all transform active:scale-95"
+              title={playbackState === 'playing' ? 'Pause' : 'Play'}
             >
               {playbackState === 'playing' ? (
-                <Pause className="w-6 h-6 fill-white" />
+                <Pause className="w-6 h-6 fill-current" />
               ) : (
-                <Play className="w-6 h-6 fill-white ml-0.5" />
+                <Play className="w-6 h-6 fill-current ml-0.5" />
               )}
             </button>
 
             <button
               onClick={handleStop}
-              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-              title="Stop audio"
+              className="p-2.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all"
+              title="Stop"
             >
-              <Square className="w-5 h-5" />
+              <Square className="w-4 h-4 fill-current" />
+            </button>
+
+            <button
+              onClick={() => handleJump('forward')}
+              className="p-2 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition-all text-xs"
+              title="Fast Forward 10 seconds"
+            >
+              <FastForward className="w-4 h-4" />
             </button>
 
             <button
               onClick={() => selectedSectionIdx < sections.length - 1 && handleSelectSection(selectedSectionIdx + 1)}
               disabled={selectedSectionIdx === sections.length - 1}
-              className="p-2 rounded-xl text-slate-400 hover:text-white disabled:opacity-30 hover:bg-slate-800 transition-colors"
-              title="Next section"
+              className="p-2.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              title="Next Topic"
             >
               <SkipForward className="w-5 h-5" />
             </button>
           </div>
 
-          {/* Speed & Voice Controls */}
-          <div className="flex items-center gap-3 flex-wrap">
-            {/* Teaching Style Toggle (Conversational vs Academic Lecture) */}
+          {/* Secondary Controls: Teaching Style, Voice Gender, Language, Speed */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Teaching Style Mode */}
             <div className="flex items-center gap-1 bg-slate-800/80 p-1 rounded-xl text-xs">
               <button
                 type="button"
-                onClick={() => handleTeachingStyleChange('conversational')}
+                onClick={() => handleTeachingStyleChange('simplified')}
                 className={`px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1 transition-all cursor-pointer ${
-                  teachingStyle === 'conversational'
-                    ? 'bg-amber-600 text-white shadow-sm'
+                  teachingStyle === 'simplified'
+                    ? 'bg-emerald-600 text-white shadow-sm'
                     : 'text-slate-400 hover:text-white'
                 }`}
-                title="Conversational teaching style (teacher-student interactive dialogue)"
+                title="Simplified intuitive explanation with analogies and core takeaways"
               >
-                <span>🎙️ Conversational</span>
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span>Simplified Explanation</span>
               </button>
               <button
                 type="button"
@@ -388,9 +507,9 @@ export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
                     ? 'bg-slate-700 text-white shadow-sm'
                     : 'text-slate-400 hover:text-white'
                 }`}
-                title="Academic lecture style (standard structured course narration)"
+                title="Academic lecture style (direct structured course narration)"
               >
-                <span>🏛️ Lecture</span>
+                <span>🏛️ In-Depth Lecture</span>
               </button>
             </div>
 
@@ -423,9 +542,9 @@ export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
                     ? 'bg-purple-600 text-white shadow-sm ring-1 ring-purple-400'
                     : 'text-slate-400 hover:text-white'
                 }`}
-                title="Girl / Female Teacher Voice Narration"
+                title="Female Voice Narration"
               >
-                <span>👩 Girl's Voice</span>
+                <span>👩 Female Voice</span>
               </button>
               <button
                 type="button"
@@ -435,9 +554,9 @@ export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
                     ? 'bg-blue-600 text-white shadow-sm ring-1 ring-blue-400'
                     : 'text-slate-400 hover:text-white'
                 }`}
-                title="Guy / Male Teacher Voice Narration"
+                title="Male Voice Narration"
               >
-                <span>👨 Guy's Voice</span>
+                <span>👨 Male Voice</span>
               </button>
             </div>
 
@@ -465,7 +584,7 @@ export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
           <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1 flex items-center justify-between">
             <div className="flex items-center gap-1">
               <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Spoken Script ({teachingStyle === 'conversational' ? 'Conversational Dialogue' : 'Lecture Mode'} • {audioLanguage})</span>
+              <span>Spoken Script ({teachingStyle === 'simplified' ? 'SIMPLIFIED EXPLANATION' : 'IN-DEPTH LECTURE'} • {audioLanguage.toUpperCase()})</span>
             </div>
           </div>
           <p>
@@ -481,7 +600,7 @@ export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
         {/* Section Citation Link */}
         <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-800">
           <span className="text-slate-400">
-            Source Anchor: Page {currentSection.sourceCitation?.pageNumber || 1} ({currentSection.sourceCitation?.sectionTitle || currentSection.sectionTitle || 'Source'})
+            Source Anchor: Page {currentSection.sourceCitation?.pageNumber || 1} ({cleanSubtopicTitle(currentSection.sourceCitation?.sectionTitle || currentSection.sectionTitle || 'Source')})
           </span>
 
           <button
@@ -505,67 +624,58 @@ export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
         </h4>
 
         <div className="space-y-2">
-          {sections.map((sec, idx) => (
-            <div
-              key={sec.id}
-              onClick={() => handleSelectSection(idx)}
-              className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
-                selectedSectionIdx === idx
-                  ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700/60 shadow-sm'
-                  : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700/70 hover:bg-slate-100'
-              }`}
-            >
-              <div className="flex items-center space-x-3">
-                <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold ${
-                  selectedSectionIdx === idx
-                    ? 'bg-emerald-500 text-white'
-                    : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
-                }`}>
-                  {idx + 1}
-                </span>
+          {sections.map((sec, idx) => {
+            const cleanTitle = cleanSubtopicTitle(sec.sectionTitle);
+            const cleanBody = cleanSpokenBody(sec.scriptText || '');
 
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h5 className="text-sm font-semibold text-slate-900 dark:text-white truncate">
-                      {sec.sectionTitle}
-                    </h5>
-                    {(sectionProgressMap[sec.id] || 0) > 0 && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300">
-                        {sectionProgressMap[sec.id]}%
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5">
-                    {(sec.scriptText || '').slice(0, 90)}...
-                  </p>
-                  {(sectionProgressMap[sec.id] || 0) > 0 && (
-                    <div className="w-full max-w-[140px] bg-slate-200 dark:bg-slate-700 h-1 rounded-full overflow-hidden mt-1.5">
-                      <div
-                        className="bg-emerald-500 h-full rounded-full transition-all duration-300"
-                        style={{ width: `${sectionProgressMap[sec.id]}%` }}
-                      />
+            return (
+              <div
+                key={sec.id}
+                onClick={() => handleSelectSection(idx)}
+                className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
+                  selectedSectionIdx === idx
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700/60 shadow-sm'
+                    : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700/70 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold ${
+                    selectedSectionIdx === idx
+                      ? 'bg-emerald-500 text-white'
+                      : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                  }`}>
+                    {idx + 1}
+                  </span>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h5 className="text-sm font-semibold text-slate-900 dark:text-white truncate">
+                        {cleanTitle}
+                      </h5>
+                      {(sectionProgressMap[sec.id] || 0) > 0 && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300">
+                          {sectionProgressMap[sec.id]}%
+                        </span>
+                      )}
                     </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5">
+                      {cleanBody.slice(0, 95)}...
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-3 text-xs text-slate-500 dark:text-slate-400">
+                  <span className="flex items-center gap-1 font-mono">
+                    <Clock className="w-3 h-3" />
+                    ~{Math.round((sec.durationSeconds || 60) / 60)}m
+                  </span>
+                  {selectedSectionIdx === idx && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                   )}
                 </div>
               </div>
-
-              <div className="flex items-center space-x-3 text-xs text-slate-400">
-                <span>{sec.durationSeconds || 60}s</span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (sec.sourceCitation) {
-                      onNavigateToCitation(sec.sourceCitation);
-                    }
-                  }}
-                  className="p-1 hover:text-brand-600 dark:hover:text-brand-400 cursor-pointer"
-                  title="Source passage"
-                >
-                  <Bookmark className="w-4 h-4 text-amber-500" />
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

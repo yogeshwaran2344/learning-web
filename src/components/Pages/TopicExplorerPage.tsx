@@ -86,7 +86,7 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
     // Default: all topics selected
     const allIds = new Set<string>();
     (document.topicHierarchy?.chapters || []).forEach(c => {
-      c.topics.forEach(t => allIds.add(t.id));
+      (c?.topics || []).forEach(t => allIds.add(t.id));
     });
     return allIds;
   });
@@ -208,7 +208,7 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
   };
 
   // Section 2.3: Topic Selection Handlers
-  const allTopicIds: string[] = hierarchy.chapters.flatMap(c => c.topics.map(t => t.id));
+  const allTopicIds: string[] = (hierarchy?.chapters || []).flatMap(c => (c?.topics || []).map(t => t.id));
   const isAllSelected = allTopicIds.length > 0 && allTopicIds.every(id => selectedTopicIds.has(id));
   const isNoneSelected = selectedTopicIds.size === 0;
 
@@ -370,23 +370,23 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
   };
 
   // Filtering topics based on search
-  const filteredChapters = hierarchy.chapters.map(chapter => {
-    const matchesChapter = chapter.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchingTopics = chapter.topics.filter(t => {
-      const matchTitle = t.title.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchConcepts = t.importantConcepts.some(c => c.toLowerCase().includes(searchQuery.toLowerCase()));
-      const matchSub = t.subtopics.some(s => s.title.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredChapters = (hierarchy?.chapters || []).map(chapter => {
+    const matchesChapter = (chapter.title || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const matchingTopics = (chapter.topics || []).filter(t => {
+      const matchTitle = (t.title || '').toLowerCase().includes(searchQuery.toLowerCase());
+      const matchConcepts = (t.importantConcepts || []).some(c => (c || '').toLowerCase().includes(searchQuery.toLowerCase()));
+      const matchSub = (t.subtopics || []).some(s => (s.title || '').toLowerCase().includes(searchQuery.toLowerCase()));
       return matchTitle || matchConcepts || matchSub || matchesChapter;
     });
     return {
       ...chapter,
       topics: matchingTopics
     };
-  }).filter(c => c.topics.length > 0);
+  }).filter(c => (c.topics || []).length > 0);
 
-  const totalFilteredTopics = filteredChapters.reduce((acc, c) => acc + c.topics.length, 0);
+  const totalFilteredTopics = filteredChapters.reduce((acc, c) => acc + (c.topics || []).length, 0);
 
-  const allTopicsList = hierarchy.chapters.flatMap(c => c.topics);
+  const allTopicsList = (hierarchy?.chapters || []).flatMap(c => c.topics || []);
   const completedTopicsCount = allTopicsList.filter(t => topicProgress[t.id] === 'completed').length;
   const inProgressTopicsCount = allTopicsList.filter(t => topicProgress[t.id] === 'in_progress').length;
   const progressPercent = allTopicsList.length > 0 ? Math.round((completedTopicsCount / allTopicsList.length) * 100) : 0;
@@ -413,7 +413,7 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
               <span>•</span>
               <span className="text-blue-300 font-bold">{hierarchy.totalTopicsCount} main topics detected</span>
               <span>•</span>
-              <span>{hierarchy.chapters.length} Chapters</span>
+              <span>{(hierarchy?.chapters || []).length} Chapters</span>
               <span>•</span>
               <span>{document.pageCount} Pages</span>
             </p>
@@ -423,8 +423,8 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
           <div className="flex items-center gap-3 shrink-0">
             <button
               onClick={() => {
-                const firstSelected = hierarchy.chapters
-                  .flatMap(c => c.topics)
+                const firstSelected = (hierarchy?.chapters || [])
+                  .flatMap(c => c?.topics || [])
                   .find(t => selectedTopicIds.has(t.id));
                 if (firstSelected) {
                   onLearnTopic(firstSelected);
@@ -535,14 +535,14 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
         ) : (
           filteredChapters.map((chapter) => {
             const isChapterExpanded = expandedChapters[chapter.id] !== false;
-            const chapterTopicIds = chapter.topics.map(t => t.id);
+            const chapterTopicIds = (chapter.topics || []).map(t => t.id);
             const isChapterSelected = chapterTopicIds.length > 0 && chapterTopicIds.every(id => selectedTopicIds.has(id));
             const isChapterPartiallySelected = !isChapterSelected && chapterTopicIds.some(id => selectedTopicIds.has(id));
 
-            const allTopicsList = hierarchy.chapters.flatMap(c => c.topics);
-  const completedTopicsCount = allTopicsList.filter(t => topicProgress[t.id] === 'completed').length;
-  const inProgressTopicsCount = allTopicsList.filter(t => topicProgress[t.id] === 'in_progress').length;
-  const progressPercent = allTopicsList.length > 0 ? Math.round((completedTopicsCount / allTopicsList.length) * 100) : 0;
+            const allTopicsList = (hierarchy?.chapters || []).flatMap(c => c?.topics || []);
+            const completedTopicsCount = allTopicsList.filter(t => topicProgress[t.id] === 'completed').length;
+            const inProgressTopicsCount = allTopicsList.filter(t => topicProgress[t.id] === 'in_progress').length;
+            const progressPercent = allTopicsList.length > 0 ? Math.round((completedTopicsCount / allTopicsList.length) * 100) : 0;
 
   return (
               <div
@@ -606,7 +606,7 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                       Pages {chapter.pageRange[0]}–{chapter.pageRange[1]}
                     </span>
                     <span className="text-slate-400 font-medium">
-                      {chapter.topics.length} topic{chapter.topics.length > 1 ? 's' : ''}
+                      {(chapter.topics || []).length} topic{(chapter.topics || []).length > 1 ? 's' : ''}
                     </span>
                   </div>
                 </div>
@@ -614,7 +614,7 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                 {/* Topics in Chapter */}
                 {isChapterExpanded && (
                   <div className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                    {chapter.topics.map((topic) => {
+                    {(chapter.topics || []).map((topic) => {
                       const isSelected = selectedTopicIds.has(topic.id);
                       const isExpanded = expandedTopics[topic.id] === true;
                       const isEditing = editingTopicId === topic.id;
@@ -628,14 +628,14 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                           ? 'Diagram'
                           : topic.associatedAlgorithms && topic.associatedAlgorithms.length > 0
                           ? 'Programming'
-                          : topic.title.toLowerCase().includes('vs') || topic.title.toLowerCase().includes('comparison')
+                          : (topic.title || '').toLowerCase().includes('vs') || (topic.title || '').toLowerCase().includes('comparison')
                           ? 'Comparison'
                           : 'Theory');
 
-                      const allTopicsList = hierarchy.chapters.flatMap(c => c.topics);
-  const completedTopicsCount = allTopicsList.filter(t => topicProgress[t.id] === 'completed').length;
-  const inProgressTopicsCount = allTopicsList.filter(t => topicProgress[t.id] === 'in_progress').length;
-  const progressPercent = allTopicsList.length > 0 ? Math.round((completedTopicsCount / allTopicsList.length) * 100) : 0;
+                      const allTopicsList = (hierarchy?.chapters || []).flatMap(c => c?.topics || []);
+                      const completedTopicsCount = allTopicsList.filter(t => topicProgress[t.id] === 'completed').length;
+                      const inProgressTopicsCount = allTopicsList.filter(t => topicProgress[t.id] === 'in_progress').length;
+                      const progressPercent = allTopicsList.length > 0 ? Math.round((completedTopicsCount / allTopicsList.length) * 100) : 0;
 
   return (
                         <div
@@ -840,7 +840,7 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                                 <span className="px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-semibold">
                                   📝 Practice Quiz
                                 </span>
-                                {topic.associatedNumericalExamples.length > 0 && (
+                                {(topic.associatedNumericalExamples || []).length > 0 && (
                                   <span className="px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 font-semibold">
                                     🔢 Worked Examples
                                   </span>
@@ -850,7 +850,7 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                               {/* Subtopics Detail List */}
                               <div className="space-y-2">
                                 <div className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
-                                  <span>Subtopics ({topic.subtopics.length})</span>
+                                  <span>Subtopics ({(topic.subtopics || []).length})</span>
                                   <button
                                     onClick={() => {
                                       setAddSubtopicTopicId(topic.id);
@@ -864,11 +864,11 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                                   </button>
                                 </div>
 
-                                {topic.subtopics.length === 0 ? (
+                                {(topic.subtopics || []).length === 0 ? (
                                   <p className="text-xs text-slate-400 italic">No subtopics added yet.</p>
                                 ) : (
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                    {topic.subtopics.map((sub) => (
+                                    {(topic.subtopics || []).map((sub) => (
                                       <div
                                         key={sub.id}
                                         className="p-3 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-start justify-between gap-2 shadow-2xs hover:border-blue-400 transition-colors"
@@ -891,9 +891,9 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                                             <span>Source: Page {sub.pageRange[0]}</span>
                                             <ExternalLink className="w-2.5 h-2.5 text-blue-500" />
                                           </div>
-                                          {sub.importantConcepts.length > 0 && (
+                                          {(sub.importantConcepts || []).length > 0 && (
                                             <div className="flex flex-wrap gap-1 pt-0.5">
-                                              {sub.importantConcepts.map((c, i) => (
+                                              {(sub.importantConcepts || []).map((c, i) => (
                                                 <span key={i} className="px-1.5 py-0.2 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] text-slate-600 dark:text-slate-400">
                                                   {c}
                                                 </span>
@@ -992,7 +992,7 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                                   </button>
 
                                   {/* Split Topic */}
-                                  {topic.subtopics.length > 1 && (
+                                  {(topic.subtopics || []).length > 1 && (
                                     <button
                                       onClick={() => {
                                         setSplitTopicData({ topic });

@@ -16,7 +16,9 @@ import { StorageService } from './storageService';
 const API_BASE = '/api';
 
 export class ApiClient {
-  private static token: string | null = localStorage.getItem('learnova_auth_token') || localStorage.getItem('learnlens_auth_token');
+  private static token: string | null = (typeof window !== 'undefined' && typeof localStorage !== 'undefined')
+    ? (localStorage.getItem('learnova_auth_token') || localStorage.getItem('learnlens_auth_token'))
+    : null;
 
   static setToken(token: string) {
     this.token = token;

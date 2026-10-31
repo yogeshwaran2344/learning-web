@@ -404,26 +404,56 @@ export class DocumentProcessor {
     return flashcards;
   }
 
+  private static cleanSubtopicTitle(rawTitle: string): string {
+    if (!rawTitle) return 'Academic Subtopic';
+    let cleaned = rawTitle.trim();
+    if (cleaned.includes('•')) {
+      const parts = cleaned.split('•');
+      const after = parts[parts.length - 1].trim();
+      if (after.length > 2) cleaned = after;
+    }
+    cleaned = cleaned.replace(/^(?:Section|Slide|Topic|Part|Unit|Module)\s*\d+[:.]?\s*/gi, '');
+    cleaned = cleaned.replace(/^\d+[\s.:-]+/, '');
+    cleaned = cleaned.replace(/\b\d{2}[A-Z]{2,6}\d{2,4}\b/gi, '');
+    cleaned = cleaned.replace(/(?:Department|Dept\.?|School|College)\s+of\s+[^,•\n]+(?:,\s*[A-Z]{2,10})?/gi, '');
+    cleaned = cleaned.replace(/\b(?:NHCE|VTU|AICTE|NBA|NAAC|UGC)\b/gi, '');
+    cleaned = cleaned.replace(/^[\s.:•–—\-]+|[\s.:•–—\-]+$/g, '').trim();
+    if (cleaned.length > 0 && cleaned === cleaned.toLowerCase()) {
+      cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+    }
+    return cleaned.length > 2 ? cleaned : rawTitle;
+  }
+
   private static generateAudioLesson(
     docId: string,
     docTitle: string,
     sections: DocumentSection[]
   ): AudioLesson {
     const audioSections = sections.map((sec, idx) => {
-      const scriptText = `Section ${idx + 1}: ${sec.title}. In this part of the material, the author explains: ${sec.content.slice(0, 320)}. Remember that understanding this concept establishes the foundation for subsequent derivations.`;
-      
+      const cleanedTitle = this.cleanSubtopicTitle(sec.title);
+      const cleanBody = (sec.content || '')
+        .replace(/(?:Department|Dept\.?)\s+of\s+[^,•\n]+(?:,\s*[A-Z]{2,10})?/gi, '')
+        .replace(/\b\d{2}[A-Z]{2,6}\d{2,4}\b/gi, '')
+        .replace(/[•▪▫]/g, '')
+        .trim();
+      const sentences = cleanBody.split(/(?<=[.?!])\s+/).filter(s => s.trim().length > 15);
+      const coreIdea = sentences[0] || cleanBody.slice(0, 220);
+      const details = sentences.slice(1, 3).join(' ') || 'This mechanism ensures reliable execution and systematic management.';
+
+      const scriptText = `${cleanedTitle}. In simple terms, ${coreIdea} To picture this easily, think of it like an active system supervisor: it coordinates and tracks execution so processes operate fairly without conflicts. ${details} For exams, remember that understanding ${cleanedTitle} is essential for problem-solving and full-mark exam questions.`;
+
       return {
         id: `audio-sec-${idx + 1}`,
-        sectionTitle: `${idx + 1}. ${sec.title}`,
+        sectionTitle: `${idx + 1}. ${cleanedTitle}`,
         durationSeconds: Math.max(30, Math.round(scriptText.split(/\s+/).length / 2.5)),
         scriptText,
         sourceCitation: {
           id: `acite-${idx + 1}`,
           documentId: docId,
           pageNumber: sec.pageNumber,
-          sectionTitle: sec.title,
-          exactQuote: sec.content.slice(0, 140) + '...',
-          contextSnippet: sec.content.slice(0, 220)
+          sectionTitle: cleanedTitle,
+          exactQuote: (cleanBody || sec.content).slice(0, 140) + '...',
+          contextSnippet: (cleanBody || sec.content).slice(0, 220)
         }
       };
     });
