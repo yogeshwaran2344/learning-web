@@ -10,6 +10,7 @@ import {
   SourceCitation
 } from '../types';
 import { TopicHierarchyService } from './topicHierarchyService';
+import { ConceptMapService } from './conceptMapService';
 
 export class DocumentProcessor {
   /**
@@ -81,8 +82,18 @@ export class DocumentProcessor {
       rawText
     });
 
-    // 3. Generate Concept Map
+    // 3. Generate Concept Map Suite
     const conceptMap = this.generateConceptMap(docId, title, sections);
+    try {
+      conceptMap.suite = ConceptMapService.generateConceptMapSuite({
+        id: docId,
+        title: title || 'Academic Study Document',
+        sections,
+        pageCount,
+        topicHierarchy,
+        rawText
+      } as any);
+    } catch (_) {}
 
     // 4. Generate Explanations with Source Citations
     const explanations = this.generateExplanations(docId, title, sections);

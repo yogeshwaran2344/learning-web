@@ -59,6 +59,7 @@ interface LearningStudioPageProps {
   onSelectDocument?: (doc: AcademicDocument) => void;
   initialTab?: StudioTab;
   activeCitation?: SourceCitation | null;
+  activeTopicId?: string;
   onNavigateToCitation: (citation: SourceCitation) => void;
   onUpdateFlashcardMastery: (docId: string, cardId: string, level: number) => void;
   onSaveItem: (item: SavedItem) => void;
@@ -71,6 +72,7 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
   onSelectDocument,
   initialTab = 'map',
   activeCitation,
+  activeTopicId,
   onNavigateToCitation,
   onUpdateFlashcardMastery,
   onSaveItem,
@@ -809,6 +811,8 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
                 {activeTab === 'map' && (
                   <ConceptMapView
                     conceptMap={currentConceptMap}
+                    document={document}
+                    initialTopicId={activeTopicId}
                     onNavigateToCitation={handleCitationClick}
                   />
                 )}

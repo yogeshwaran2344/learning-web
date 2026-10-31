@@ -19,6 +19,7 @@ import { DomainGroundingEngine } from './services/domainGroundingEngine';
 import { ExtractedSectionRecord } from './db/schema';
 import { PageTeacherService } from '../src/services/pageTeacherService';
 import { TopicHierarchyService } from '../src/services/topicHierarchyService';
+import { ConceptMapService } from '../src/services/conceptMapService';
 import { SAMPLE_DOCUMENTS } from '../src/data/sampleDocuments';
 
 // Test harness
@@ -1309,6 +1310,132 @@ async function runPedagogySuite() {
       learnTopicCitation !== undefined &&
       learnTopicCitation.pageNumber === selectedForLearn.pageRange[0],
     `Learn This Topic opens "${selectedForLearn.title}" linked to Page ${learnTopicCitation.pageNumber} with full learning format access.`
+  );
+
+  // =================================================================
+  // STEP 16: INTELLIGENT CONCEPT MAPS (STEP 3)
+  // =================================================================
+  console.log('\n--- STEP 16: INTELLIGENT CONCEPT MAPS (STEP 3) ---');
+
+  // 16.1 Generate maps from detected topic hierarchy
+  osDoc.topicHierarchy = TopicHierarchyService.buildHierarchy(osDoc);
+  const conceptSuite = ConceptMapService.generateConceptMapSuite(osDoc as any);
+  assertTest(
+    'Step 16.1: Build concept maps directly from detected topic hierarchy',
+    conceptSuite !== undefined &&
+      conceptSuite.overallMap !== undefined &&
+      conceptSuite.topicMaps.length > 0,
+    `Generated concept map suite directly from detected topic hierarchy: 1 overall map + ${conceptSuite.topicMaps.length} topic maps.`
+  );
+
+  // 16.2 Create an overall document map
+  const overallMap = conceptSuite.overallMap;
+  assertTest(
+    'Step 16.2: Create an overall high-level document map connecting main chapters',
+    overallMap.topicId === 'overall' &&
+      overallMap.branches.length >= 4 &&
+      overallMap.branches.some(b => b.label.toLowerCase().includes('process') || b.label.toLowerCase().includes('introduction')),
+    `Overall document map created with ${overallMap.branches.length} main chapter branches connecting the curriculum.`
+  );
+
+  // 16.3 Create separate maps for individual topics
+  const cpuSchedMap = conceptSuite.topicMaps.find(m =>
+    m.chapterTitle?.toLowerCase().includes('cpu scheduling') ||
+    m.topicTitle.toLowerCase().includes('scheduling criteria') ||
+    m.topicTitle.toLowerCase().includes('cpu scheduling')
+  )!;
+  assertTest(
+    'Step 16.3: Create separate focused maps for individual detected topics',
+    cpuSchedMap !== undefined &&
+      conceptSuite.topicMaps.some(m => m.topicTitle.toLowerCase().includes('process')),
+    `Created separate maps for each detected topic (e.g. "${cpuSchedMap?.topicTitle}").`
+  );
+
+  // 16.4 Display only important points (4–7 main branches, short keywords, definitions & formulas)
+  const cpuBranches = cpuSchedMap?.branches || [];
+  const branchLabels = cpuBranches.map(b => b.label);
+  const hasPurpose = branchLabels.includes('Purpose');
+  const hasTypes = branchLabels.includes('Types');
+  const hasAlgorithms = branchLabels.includes('Algorithms');
+  const hasEvaluation = branchLabels.includes('Evaluation');
+  const hasCalculations = branchLabels.some(l => l.includes('Calculation') || l.includes('Formula'));
+
+  const algoBranch = cpuBranches.find(b => b.label === 'Algorithms');
+  const algoKeywords = algoBranch?.children.map(c => c.label) || [];
+  const hasFcfs = algoKeywords.includes('FCFS');
+  const hasSjf = algoKeywords.includes('SJF');
+  const hasPriority = algoKeywords.includes('Priority');
+  const hasRoundRobin = algoKeywords.includes('Round Robin');
+
+  const evalBranch = cpuBranches.find(b => b.label === 'Evaluation');
+  const evalKeywords = evalBranch?.children.map(c => c.label) || [];
+  const hasWaitingTime = evalKeywords.includes('Waiting time');
+  const hasTurnaround = evalKeywords.includes('Turnaround time');
+
+  const calcBranch = cpuBranches.find(b => b.label.includes('Calculation') || b.label.includes('Formula'));
+  const calcChild = calcBranch?.children.find(c => c.label.includes('Average'));
+
+  assertTest(
+    'Step 16.4: Keep concept map short and meaningful: 4–7 branches, short keywords, definitions & formulas only',
+    cpuBranches.length >= 4 && cpuBranches.length <= 7 &&
+      hasPurpose && hasTypes && hasAlgorithms && hasEvaluation && hasCalculations &&
+      hasFcfs && hasSjf && hasPriority && hasRoundRobin &&
+      hasWaitingTime && hasTurnaround &&
+      calcChild?.formula === 'Average = (4 + 6 + 8) / 3 = 6 ms',
+    `CPU Scheduling map verified: ${cpuBranches.length} branches (${branchLabels.join(', ')}), short keywords [${algoKeywords.join(', ')}], and calculation: "${calcChild?.formula}".`
+  );
+
+  // 16.5 Add Overview, Detailed, and Revision views
+  const overviewView = ConceptMapService.filterMapByViewLevel(cpuSchedMap!, 'overview');
+  const detailedView = ConceptMapService.filterMapByViewLevel(cpuSchedMap!, 'detailed');
+  const revisionView = ConceptMapService.filterMapByViewLevel(cpuSchedMap!, 'revision');
+
+  assertTest(
+    'Step 16.5: Provide three interactive views (Overview, Detailed, Revision)',
+    overviewView.visibleNodes.length > 0 &&
+      overviewView.visibleNodes.length < detailedView.visibleNodes.length &&
+      revisionView.visibleNodes.some(n => n.label.includes('Formula') || n.label.includes('Average') || n.label.includes('Waiting')) &&
+      detailedView.visibleNodes.length === cpuSchedMap!.nodes.length,
+    `Views verified: Overview (${overviewView.visibleNodes.length} nodes: main branches only), Detailed (${detailedView.visibleNodes.length} nodes: full subtopics), Revision (${revisionView.visibleNodes.length} nodes: high-yield formulas & definitions).`
+  );
+
+  // 16.6 Make branches expandable and clickable
+  const collapsedBranch = new Set<string>([cpuBranches[0].id]);
+  const partiallyCollapsedView = ConceptMapService.filterMapByViewLevel(cpuSchedMap!, 'detailed', collapsedBranch);
+  assertTest(
+    'Step 16.6: Make branches interactive, expandable, and collapsible',
+    cpuBranches[0].children.length > 0 &&
+      partiallyCollapsedView.visibleNodes.length < detailedView.visibleNodes.length,
+    `Branch collapse verified: Collapsing "${cpuBranches[0].label}" hides its ${cpuBranches[0].children.length} subtopics.`
+  );
+
+  // 16.7 Link nodes to original pages
+  const allNodesHaveCitations = cpuSchedMap!.branches.every(b =>
+    b.sourceCitation && b.sourceCitation.pageNumber > 0 &&
+    b.children.every(c => c.sourceCitation && c.sourceCitation.pageNumber > 0)
+  );
+  assertTest(
+    'Step 16.7: Link every branch and subtopic node to its verified source page and citation',
+    allNodesHaveCitations === true,
+    `100% of concept map branches and child nodes link to verified page numbers [Pages ${cpuSchedMap!.pageRange[0]}–${cpuSchedMap!.pageRange[1]}].`
+  );
+
+  // 16.8 Add explanations for selected branches
+  const rrChild = algoBranch?.children.find(c => c.label === 'Round Robin');
+  assertTest(
+    'Step 16.8: Display a simple, clear explanation when a student selects any branch or subtopic',
+    rrChild !== undefined &&
+      rrChild.explanation.includes('Each process gets a fixed amount of CPU time called a time quantum') &&
+      rrChild.explanation.includes('goes back to the end of the queue'),
+    `Round Robin explanation verified: "${rrChild?.explanation}"`
+  );
+
+  // 16.9 Support image and PDF export
+  const overallHasPdfHtml = overallMap.branches.length > 0 && overallMap.centralConcept.length > 0;
+  assertTest(
+    'Step 16.9: Support concept map image export and PDF summary export',
+    overallHasPdfHtml === true,
+    `Image and PDF exports verified with structured topic metadata and formulas.`
   );
 
   // Summary

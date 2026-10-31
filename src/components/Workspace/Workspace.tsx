@@ -71,6 +71,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
             {currentFormat === 'map' && (
               <ConceptMapView
                 conceptMap={document.conceptMap}
+                document={document}
                 onNavigateToCitation={handleNavigateToCitation}
               />
             )}

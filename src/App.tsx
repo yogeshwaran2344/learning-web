@@ -42,6 +42,7 @@ export function App() {
   const [activeDocument, setActiveDocument] = useState<AcademicDocument | null>(null);
   const [studioTab, setStudioTab] = useState<StudioTab>('map');
   const [activeCitation, setActiveCitation] = useState<SourceCitation | null>(null);
+  const [activeTopicId, setActiveTopicId] = useState<string>('overall');
   const [isContextPanelOpen, setIsContextPanelOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [savedItems, setSavedItems] = useState<SavedItem[]>([]);
@@ -365,6 +366,7 @@ export function App() {
                   if (topic.sourceCitations && topic.sourceCitations[0]) {
                     setActiveCitation(topic.sourceCitations[0]);
                   }
+                  setActiveTopicId(topic.id);
                   if (preferredFormat) {
                     setStudioTab(preferredFormat);
                   }
@@ -413,6 +415,7 @@ export function App() {
                 onSelectDocument={(doc) => setActiveDocument(doc)}
                 initialTab={studioTab}
                 activeCitation={activeCitation}
+                activeTopicId={activeTopicId}
                 onNavigateToCitation={handleNavigateToCitation}
                 onUpdateFlashcardMastery={handleUpdateFlashcardMastery}
                 onSaveItem={handleSaveItem}

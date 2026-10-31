@@ -192,9 +192,49 @@ export interface ConceptEdge {
   relation: string;
 }
 
+export type ConceptMapViewLevel = 'overview' | 'detailed' | 'revision';
+
+export interface IntelligentConceptChild {
+  id: string;
+  label: string; // e.g. "FCFS", "Round Robin"
+  formula?: string; // e.g. "TAT = CT - AT"
+  explanation: string;
+  category?: 'core' | 'mechanism' | 'equation' | 'condition' | 'application';
+  sourceCitation: SourceCitation;
+  isImportant?: boolean;
+}
+
+export interface IntelligentConceptBranch {
+  id: string;
+  label: string; // e.g. "Purpose", "Types", "Algorithms", "Evaluation"
+  category: 'core' | 'mechanism' | 'equation' | 'condition' | 'application';
+  summary: string;
+  sourceCitation: SourceCitation;
+  isExpanded?: boolean;
+  children: IntelligentConceptChild[];
+}
+
+export interface TopicConceptMap {
+  id: string;
+  topicId: string;
+  topicTitle: string;
+  chapterTitle?: string;
+  pageRange: [number, number];
+  centralConcept: string; // e.g. "CPU SCHEDULING"
+  branches: IntelligentConceptBranch[];
+  nodes: ConceptNode[];
+  edges: ConceptEdge[];
+}
+
+export interface ConceptMapSuite {
+  overallMap: TopicConceptMap;
+  topicMaps: TopicConceptMap[];
+}
+
 export interface ConceptMapData {
   nodes: ConceptNode[];
   edges: ConceptEdge[];
+  suite?: ConceptMapSuite;
 }
 
 export interface ExplanationLevel {

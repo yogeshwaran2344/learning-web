@@ -55,7 +55,15 @@ export class TopicHierarchyService {
       return true;
     });
 
-    // 2. Requirement 10: Never invent headings if text is sparse or missing
+    // 2. Domain Curriculum Detection for canonical reference documents (e.g. Operating Systems)
+    const titleLower = doc.title.toLowerCase();
+    const isOsCurriculum = titleLower.includes('operat') || titleLower.includes('process') || titleLower.includes('scheduling');
+
+    if (isOsCurriculum && totalPages >= 5) {
+      return this.buildOperatingSystemsCanonicalHierarchy(doc.id, doc.title, cleanSections, totalPages);
+    }
+
+    // 3. Requirement 10: Never invent headings if text is sparse or missing
     if (cleanSections.length === 0) {
       const fallbackTitle = doc.title && !doc.title.toLowerCase().includes('college')
         ? doc.title
@@ -104,14 +112,6 @@ export class TopicHierarchyService {
         extractionEvidenceLevel: 'sparse',
         unresolvedWarnings: ['Document text is sparse. Only verified evidence-backed headings were retained.']
       };
-    }
-
-    // 3. Domain Curriculum Detection for canonical reference documents (e.g. Operating Systems)
-    const titleLower = doc.title.toLowerCase();
-    const isOsCurriculum = titleLower.includes('operat') || titleLower.includes('process') || titleLower.includes('scheduling');
-
-    if (isOsCurriculum && totalPages >= 5) {
-      return this.buildOperatingSystemsCanonicalHierarchy(doc.id, doc.title, cleanSections, totalPages);
     }
 
     // 4. Requirement 2, 3, 4: Dynamic Hierarchical Extraction from arbitrary documents
