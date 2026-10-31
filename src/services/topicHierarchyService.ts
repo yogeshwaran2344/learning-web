@@ -1249,6 +1249,252 @@ export class TopicHierarchyService {
   }
 
   /**
+   * Requirement 2.5: Add a subtopic to an existing topic.
+   */
+  static addSubtopicToTopic(
+    hierarchy: DocumentTopicHierarchy,
+    topicId: string,
+    subtopicTitle: string,
+    pageRange?: [number, number]
+  ): DocumentTopicHierarchy {
+    const trimmed = subtopicTitle.trim();
+    if (!trimmed) return hierarchy;
+
+    const updatedChapters = hierarchy.chapters.map(chap => ({
+      ...chap,
+      topics: chap.topics.map(t => {
+        if (t.id === topicId) {
+          const effectiveRange = pageRange || t.pageRange;
+          const newSubtopic: DocumentSubtopic = {
+            id: `sub-custom-${Date.now()}-${t.subtopics.length + 1}`,
+            title: trimmed,
+            level: 3,
+            pageRange: effectiveRange,
+            importantConcepts: [trimmed],
+            equationsCount: 0,
+            diagramsCount: 0,
+            tablesCount: 0,
+            numericalExamplesCount: 0
+          };
+          return {
+            ...t,
+            subtopics: [...t.subtopics, newSubtopic]
+          };
+        }
+        return t;
+      })
+    }));
+
+    const totalSubtopicsCount = updatedChapters.reduce(
+      (acc, c) => acc + c.topics.reduce((subAcc, t) => subAcc + t.subtopics.length, 0),
+      0
+    );
+
+    return {
+      ...hierarchy,
+      chapters: updatedChapters,
+      totalSubtopicsCount,
+      isUserVerified: true,
+      userAdjustmentsCount: (hierarchy.userAdjustmentsCount || 0) + 1
+    };
+  }
+
+  /**
+   * Requirement 2.5: Remove an incorrectly detected subtopic.
+   */
+  static removeSubtopic(
+    hierarchy: DocumentTopicHierarchy,
+    topicId: string,
+    subtopicId: string
+  ): DocumentTopicHierarchy {
+    const updatedChapters = hierarchy.chapters.map(chap => ({
+      ...chap,
+      topics: chap.topics.map(t => {
+        if (t.id === topicId) {
+          return {
+            ...t,
+            subtopics: t.subtopics.filter(s => s.id !== subtopicId)
+          };
+        }
+        return t;
+      })
+    }));
+
+    const totalSubtopicsCount = updatedChapters.reduce(
+      (acc, c) => acc + c.topics.reduce((subAcc, t) => subAcc + t.subtopics.length, 0),
+      0
+    );
+
+    return {
+      ...hierarchy,
+      chapters: updatedChapters,
+      totalSubtopicsCount,
+      isUserVerified: true,
+      userAdjustmentsCount: (hierarchy.userAdjustmentsCount || 0) + 1
+    };
+  }
+
+  /**
+   * Requirement 2.5: Rename a detected subtopic.
+   */
+  static renameSubtopic(
+    hierarchy: DocumentTopicHierarchy,
+    topicId: string,
+    subtopicId: string,
+    newTitle: string
+  ): DocumentTopicHierarchy {
+    const trimmed = newTitle.trim();
+    if (!trimmed) return hierarchy;
+
+    const updatedChapters = hierarchy.chapters.map(chap => ({
+      ...chap,
+      topics: chap.topics.map(t => {
+        if (t.id === topicId) {
+          return {
+            ...t,
+            subtopics: t.subtopics.map(s => {
+              if (s.id === subtopicId) {
+                return { ...s, title: trimmed };
+              }
+              return s;
+            })
+          };
+        }
+        return t;
+      })
+    }));
+
+    return {
+      ...hierarchy,
+      chapters: updatedChapters,
+      isUserVerified: true,
+      userAdjustmentsCount: (hierarchy.userAdjustmentsCount || 0) + 1
+    };
+  }
+
+  /**
+   * Requirement 2.5: Move a subtopic under another topic.
+   */
+  static moveSubtopic(
+    hierarchy: DocumentTopicHierarchy,
+    sourceTopicId: string,
+    targetTopicId: string,
+    subtopicId: string
+  ): DocumentTopicHierarchy {
+    if (sourceTopicId === targetTopicId) return hierarchy;
+
+    let subtopicToMove: DocumentSubtopic | null = null;
+
+    // First find the subtopic
+    for (const chap of hierarchy.chapters) {
+      for (const top of chap.topics) {
+        if (top.id === sourceTopicId) {
+          const found = top.subtopics.find(s => s.id === subtopicId);
+          if (found) {
+            subtopicToMove = found;
+            break;
+          }
+        }
+      }
+      if (subtopicToMove) break;
+    }
+
+    if (!subtopicToMove) return hierarchy;
+
+    // Now remove from source and add to target
+    const updatedChapters = hierarchy.chapters.map(chap => ({
+      ...chap,
+      topics: chap.topics.map(top => {
+        if (top.id === sourceTopicId) {
+          return {
+            ...top,
+            subtopics: top.subtopics.filter(s => s.id !== subtopicId)
+          };
+        }
+        if (top.id === targetTopicId && subtopicToMove) {
+          return {
+            ...top,
+            subtopics: [...top.subtopics, subtopicToMove]
+          };
+        }
+        return top;
+      })
+    }));
+
+    return {
+      ...hierarchy,
+      chapters: updatedChapters,
+      isUserVerified: true,
+      userAdjustmentsCount: (hierarchy.userAdjustmentsCount || 0) + 1
+    };
+  }
+
+  /**
+   * Requirement 2.5: Merge duplicate topics into a single topic.
+   */
+  static mergeTopics(
+    hierarchy: DocumentTopicHierarchy,
+    sourceTopicId: string,
+    targetTopicId: string
+  ): DocumentTopicHierarchy {
+    if (sourceTopicId === targetTopicId) return hierarchy;
+
+    let sourceTopic: DocumentTopic | null = null;
+
+    for (const chap of hierarchy.chapters) {
+      const found = chap.topics.find(t => t.id === sourceTopicId);
+      if (found) {
+        sourceTopic = found;
+        break;
+      }
+    }
+
+    if (!sourceTopic) return hierarchy;
+
+    const updatedChapters = hierarchy.chapters.map(chap => ({
+      ...chap,
+      topics: chap.topics
+        .filter(t => t.id !== sourceTopicId)
+        .map(t => {
+          if (t.id === targetTopicId && sourceTopic) {
+            const mergedPageRange: [number, number] = [
+              Math.min(t.pageRange[0], sourceTopic.pageRange[0]),
+              Math.max(t.pageRange[1], sourceTopic.pageRange[1])
+            ];
+            return {
+              ...t,
+              pageRange: mergedPageRange,
+              isMultiPage: mergedPageRange[1] > mergedPageRange[0],
+              subtopics: [...t.subtopics, ...sourceTopic.subtopics],
+              importantConcepts: Array.from(new Set([...t.importantConcepts, ...sourceTopic.importantConcepts])),
+              associatedEquations: [...t.associatedEquations, ...sourceTopic.associatedEquations],
+              associatedDiagrams: [...t.associatedDiagrams, ...sourceTopic.associatedDiagrams],
+              associatedTables: [...t.associatedTables, ...sourceTopic.associatedTables],
+              associatedNumericalExamples: [...t.associatedNumericalExamples, ...sourceTopic.associatedNumericalExamples],
+              sourceCitations: [...t.sourceCitations, ...sourceTopic.sourceCitations]
+            };
+          }
+          return t;
+        })
+    }));
+
+    const totalTopicsCount = updatedChapters.reduce((acc, c) => acc + c.topics.length, 0);
+    const totalSubtopicsCount = updatedChapters.reduce(
+      (acc, c) => acc + c.topics.reduce((subAcc, t) => subAcc + t.subtopics.length, 0),
+      0
+    );
+
+    return {
+      ...hierarchy,
+      chapters: updatedChapters,
+      totalTopicsCount,
+      totalSubtopicsCount,
+      isUserVerified: true,
+      userAdjustmentsCount: (hierarchy.userAdjustmentsCount || 0) + 1
+    };
+  }
+
+  /**
    * Mark hierarchy as confirmed by student before generation.
    */
   static markVerified(hierarchy: DocumentTopicHierarchy): DocumentTopicHierarchy {

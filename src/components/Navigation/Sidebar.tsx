@@ -2,6 +2,7 @@ import React from 'react';
 import {
   LayoutDashboard,
   FolderOpen,
+  FolderTree,
   Sparkles,
   ShieldCheck,
   BookmarkCheck,
@@ -40,6 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'documents', label: 'My Documents', icon: FolderOpen },
+    { id: 'topic-explorer', label: 'Topic Explorer', icon: FolderTree, badge: activeDocument?.topicHierarchy ? `${activeDocument.topicHierarchy.totalTopicsCount}` : undefined },
     { id: 'studio', label: 'Learning Studio', icon: Sparkles, badge: activeDocument ? 'Active' : undefined },
     { id: 'verification', label: 'Source Verification', icon: ShieldCheck, badge: 'Audit' },
     { id: 'saved', label: 'Saved Materials', icon: BookmarkCheck },

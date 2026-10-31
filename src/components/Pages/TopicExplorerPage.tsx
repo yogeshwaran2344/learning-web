@@ -1,0 +1,878 @@
+import React, { useState } from 'react';
+import {
+  FolderTree,
+  CheckCircle2,
+  Edit2,
+  Check,
+  X,
+  Plus,
+  Trash2,
+  FileText,
+  Calculator,
+  Network,
+  Table as TableIcon,
+  Layers,
+  Sparkles,
+  ShieldCheck,
+  AlertTriangle,
+  ArrowRight,
+  BookOpen,
+  ChevronDown,
+  ChevronRight,
+  Search,
+  CheckSquare,
+  Square,
+  GraduationCap,
+  Headphones,
+  Award,
+  FlaskConical,
+  Zap,
+  ArrowLeftRight,
+  FolderPlus,
+  MoveRight,
+  Info
+} from 'lucide-react';
+import {
+  AcademicDocument,
+  DocumentTopicHierarchy,
+  DocumentTopic,
+  DocumentSubtopic,
+  DocumentChapter,
+  StudioTab
+} from '../../types';
+import { TopicHierarchyService } from '../../services/topicHierarchyService';
+import { StorageService } from '../../services/storageService';
+
+interface TopicExplorerPageProps {
+  document: AcademicDocument;
+  onLearnTopic: (topic: DocumentTopic, preferredFormat?: StudioTab) => void;
+  onNavigateToDocumentList: () => void;
+  onDocumentUpdate?: (updatedDoc: AcademicDocument) => void;
+}
+
+export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
+  document,
+  onLearnTopic,
+  onNavigateToDocumentList,
+  onDocumentUpdate
+}) => {
+  // Ensure we always have an active topic hierarchy
+  const [hierarchy, setHierarchy] = useState<DocumentTopicHierarchy>(() => {
+    return document.topicHierarchy || TopicHierarchyService.buildHierarchy(document);
+  });
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [expandedTopics, setExpandedTopics] = useState<Record<string, boolean>>({});
+  const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>(() => {
+    const map: Record<string, boolean> = {};
+    (document.topicHierarchy?.chapters || []).forEach(c => {
+      map[c.id] = true;
+    });
+    return map;
+  });
+
+  // Section 2.3: Topic Selection State
+  const [selectedTopicIds, setSelectedTopicIds] = useState<Set<string>>(() => {
+    // Default: all topics selected
+    const allIds = new Set<string>();
+    (document.topicHierarchy?.chapters || []).forEach(c => {
+      c.topics.forEach(t => allIds.add(t.id));
+    });
+    return allIds;
+  });
+
+  // Section 2.5: Correction Modals & Inline Edits
+  const [editingTopicId, setEditingTopicId] = useState<string | null>(null);
+  const [editingTopicTitle, setEditingTopicTitle] = useState<string>('');
+
+  // Add Subtopic State
+  const [addSubtopicTopicId, setAddSubtopicTopicId] = useState<string | null>(null);
+  const [newSubtopicTitle, setNewSubtopicTitle] = useState('');
+  const [newSubtopicStartPage, setNewSubtopicStartPage] = useState(1);
+  const [newSubtopicEndPage, setNewSubtopicEndPage] = useState(1);
+
+  // Move Subtopic State
+  const [moveSubtopicData, setMoveSubtopicData] = useState<{
+    sourceTopicId: string;
+    subtopicId: string;
+    subtopicTitle: string;
+  } | null>(null);
+  const [targetTopicIdForMove, setTargetTopicIdForMove] = useState<string>('');
+
+  // Merge Topics State
+  const [mergeSourceTopicId, setMergeSourceTopicId] = useState<string | null>(null);
+  const [mergeTargetTopicId, setMergeTargetTopicId] = useState<string>('');
+
+  const syncHierarchyUpdate = (newHierarchy: DocumentTopicHierarchy) => {
+    setHierarchy(newHierarchy);
+    const updatedDoc: AcademicDocument = {
+      ...document,
+      topicHierarchy: newHierarchy
+    };
+    StorageService.saveDocuments([
+      updatedDoc,
+      ...StorageService.getDocuments().filter(d => d.id !== document.id)
+    ]);
+    if (onDocumentUpdate) {
+      onDocumentUpdate(updatedDoc);
+    }
+  };
+
+  // Toggle single topic expanded
+  const toggleTopicExpand = (topicId: string) => {
+    setExpandedTopics(prev => ({ ...prev, [topicId]: !prev[topicId] }));
+  };
+
+  // Toggle chapter expand
+  const toggleChapterExpand = (chapterId: string) => {
+    setExpandedChapters(prev => ({ ...prev, [chapterId]: !prev[chapterId] }));
+  };
+
+  // Section 2.3: Topic Selection Handlers
+  const allTopicIds: string[] = hierarchy.chapters.flatMap(c => c.topics.map(t => t.id));
+  const isAllSelected = allTopicIds.length > 0 && allTopicIds.every(id => selectedTopicIds.has(id));
+  const isNoneSelected = selectedTopicIds.size === 0;
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedTopicIds(new Set());
+    } else {
+      setSelectedTopicIds(new Set(allTopicIds));
+    }
+  };
+
+  const handleToggleTopic = (topicId: string) => {
+    setSelectedTopicIds(prev => {
+      const next = new Set(prev);
+      if (next.has(topicId)) {
+        next.delete(topicId);
+      } else {
+        next.add(topicId);
+      }
+      return next;
+    });
+  };
+
+  const handleToggleChapter = (chapter: DocumentChapter) => {
+    const chapterTopicIds = chapter.topics.map(t => t.id);
+    const isChapterAllSelected = chapterTopicIds.every(id => selectedTopicIds.has(id));
+
+    setSelectedTopicIds(prev => {
+      const next = new Set(prev);
+      if (isChapterAllSelected) {
+        chapterTopicIds.forEach(id => next.delete(id));
+      } else {
+        chapterTopicIds.forEach(id => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  // Section 2.5: Edit Topic Title
+  const handleStartEditTopic = (topic: DocumentTopic) => {
+    setEditingTopicId(topic.id);
+    setEditingTopicTitle(topic.title);
+  };
+
+  const handleSaveTopicTitle = (topicId: string) => {
+    if (editingTopicTitle.trim()) {
+      const updated = TopicHierarchyService.updateTopicTitle(hierarchy, topicId, editingTopicTitle);
+      syncHierarchyUpdate(updated);
+    }
+    setEditingTopicId(null);
+  };
+
+  const handleRemoveTopic = (topicId: string) => {
+    if (confirm('Are you sure you want to remove this detected topic from the hierarchy?')) {
+      const updated = TopicHierarchyService.removeTopic(hierarchy, topicId);
+      syncHierarchyUpdate(updated);
+      setSelectedTopicIds(prev => {
+        const next = new Set(prev);
+        next.delete(topicId);
+        return next;
+      });
+    }
+  };
+
+  // Section 2.5: Add Subtopic Submit
+  const handleAddSubtopicSubmit = (topicId: string) => {
+    if (newSubtopicTitle.trim()) {
+      const updated = TopicHierarchyService.addSubtopicToTopic(
+        hierarchy,
+        topicId,
+        newSubtopicTitle,
+        [newSubtopicStartPage, newSubtopicEndPage]
+      );
+      syncHierarchyUpdate(updated);
+      setNewSubtopicTitle('');
+      setAddSubtopicTopicId(null);
+    }
+  };
+
+  // Section 2.5: Move Subtopic Submit
+  const handleMoveSubtopicSubmit = () => {
+    if (moveSubtopicData && targetTopicIdForMove) {
+      const updated = TopicHierarchyService.moveSubtopic(
+        hierarchy,
+        moveSubtopicData.sourceTopicId,
+        targetTopicIdForMove,
+        moveSubtopicData.subtopicId
+      );
+      syncHierarchyUpdate(updated);
+      setMoveSubtopicData(null);
+      setTargetTopicIdForMove('');
+    }
+  };
+
+  // Section 2.5: Merge Topics Submit
+  const handleMergeTopicsSubmit = () => {
+    if (mergeSourceTopicId && mergeTargetTopicId) {
+      const updated = TopicHierarchyService.mergeTopics(hierarchy, mergeSourceTopicId, mergeTargetTopicId);
+      syncHierarchyUpdate(updated);
+      setMergeSourceTopicId(null);
+      setMergeTargetTopicId('');
+    }
+  };
+
+  // Filtering topics based on search
+  const filteredChapters = hierarchy.chapters.map(chapter => {
+    const matchesChapter = chapter.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchingTopics = chapter.topics.filter(t => {
+      const matchTitle = t.title.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchConcepts = t.importantConcepts.some(c => c.toLowerCase().includes(searchQuery.toLowerCase()));
+      const matchSub = t.subtopics.some(s => s.title.toLowerCase().includes(searchQuery.toLowerCase()));
+      return matchTitle || matchConcepts || matchSub || matchesChapter;
+    });
+    return {
+      ...chapter,
+      topics: matchingTopics
+    };
+  }).filter(c => c.topics.length > 0);
+
+  const totalFilteredTopics = filteredChapters.reduce((acc, c) => acc + c.topics.length, 0);
+
+  return (
+    <div className="p-6 md:p-8 max-w-6xl mx-auto space-y-6 select-none animate-fadeIn">
+      {/* 2.1 Top Banner: Explore Your Topics & Document Analysed Status */}
+      <div className="rounded-3xl p-6 md:p-8 bg-gradient-to-r from-blue-900/90 via-slate-900 to-indigo-950 border border-blue-500/20 shadow-xl text-white relative overflow-hidden">
+        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-radial from-blue-500/10 to-transparent pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-bold uppercase tracking-wider">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Document Analysed</span>
+            </div>
+
+            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white flex items-center gap-3">
+              <span>Explore Your Topics</span>
+            </h1>
+
+            <p className="text-sm text-slate-300 font-medium flex items-center gap-2">
+              <span className="text-white font-bold">{document.title}</span>
+              <span>•</span>
+              <span className="text-blue-300 font-bold">{hierarchy.totalTopicsCount} main topics detected</span>
+              <span>•</span>
+              <span>{hierarchy.chapters.length} Chapters</span>
+              <span>•</span>
+              <span>{document.pageCount} Pages</span>
+            </p>
+          </div>
+
+          {/* Quick Action Button */}
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              onClick={() => {
+                const firstSelected = hierarchy.chapters
+                  .flatMap(c => c.topics)
+                  .find(t => selectedTopicIds.has(t.id));
+                if (firstSelected) {
+                  onLearnTopic(firstSelected);
+                } else if (hierarchy.chapters[0]?.topics[0]) {
+                  onLearnTopic(hierarchy.chapters[0].topics[0]);
+                }
+              }}
+              disabled={selectedTopicIds.size === 0}
+              className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-sm flex items-center gap-2 shadow-lg shadow-blue-500/30 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>Learn Selected ({selectedTopicIds.size})</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 2.3 Selection & Search Toolbar */}
+      <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">
+        {/* Left: Global Select All Controls */}
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <button
+            onClick={handleToggleSelectAll}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+          >
+            {isAllSelected ? (
+              <CheckSquare className="w-4 h-4 text-blue-600" />
+            ) : (
+              <Square className="w-4 h-4 text-slate-400" />
+            )}
+            <span>Select All ({allTopicIds.length})</span>
+          </button>
+
+          <span className="text-xs text-slate-500 font-medium">
+            <strong className="text-blue-600 dark:text-blue-400">{selectedTopicIds.size}</strong> of {allTopicIds.length} topics selected for learning
+          </span>
+        </div>
+
+        {/* Right: Search Filter */}
+        <div className="relative w-full sm:w-72">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search topics, concepts, formulas..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white outline-hidden focus:border-blue-500 transition-colors"
+          />
+        </div>
+      </div>
+
+      {/* 2.1 & 2.2 Hierarchical Chapters & Topics List */}
+      <div className="space-y-6">
+        {filteredChapters.length === 0 ? (
+          <div className="p-12 text-center rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
+            <FolderTree className="w-10 h-10 text-slate-400 mx-auto" />
+            <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">
+              No matching topics found
+            </h3>
+            <p className="text-xs text-slate-500">
+              Try adjusting your search query or reset the filter.
+            </p>
+          </div>
+        ) : (
+          filteredChapters.map((chapter) => {
+            const isChapterExpanded = expandedChapters[chapter.id] !== false;
+            const chapterTopicIds = chapter.topics.map(t => t.id);
+            const isChapterSelected = chapterTopicIds.length > 0 && chapterTopicIds.every(id => selectedTopicIds.has(id));
+            const isChapterPartiallySelected = !isChapterSelected && chapterTopicIds.some(id => selectedTopicIds.has(id));
+
+            return (
+              <div
+                key={chapter.id}
+                className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden transition-all"
+              >
+                {/* Chapter Banner Header */}
+                <div className="px-5 py-4 bg-slate-50/80 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    {/* Chapter Select Checkbox */}
+                    <button
+                      onClick={() => handleToggleChapter(chapter)}
+                      className="text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
+                      title={isChapterSelected ? 'Deselect Chapter' : 'Select Chapter'}
+                    >
+                      {isChapterSelected ? (
+                        <CheckSquare className="w-4 h-4 text-blue-600" />
+                      ) : isChapterPartiallySelected ? (
+                        <div className="w-4 h-4 rounded-sm border-2 border-blue-600 bg-blue-100 flex items-center justify-center">
+                          <div className="w-2 h-0.5 bg-blue-600" />
+                        </div>
+                      ) : (
+                        <Square className="w-4 h-4" />
+                      )}
+                    </button>
+
+                    <button
+                      onClick={() => toggleChapterExpand(chapter.id)}
+                      className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                    >
+                      {isChapterExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                    </button>
+
+                    <span className="font-mono text-xs font-black text-blue-600 dark:text-blue-400">
+                      0{chapter.chapterNumber}.
+                    </span>
+
+                    <h2
+                      onClick={() => toggleChapterExpand(chapter.id)}
+                      className="text-sm md:text-base font-black text-slate-900 dark:text-white truncate cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                    >
+                      {chapter.title}
+                    </h2>
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0 text-xs">
+                    <span className="px-2.5 py-1 rounded-lg bg-slate-200/60 dark:bg-slate-700/60 font-mono text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                      Pages {chapter.pageRange[0]}–{chapter.pageRange[1]}
+                    </span>
+                    <span className="text-slate-400 font-medium">
+                      {chapter.topics.length} topic{chapter.topics.length > 1 ? 's' : ''}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Topics in Chapter */}
+                {isChapterExpanded && (
+                  <div className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                    {chapter.topics.map((topic) => {
+                      const isSelected = selectedTopicIds.has(topic.id);
+                      const isExpanded = expandedTopics[topic.id] === true;
+                      const isEditing = editingTopicId === topic.id;
+
+                      // Determine Content Type badge
+                      const contentType = topic.associatedNumericalExamples.length > 0
+                        ? 'Numerical'
+                        : topic.associatedDiagrams.length > 0
+                        ? 'Diagram'
+                        : topic.title.toLowerCase().includes('vs') || topic.title.toLowerCase().includes('comparison')
+                        ? 'Comparison'
+                        : 'Theory';
+
+                      return (
+                        <div
+                          key={topic.id}
+                          className={`p-5 transition-colors ${
+                            isSelected
+                              ? 'bg-blue-50/20 dark:bg-blue-950/10'
+                              : 'hover:bg-slate-50/50 dark:hover:bg-slate-800/20'
+                          }`}
+                        >
+                          {/* Main Topic Header Row */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div className="flex items-start gap-3 flex-1 min-w-0">
+                              {/* Individual Topic Checkbox */}
+                              <button
+                                onClick={() => handleToggleTopic(topic.id)}
+                                className="mt-0.5 text-slate-400 hover:text-blue-600 transition-colors cursor-pointer shrink-0"
+                                title="Toggle topic selection for learning"
+                              >
+                                {isSelected ? (
+                                  <CheckSquare className="w-4 h-4 text-blue-600" />
+                                ) : (
+                                  <Square className="w-4 h-4" />
+                                )}
+                              </button>
+
+                              <button
+                                onClick={() => toggleTopicExpand(topic.id)}
+                                className="mt-0.5 p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer shrink-0"
+                              >
+                                {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                              </button>
+
+                              <span className="font-mono text-xs font-bold text-blue-600 dark:text-blue-400 shrink-0">
+                                {topic.topicNumber}
+                              </span>
+
+                              {isEditing ? (
+                                <div className="flex items-center gap-1.5 flex-1 max-w-md">
+                                  <input
+                                    type="text"
+                                    value={editingTopicTitle}
+                                    onChange={(e) => setEditingTopicTitle(e.target.value)}
+                                    className="px-2.5 py-1 text-xs rounded-lg border border-blue-500 bg-white dark:bg-slate-900 text-slate-900 dark:text-white w-full outline-hidden"
+                                    autoFocus
+                                  />
+                                  <button
+                                    onClick={() => handleSaveTopicTitle(topic.id)}
+                                    className="p-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer"
+                                    title="Save Title"
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingTopicId(null)}
+                                    className="p-1 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                  <h3
+                                    onClick={() => toggleTopicExpand(topic.id)}
+                                    className="text-sm font-bold text-slate-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer truncate"
+                                  >
+                                    {topic.title}
+                                  </h3>
+                                  <button
+                                    onClick={() => handleStartEditTopic(topic)}
+                                    className="text-slate-400 hover:text-blue-600 p-0.5 cursor-pointer opacity-50 hover:opacity-100 transition-opacity"
+                                    title="Rename topic (keeps source references)"
+                                  >
+                                    <Edit2 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Right Action: Learn This Topic Button (2.6) */}
+                            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                              <button
+                                onClick={() => onLearnTopic(topic)}
+                                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                                title="Open this topic's dedicated learning workspace"
+                              >
+                                <GraduationCap className="w-3.5 h-3.5" />
+                                <span>Learn This Topic</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* 2.4 Topic Information Table / Cards Strip */}
+                          <div className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs pt-1">
+                            {/* 1. Topic Name */}
+                            <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex flex-col">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Topic Name</span>
+                              <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">{topic.title}</span>
+                            </div>
+
+                            {/* 2. Subtopics Count */}
+                            <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex flex-col">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Subtopics</span>
+                              <span className="font-semibold text-slate-800 dark:text-slate-200">
+                                {topic.subtopics.length} subtopic{topic.subtopics.length > 1 ? 's' : ''}
+                              </span>
+                            </div>
+
+                            {/* 3. Source Pages */}
+                            <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex flex-col">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Source Pages</span>
+                              <span className="font-mono font-semibold text-blue-600 dark:text-blue-400">
+                                Pages {topic.pageRange[0]}–{topic.pageRange[1]}
+                              </span>
+                            </div>
+
+                            {/* 4. Content Type */}
+                            <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex flex-col">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Content Type</span>
+                              <span className="font-semibold text-purple-600 dark:text-purple-400">{contentType}</span>
+                            </div>
+
+                            {/* 5. Extraction Status */}
+                            <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex flex-col">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Extraction Status</span>
+                              <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>Successfully analysed</span>
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* 2.2 Expandable Subtopics & Learning Material Counts */}
+                          {isExpanded && (
+                            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800/60 space-y-3 animate-fadeIn">
+                              {/* Short Topic Description / Purpose */}
+                              <div className="text-xs text-slate-600 dark:text-slate-300 bg-blue-50/30 dark:bg-blue-950/20 p-3 rounded-xl border border-blue-100 dark:border-blue-900/40">
+                                <strong className="text-slate-800 dark:text-slate-200">Core Purpose: </strong>
+                                Formalizes {topic.title.toLowerCase()} across Pages {topic.pageRange[0]}–{topic.pageRange[1]}. All definitions, equations, and invariant boundary conditions are preserved for student study.
+                              </div>
+
+                              {/* Available Learning Formats Count */}
+                              <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                                <span className="font-bold text-slate-500">Available Formats:</span>
+                                <span className="px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 font-semibold">
+                                  💡 Short Explanation
+                                </span>
+                                <span className="px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-semibold">
+                                  🗺️ Concept Map
+                                </span>
+                                <span className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-semibold">
+                                  🎧 Audio Lesson
+                                </span>
+                                <span className="px-2 py-0.5 rounded-md bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 font-semibold">
+                                  🗂️ Flashcards
+                                </span>
+                                <span className="px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-semibold">
+                                  📝 Practice Quiz
+                                </span>
+                                {topic.associatedNumericalExamples.length > 0 && (
+                                  <span className="px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 font-semibold">
+                                    🔢 Worked Examples
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Subtopics Detail List */}
+                              <div className="space-y-2">
+                                <div className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                                  <span>Subtopics ({topic.subtopics.length})</span>
+                                  <button
+                                    onClick={() => {
+                                      setAddSubtopicTopicId(topic.id);
+                                      setNewSubtopicStartPage(topic.pageRange[0]);
+                                      setNewSubtopicEndPage(topic.pageRange[1]);
+                                    }}
+                                    className="text-[11px] text-blue-600 hover:text-blue-700 font-bold flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                    <span>Add Subtopic</span>
+                                  </button>
+                                </div>
+
+                                {topic.subtopics.length === 0 ? (
+                                  <p className="text-xs text-slate-400 italic">No subtopics added yet.</p>
+                                ) : (
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                    {topic.subtopics.map((sub) => (
+                                      <div
+                                        key={sub.id}
+                                        className="p-3 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-start justify-between gap-2 shadow-2xs hover:border-blue-400 transition-colors"
+                                      >
+                                        <div className="space-y-1 min-w-0 flex-1">
+                                          <div className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                                            {sub.title}
+                                          </div>
+                                          <div className="text-[10px] text-slate-500 font-mono">
+                                            Source: Page {sub.pageRange[0]}
+                                          </div>
+                                          {sub.importantConcepts.length > 0 && (
+                                            <div className="flex flex-wrap gap-1 pt-0.5">
+                                              {sub.importantConcepts.map((c, i) => (
+                                                <span key={i} className="px-1.5 py-0.2 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] text-slate-600 dark:text-slate-400">
+                                                  {c}
+                                                </span>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        <div className="flex items-center gap-1 shrink-0">
+                                          {/* Move Subtopic */}
+                                          <button
+                                            onClick={() => {
+                                              setMoveSubtopicData({
+                                                sourceTopicId: topic.id,
+                                                subtopicId: sub.id,
+                                                subtopicTitle: sub.title
+                                              });
+                                              setTargetTopicIdForMove('');
+                                            }}
+                                            className="p-1 rounded-md text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
+                                            title="Move subtopic under another topic"
+                                          >
+                                            <MoveRight className="w-3.5 h-3.5" />
+                                          </button>
+
+                                          {/* Remove Subtopic */}
+                                          <button
+                                            onClick={() => {
+                                              const updated = TopicHierarchyService.removeSubtopic(hierarchy, topic.id, sub.id);
+                                              syncHierarchyUpdate(updated);
+                                            }}
+                                            className="p-1 rounded-md text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
+                                            title="Remove subtopic"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Topic Management Toolbar (Merge & Remove) */}
+                              <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/60 text-xs">
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => {
+                                      setMergeSourceTopicId(topic.id);
+                                      setMergeTargetTopicId('');
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 flex items-center gap-1 cursor-pointer transition-colors"
+                                    title="Merge duplicate topics"
+                                  >
+                                    <ArrowLeftRight className="w-3 h-3" />
+                                    <span>Merge Duplicate</span>
+                                  </button>
+                                </div>
+
+                                <button
+                                  onClick={() => handleRemoveTopic(topic.id)}
+                                  className="px-2.5 py-1 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center gap-1 cursor-pointer transition-colors"
+                                  title="Remove incorrectly detected heading"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                  <span>Remove Heading</span>
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Modal 1: Add Missing Subtopic */}
+      {addSubtopicTopicId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                Add Missing Subtopic
+              </h3>
+              <button onClick={() => setAddSubtopicTopicId(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Subtopic Title</label>
+                <input
+                  type="text"
+                  placeholder="e.g. PCB Context Switch Mechanism"
+                  value={newSubtopicTitle}
+                  onChange={(e) => setNewSubtopicTitle(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white mt-1"
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Start Page</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={newSubtopicStartPage}
+                    onChange={(e) => setNewSubtopicStartPage(parseInt(e.target.value, 10) || 1)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white mt-1"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">End Page</label>
+                  <input
+                    type="number"
+                    min={newSubtopicStartPage}
+                    value={newSubtopicEndPage}
+                    onChange={(e) => setNewSubtopicEndPage(parseInt(e.target.value, 10) || newSubtopicStartPage)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white mt-1"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setAddSubtopicTopicId(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleAddSubtopicSubmit(addSubtopicTopicId)}
+                className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold shadow-sm"
+              >
+                Add Subtopic
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 2: Move Subtopic Under Another Topic */}
+      {moveSubtopicData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                Move Subtopic Under Another Topic
+              </h3>
+              <button onClick={() => setMoveSubtopicData(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">
+              Moving subtopic: <strong className="text-blue-600">{moveSubtopicData.subtopicTitle}</strong>
+            </p>
+            <div>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Select Target Topic</label>
+              <select
+                value={targetTopicIdForMove}
+                onChange={(e) => setTargetTopicIdForMove(e.target.value)}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-white mt-1"
+              >
+                <option value="">-- Choose destination topic --</option>
+                {hierarchy.chapters.flatMap(c => c.topics)
+                  .filter(t => t.id !== moveSubtopicData.sourceTopicId)
+                  .map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.topicNumber} {t.title} ({t.chapterTitle})
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setMoveSubtopicData(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleMoveSubtopicSubmit}
+                disabled={!targetTopicIdForMove}
+                className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold shadow-sm disabled:opacity-40"
+              >
+                Move Subtopic
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 3: Merge Duplicate Topics */}
+      {mergeSourceTopicId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                Merge Duplicate Topics
+              </h3>
+              <button onClick={() => setMergeSourceTopicId(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">
+              Combine this topic with another topic, uniting all subtopics and source references.
+            </p>
+            <div>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Target Topic to Merge Into</label>
+              <select
+                value={mergeTargetTopicId}
+                onChange={(e) => setMergeTargetTopicId(e.target.value)}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-white mt-1"
+              >
+                <option value="">-- Choose target topic --</option>
+                {hierarchy.chapters.flatMap(c => c.topics)
+                  .filter(t => t.id !== mergeSourceTopicId)
+                  .map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.topicNumber} {t.title}
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setMergeSourceTopicId(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleMergeTopicsSubmit}
+                disabled={!mergeTargetTopicId}
+                className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold shadow-sm disabled:opacity-40"
+              >
+                Merge Topics
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

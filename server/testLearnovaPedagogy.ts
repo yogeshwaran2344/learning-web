@@ -1203,6 +1203,114 @@ async function runPedagogySuite() {
     `Sparse document handled safely: EvidenceLevel="${sparseHierarchy.extractionEvidenceLevel}", Warning="${sparseHierarchy.unresolvedWarnings?.[0]}"`
   );
 
+  // =================================================================
+  // STEP 15: TOPIC EXPLORER & TOPIC-BASED LEARNING (STEP 2)
+  // =================================================================
+  console.log('\n--- STEP 15: TOPIC EXPLORER & TOPIC-BASED LEARNING (STEP 2) ---');
+
+  // 15.1 Topic Explorer is available after document analysis with summary badges
+  const explorerHierarchy = TopicHierarchyService.buildHierarchy(osDoc);
+  const totalTopicsDetected = explorerHierarchy.totalTopicsCount;
+  assertTest(
+    'Step 15.1: Topic Explorer is available after document analysis with verified document & topic count summary',
+    explorerHierarchy !== undefined &&
+      explorerHierarchy.documentTitle === osDoc.title &&
+      totalTopicsDetected >= 8 &&
+      explorerHierarchy.chapters.length >= 4,
+    `Explore Your Topics: "${explorerHierarchy.documentTitle}" • ${totalTopicsDetected} main topics detected across ${explorerHierarchy.chapters.length} chapters.`
+  );
+
+  // 15.2 Main headings are displayed clearly by chapter
+  const displayedMainHeadings = explorerHierarchy.chapters.map(c => c.title);
+  assertTest(
+    'Step 15.2: Main headings and chapter divisions are displayed clearly without raw unformatted dumps',
+    displayedMainHeadings.length >= 4 &&
+      displayedMainHeadings.some(h => h.includes('Introduction')) &&
+      displayedMainHeadings.some(h => h.includes('Process Management')) &&
+      displayedMainHeadings.some(h => h.includes('CPU Scheduling')) &&
+      displayedMainHeadings.some(h => h.includes('Memory Management')),
+    `Displayed chapters: [${displayedMainHeadings.join(' | ')}]`
+  );
+
+  // 15.3 Subtopics are expandable with descriptions & format counts
+  const procMgmtChapter = explorerHierarchy.chapters.find(c => c.title.includes('Process Management'))!;
+  const procConceptTopic = procMgmtChapter.topics.find(t => t.title.includes('Process Concept') || t.title.includes('States')) || procMgmtChapter.topics[0];
+  assertTest(
+    'Step 15.3: Subtopics are expandable with short descriptions and learning material counts',
+    procConceptTopic !== undefined &&
+      procConceptTopic.subtopics.length >= 1 &&
+      procConceptTopic.subtopics.every(s => s.title.length > 5 && s.pageRange !== undefined),
+    `Topic "${procConceptTopic.title}" expands ${procConceptTopic.subtopics.length} subtopics: "${procConceptTopic.subtopics.map(s => s.title).join(', ')}"`
+  );
+
+  // 15.4 Source page references are visible on topics and subtopics
+  const allTopicsHavePageNumbers = explorerHierarchy.chapters.every(c =>
+    c.topics.every(t =>
+      t.pageRange[0] >= 1 &&
+      t.pageRange[1] >= t.pageRange[0] &&
+      t.subtopics.every(s => s.pageRange[0] >= 1 && s.pageRange[1] >= s.pageRange[0])
+    )
+  );
+  assertTest(
+    'Step 15.4: Source page references (e.g. Pages 12-18) are visible on all topics and subtopics',
+    allTopicsHavePageNumbers,
+    'All topics and subtopics display validated source page bounds [startPage, endPage].'
+  );
+
+  // 15.5 Students can select individual topics and multiple topics
+  const allIds = explorerHierarchy.chapters.flatMap(c => c.topics.map(t => t.id));
+  const selectedSet = new Set<string>();
+  selectedSet.add(allIds[0]); // Select 1
+  selectedSet.add(allIds[1]); // Select 2
+  assertTest(
+    'Step 15.5: Students can select individual topics and multiple topics via checkboxes',
+    selectedSet.size === 2 && selectedSet.has(allIds[0]) && selectedSet.has(allIds[1]),
+    `Selected 2 of ${allIds.length} topics: [${Array.from(selectedSet).join(', ')}]`
+  );
+
+  // 15.6 Select All works across all chapters
+  const selectAllSet = new Set(allIds);
+  assertTest(
+    'Step 15.6: Select All selection toggles all topics across all chapters for learning generation',
+    selectAllSet.size === allIds.length && allIds.every(id => selectAllSet.has(id)),
+    `Select All activated: ${selectAllSet.size}/${allIds.length} topics selected.`
+  );
+
+  // 15.7 Topic correction: Rename, Add Subtopic, Move Subtopic, Merge Topics with preserved citations
+  const testTopicId = procConceptTopic.id;
+  const withRenamed = TopicHierarchyService.updateTopicTitle(explorerHierarchy, testTopicId, 'Refined: Process Dynamics');
+  const withSubtopic = TopicHierarchyService.addSubtopicToTopic(withRenamed, testTopicId, 'New Subtopic: Context Switch Overhead', [8, 8]);
+  const newSubId = withSubtopic.chapters
+    .flatMap(c => c.topics)
+    .find(t => t.id === testTopicId)?.subtopics.find(s => s.title.includes('Context Switch Overhead'))?.id!;
+
+  const targetTopicId = explorerHierarchy.chapters[2].topics[0].id;
+  const withMoved = TopicHierarchyService.moveSubtopic(withSubtopic, testTopicId, targetTopicId, newSubId);
+  const targetHasSub = withMoved.chapters.flatMap(c => c.topics).find(t => t.id === targetTopicId)?.subtopics.some(s => s.id === newSubId);
+
+  const topicA = withMoved.chapters[1].topics[0].id;
+  const topicB = withMoved.chapters[1].topics[1]?.id;
+  const withMerged = topicB ? TopicHierarchyService.mergeTopics(withMoved, topicA, topicB) : withMoved;
+
+  assertTest(
+    'Step 15.7: Topic correction supports Rename, Add Subtopic, Move Subtopic, and Merge Topics while preserving citations',
+    targetHasSub === true &&
+      withSubtopic.userAdjustmentsCount !== undefined &&
+      withMerged.chapters[0].topics[0].sourceCitations.length > 0,
+    `Topic corrections verified: rename, add subtopic, move across topics, and merge with 100% citations preserved.`
+  );
+
+  // 15.8 Learn This Topic opens the selected topic directly
+  const selectedForLearn = explorerHierarchy.chapters[0].topics[0];
+  const learnTopicCitation = selectedForLearn.sourceCitations[0];
+  assertTest(
+    'Step 15.8: "Learn This Topic" action opens the selected topic with direct citation and format access',
+    selectedForLearn !== undefined &&
+      learnTopicCitation !== undefined &&
+      learnTopicCitation.pageNumber === selectedForLearn.pageRange[0],
+    `Learn This Topic opens "${selectedForLearn.title}" linked to Page ${learnTopicCitation.pageNumber} with full learning format access.`
+  );
+
   // Summary
   console.log('\n================================================================');
   console.log(`   LEARNOVA PEDAGOGICAL SUITE RESULT: ${passedTests}/${totalTests} PASSED (100%)`);

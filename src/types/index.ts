@@ -4,6 +4,7 @@ export type NavigationPage =
   | 'dashboard'
   | 'documents'
   | 'studio'
+  | 'topic-explorer'
   | 'verification'
   | 'saved'
   | 'lecturer'
@@ -103,6 +104,8 @@ export interface DocumentTopic {
   chapterNumber: number;
   pageRange: [number, number];
   isMultiPage: boolean;
+  contentType?: PageContentType;
+  description?: string;
   subtopics: DocumentSubtopic[];
   importantConcepts: string[];
   associatedEquations: { latex: string; label: string; meaning: string; pageNumber: number }[];

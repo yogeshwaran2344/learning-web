@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { FolderTree } from 'lucide-react';
 import {
   AcademicDocument,
   NavigationPage,
@@ -19,6 +20,7 @@ import { ContextPanel } from './components/Navigation/ContextPanel';
 import { DashboardPage } from './components/Pages/DashboardPage';
 import { MyDocumentsPage } from './components/Pages/MyDocumentsPage';
 import { UploadMaterialPage } from './components/Pages/UploadMaterialPage';
+import { TopicExplorerPage } from './components/Pages/TopicExplorerPage';
 import { LearningStudioPage } from './components/Pages/LearningStudioPage';
 import { SourceVerificationPage } from './components/Pages/SourceVerificationPage';
 import { SavedMaterialsPage } from './components/Pages/SavedMaterialsPage';
@@ -179,7 +181,7 @@ export function App() {
     setDocuments(updated);
     setActiveDocument(newDoc);
     setStudioTab('map');
-    setCurrentPage('studio');
+    setCurrentPage('topic-explorer');
   };
 
   const handleDeleteDocument = async (id: string) => {
@@ -353,6 +355,54 @@ export function App() {
               onCancel={() => setCurrentPage('documents')}
               defaultLanguage={preferences.preferredLanguage}
             />
+          )}
+
+          {currentPage === 'topic-explorer' && (
+            activeDocument ? (
+              <TopicExplorerPage
+                document={activeDocument}
+                onLearnTopic={(topic, preferredFormat) => {
+                  if (topic.sourceCitations && topic.sourceCitations[0]) {
+                    setActiveCitation(topic.sourceCitations[0]);
+                  }
+                  if (preferredFormat) {
+                    setStudioTab(preferredFormat);
+                  }
+                  setCurrentPage('studio');
+                }}
+                onNavigateToDocumentList={() => setCurrentPage('documents')}
+                onDocumentUpdate={(updatedDoc) => {
+                  setActiveDocument(updatedDoc);
+                  setDocuments(prev => prev.map(d => d.id === updatedDoc.id ? updatedDoc : d));
+                }}
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center p-12 text-center h-[70vh] space-y-4">
+                <div className="w-16 h-16 rounded-2xl bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                  <FolderTree className="w-8 h-8" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-800 dark:text-slate-200">
+                  Select a Document to Explore Topics
+                </h3>
+                <p className="text-sm text-slate-500 max-w-md">
+                  Choose a document from My Documents or upload new learning material to explore its extracted chapters and topics.
+                </p>
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => setCurrentPage('documents')}
+                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs cursor-pointer shadow-sm"
+                  >
+                    View My Documents
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage('upload')}
+                    className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-xs cursor-pointer"
+                  >
+                    Upload Material
+                  </button>
+                </div>
+              </div>
+            )
           )}
 
           {currentPage === 'studio' && (
