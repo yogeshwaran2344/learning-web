@@ -175,11 +175,10 @@ export class DocumentController {
       const auditReport = MeaningPreservationEngine.auditDocument(docId, extraction.sections, hasWarning);
       Database.saveVerification(auditReport);
 
-      // Pre-synthesize all 7 learning formats using async AI generation (Gemini / OpenAI / Deterministic Grounded)
-      const initialFormats: ('map' | 'simplified' | 'notes' | 'worked' | 'flashcards' | 'audio' | 'quiz')[] = [
-        'map', 'simplified', 'notes', 'worked', 'flashcards', 'audio', 'quiz'
-      ];
-      for (const fmt of initialFormats) {
+      // Pre-synthesize core learning formats quickly to prevent 502 proxy timeouts
+      // Generate concept map and notes immediately; generate others asynchronously in background
+      const fastFormats: ('map' | 'notes')[] = ['map', 'notes'];
+      for (const fmt of fastFormats) {
         try {
           const matResult = await AiGeneratorService.generateFormatAsync(docId, docRecord.title, extraction.sections, fmt, 'English');
           Database.saveMaterial({
@@ -194,6 +193,26 @@ export class DocumentController {
           console.warn(`Format pre-generation warning for ${fmt}:`, genErr);
         }
       }
+
+      // Background generation for secondary formats without blocking HTTP upload response
+      const deferredFormats: ('simplified' | 'worked' | 'flashcards' | 'audio' | 'quiz')[] = [
+        'simplified', 'worked', 'flashcards', 'audio', 'quiz'
+      ];
+      (async () => {
+        for (const fmt of deferredFormats) {
+          try {
+            const matResult = await AiGeneratorService.generateFormatAsync(docId, docRecord.title, extraction.sections, fmt, 'English');
+            Database.saveMaterial({
+              id: `mat-${fmt}-${docId}`,
+              documentId: docId,
+              formatType: fmt,
+              language: 'English',
+              content: matResult,
+              generatedAt: new Date().toISOString()
+            });
+          } catch (_) {}
+        }
+      })().catch(() => {});
 
       const enriched = enrichDocumentWithMaterials(docRecord);
 

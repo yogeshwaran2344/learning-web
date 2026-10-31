@@ -29,7 +29,7 @@ export class ApiClient {
     }
     // If in development mode and token is missing, auto-bind default student session
     if (!this.token && typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-      this.token = 'token_demo_student_active_session';
+      this.token = 'token_demo_pooja_session';
       localStorage.setItem('learnova_auth_token', this.token);
     }
     return this.token;

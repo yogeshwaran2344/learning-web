@@ -1228,6 +1228,7 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
               <FlashcardView
                 documentId={document.id}
                 flashcards={currentFlashcards}
+                document={document}
                 onUpdateMastery={onUpdateFlashcardMastery}
                 onNavigateToCitation={handleCitationClick}
               />

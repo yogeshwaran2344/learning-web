@@ -57,12 +57,12 @@ export interface ExtractionQualityReport {
 }
 
 export interface SourceCitation {
-  id: string;
+  id?: string;
   documentId: string;
   pageNumber: number;
   sectionTitle: string;
   exactQuote: string;
-  contextSnippet: string;
+  contextSnippet?: string;
   charStart?: number;
   charEnd?: number;
 }
@@ -93,7 +93,7 @@ export interface DocumentSubtopic {
   equationsCount: number;
   diagramsCount: number;
   tablesCount: number;
-  numericalExamplesCount: number;
+  numericalExamplesCount?: number;
 }
 
 export interface DocumentTopic {
@@ -261,14 +261,86 @@ export interface ExplanationLevel {
 export interface Flashcard {
   id: string;
   conceptId?: string;
+  topicId?: string;
+  topicTitle?: string;
+  chapterTitle?: string;
   front: string;
   back: string;
   category: 'definition' | 'equation' | 'condition' | 'practice_question';
   sourceCitation: SourceCitation;
   masteryLevel: number; // 0: unlearned, 1: learning, 2: mastered
+  difficulty?: 'easy' | 'medium' | 'difficult';
+  rating?: 'easy' | 'medium' | 'difficult';
+  isMarkedDifficult?: boolean;
   lastReviewed?: string;
   isMarkedForReview?: boolean;
   practiceOptions?: { text: string; isCorrect: boolean; explanation: string }[];
+}
+
+export type QuizQuestionType =
+  | 'multiple_choice'
+  | 'true_false'
+  | 'fill_blank'
+  | 'short_answer'
+  | 'application'
+  | 'numerical';
+
+export interface QuizQuestion {
+  id: string;
+  type: QuizQuestionType;
+  difficulty: 'beginner' | 'intermediate' | 'advanced';
+  topicId?: string;
+  topicTitle?: string;
+  chapterTitle?: string;
+  questionText: string;
+  options?: {
+    id: string;
+    text: string;
+    isCorrect: boolean;
+    explanation: string;
+  }[];
+  fillBlankAnswer?: string;
+  modelAnswer?: string;
+  givenValues?: Record<string, string | number>;
+  formulaUsed?: string;
+  stepByStepSolution?: string[];
+  finalAnswer?: string;
+  explanation: string;
+  citation: SourceCitation;
+  category?: string;
+}
+
+export interface QuizScope {
+  type: 'topic' | 'chapter' | 'document';
+  id?: string;
+  title?: string;
+}
+
+export interface QuizEvaluationResult {
+  score: number;
+  totalQuestions: number;
+  percentage: number;
+  correctCount: number;
+  incorrectCount: number;
+  weakTopics: {
+    topicId?: string;
+    topicTitle: string;
+    pageNumber: number;
+    accuracyPercent: number;
+    revisionAdvice: string;
+  }[];
+  revisionSuggestions: {
+    topicTitle: string;
+    pageNumber: number;
+    advice: string;
+  }[];
+  questionBreakdown: {
+    questionId: string;
+    userChoice: string;
+    isCorrect: boolean;
+    explanation: string;
+    citation: SourceCitation;
+  }[];
 }
 
 export interface AudioLesson {

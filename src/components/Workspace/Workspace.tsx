@@ -88,6 +88,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({
               <FlashcardView
                 documentId={document.id}
                 flashcards={document.flashcards}
+                document={document}
                 onUpdateMastery={onUpdateFlashcardMastery}
                 onNavigateToCitation={handleNavigateToCitation}
               />

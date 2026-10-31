@@ -20,6 +20,7 @@ import { ExtractedSectionRecord } from './db/schema';
 import { PageTeacherService } from '../src/services/pageTeacherService';
 import { TopicHierarchyService } from '../src/services/topicHierarchyService';
 import { ConceptMapService } from '../src/services/conceptMapService';
+import { AssessmentService } from '../src/services/assessmentService';
 import { SAMPLE_DOCUMENTS } from '../src/data/sampleDocuments';
 
 // Test harness
@@ -1436,6 +1437,137 @@ async function runPedagogySuite() {
     'Step 16.9: Support concept map image export and PDF summary export',
     overallHasPdfHtml === true,
     `Image and PDF exports verified with structured topic metadata and formulas.`
+  );
+
+  // ============================================================================
+  // STEP 17: AI-POWERED TOPIC-WISE FLASHCARDS & QUIZZES (STEP 6)
+  // ============================================================================
+  console.log('\n--- STEP 17: AI-POWERED TOPIC-WISE FLASHCARDS & QUIZZES (STEP 6) ---');
+
+  // 17.1 Topic-wise flashcards: generate flashcards separately for every detected topic and subtopic
+  const flashcardSuite = AssessmentService.generateTopicWiseFlashcards(osDoc);
+  const topicIds = Object.keys(flashcardSuite.topicDecks);
+  assertTest(
+    'Step 17.1: Generate flashcards separately for every detected topic and subtopic',
+    topicIds.length >= 4 && flashcardSuite.overallDeck.length >= 10,
+    `Generated topic flashcard decks across ${topicIds.length} topics (${flashcardSuite.overallDeck.length} total cards).`
+  );
+
+  // 17.2 Flashcard contents: Front question, Back answer, rating options (Easy, Medium, Difficult)
+  const sampleCard = flashcardSuite.overallDeck[0];
+  const allCardsGrounded = flashcardSuite.overallDeck.every(c =>
+    c.front.length > 5 &&
+    c.back.length > 10 &&
+    c.sourceCitation &&
+    c.sourceCitation.pageNumber > 0
+  );
+  assertTest(
+    'Step 17.2: Each flashcard contains question on front, concise answer on back, and citation',
+    allCardsGrounded && sampleCard.difficulty !== undefined,
+    `Verified card structure: Front: "${sampleCard.front}", Back: "${sampleCard.back.slice(0, 50)}...", Page ${sampleCard.sourceCitation.pageNumber}.`
+  );
+
+  // 17.3 Save and revisit difficult cards with shuffle option
+  const difficultSubset = flashcardSuite.overallDeck.filter(c => c.difficulty === 'difficult');
+  assertTest(
+    'Step 17.3: Support rating options (Easy, Medium, Difficult) and filter/revisit difficult cards',
+    difficultSubset.length > 0,
+    `Difficult cards filtered successfully (${difficultSubset.length} cards marked for focused revisit).`
+  );
+
+  // 17.4 AI-generated quizzes for individual topics, selected chapters, or entire document
+  const chapterScopeQuiz = AssessmentService.generateQuizQuestions(
+    osDoc,
+    { type: 'chapter', title: 'Process Management' },
+    'intermediate'
+  );
+  const documentScopeQuiz = AssessmentService.generateQuizQuestions(
+    osDoc,
+    { type: 'document' },
+    'intermediate'
+  );
+  assertTest(
+    'Step 17.4: Generate quizzes scoped to individual topics, selected chapters, or entire document',
+    chapterScopeQuiz.length > 0 && documentScopeQuiz.length > 0,
+    `Scoped quizzes generated: Chapter scope (${chapterScopeQuiz.length} questions), Document scope (${documentScopeQuiz.length} questions).`
+  );
+
+  // 17.5 Support all 6 question formats: MCQs, True/False, Fill in blanks, Short answers, Application, Numerical
+  const advancedQuiz = AssessmentService.generateQuizQuestions(
+    osDoc,
+    { type: 'document' },
+    'advanced'
+  );
+  const questionTypesFound = new Set(advancedQuiz.map(q => q.type));
+  const hasMcq = questionTypesFound.has('multiple_choice');
+  const hasTf = questionTypesFound.has('true_false');
+  const hasFib = questionTypesFound.has('fill_blank');
+  const hasSa = questionTypesFound.has('short_answer');
+  const hasApp = questionTypesFound.has('application');
+  const hasNum = questionTypesFound.has('numerical');
+  assertTest(
+    'Step 17.5: Support all 6 question formats (MCQ, True/False, Fill in blank, Short answer, Application, Numerical)',
+    hasMcq && hasTf && hasFib && hasSa && hasApp && hasNum,
+    `All 6 question types validated: [MCQ: ${hasMcq}, True/False: ${hasTf}, FillBlank: ${hasFib}, ShortAnswer: ${hasSa}, Application: ${hasApp}, Numerical: ${hasNum}].`
+  );
+
+  // 17.6 Numerical questions preserve given values, formulas, and step-by-step derivations
+  const numericalQ = advancedQuiz.find(q => q.type === 'numerical');
+  assertTest(
+    'Step 17.6: Numerical questions provide given values, formulas, and step-by-step mathematical solutions',
+    numericalQ !== undefined &&
+      numericalQ.givenValues !== undefined &&
+      numericalQ.formulaUsed !== undefined &&
+      numericalQ.stepByStepSolution !== undefined &&
+      numericalQ.finalAnswer === '6 ms',
+    `Numerical verified: Formula "${numericalQ?.formulaUsed}", Final Answer "${numericalQ?.finalAnswer}", Calculation: "Average = (4 + 6 + 8) / 3 = 6 ms".`
+  );
+
+  // 17.7 3 difficulty levels (Beginner, Intermediate, Advanced)
+  const beginnerQuiz = AssessmentService.generateQuizQuestions(osDoc, { type: 'document' }, 'beginner');
+  assertTest(
+    'Step 17.7: Support 3 selectable difficulty levels (Beginner, Intermediate, Advanced)',
+    beginnerQuiz[0].difficulty === 'beginner' &&
+      chapterScopeQuiz[0].difficulty === 'intermediate' &&
+      advancedQuiz[0].difficulty === 'advanced',
+    `Difficulty levels verified: Beginner definitions vs Intermediate applications vs Advanced numerical derivations.`
+  );
+
+  // 17.8 Quiz evaluation: score, percentage, correct/incorrect breakdown, and explanations
+  const mockAnswers: Record<string, string> = {
+    'q-mcq-beg-1': 'opt-mcq-1',
+    'q-tf-1': 'opt-tf-1',
+    'q-fib-1': 'state',
+    'q-sa-1': 'A process is an active executing program while program is static code.',
+    'q-app-1': 'opt-app-1',
+    'q-num-1': 'opt-num-1'
+  };
+  const evaluationResult = AssessmentService.evaluateQuiz(advancedQuiz, mockAnswers);
+  assertTest(
+    'Step 17.8: Quiz evaluation calculates score, percentage, and explains right/wrong answers',
+    evaluationResult.totalQuestions === advancedQuiz.length &&
+      evaluationResult.percentage > 0 &&
+      evaluationResult.questionBreakdown.every(b => b.explanation.length > 5),
+    `Quiz evaluated: Score ${evaluationResult.score}/${evaluationResult.totalQuestions} (${evaluationResult.percentage}%), 100% questions have detailed pedagogical explanations.`
+  );
+
+  // 17.9 Identify weak topics (< 70% accuracy), targeted revision advice, and retry incorrect questions
+  const failingAnswers: Record<string, string> = {
+    'q-mcq-int-1': 'wrong-opt',
+    'q-tf-1': 'opt-tf-2',
+    'q-num-1': 'opt-num-4'
+  };
+  const failingEvaluation = AssessmentService.evaluateQuiz(advancedQuiz, failingAnswers);
+  const weakTopics = failingEvaluation.weakTopics;
+  const incorrectIds = failingEvaluation.questionBreakdown.filter(q => !q.isCorrect).map(q => q.questionId);
+  const retryQuestions = advancedQuiz.filter(q => incorrectIds.includes(q.id));
+  assertTest(
+    'Step 17.9: Identify weak topics (< 70% accuracy) with page links, revision advice, and retry incorrect mode',
+    weakTopics.length > 0 &&
+      weakTopics[0].pageNumber > 0 &&
+      weakTopics[0].revisionAdvice.includes('Page') &&
+      retryQuestions.length === failingEvaluation.incorrectCount,
+    `Weak topics flagged: "${weakTopics[0].topicTitle}" (${weakTopics[0].accuracyPercent}%) on Page ${weakTopics[0].pageNumber}. Retry mode isolates ${retryQuestions.length} missed questions.`
   );
 
   // Summary

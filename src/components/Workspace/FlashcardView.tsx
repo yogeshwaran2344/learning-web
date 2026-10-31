@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   RotateCw,
   ChevronLeft,
@@ -15,13 +15,19 @@ import {
   Shuffle,
   Bookmark,
   BookmarkCheck,
-  Filter
+  Filter,
+  Check,
+  Star,
+  Flame,
+  Tag
 } from 'lucide-react';
-import { Flashcard, SourceCitation } from '../../types';
+import { Flashcard, SourceCitation, AcademicDocument } from '../../types';
+import { AssessmentService } from '../../services/assessmentService';
 
 interface FlashcardViewProps {
   documentId: string;
   flashcards: Flashcard[];
+  document?: AcademicDocument;
   onUpdateMastery: (docId: string, cardId: string, newLevel: number) => void;
   onNavigateToCitation: (citation: SourceCitation) => void;
 }
@@ -29,34 +35,63 @@ interface FlashcardViewProps {
 export const FlashcardView: React.FC<FlashcardViewProps> = ({
   documentId,
   flashcards: initialFlashcards,
+  document,
   onUpdateMastery,
   onNavigateToCitation
 }) => {
-  const [deck, setDeck] = useState<Flashcard[]>(initialFlashcards);
+  // Generate or partition flashcards by topic
+  const { topicDecks, topicTitles, overallDeck } = useMemo(() => {
+    if (document) {
+      return AssessmentService.generateTopicWiseFlashcards(document);
+    }
+    // Fallback if full document not provided
+    const overall = [...initialFlashcards];
+    const decks: Record<string, Flashcard[]> = { overall };
+    const titles: Record<string, string> = { overall: 'All Topics' };
+    overall.forEach((fc) => {
+      const topId = fc.topicId || 'general';
+      const topTitle = fc.topicTitle || 'Core Concepts';
+      titles[topId] = topTitle;
+      if (!decks[topId]) decks[topId] = [];
+      decks[topId].push(fc);
+    });
+    return { topicDecks: decks, topicTitles: titles, overallDeck: overall };
+  }, [document, initialFlashcards]);
+
+  const [selectedTopicId, setSelectedTopicId] = useState<string>('overall');
+  const [deck, setDeck] = useState<Flashcard[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
-  const [quizSelection, setQuizSelection] = useState<number | null>(null);
+  const [markedDifficult, setMarkedDifficult] = useState<Set<string>>(new Set());
+  const [cardRatings, setCardRatings] = useState<Record<string, 'easy' | 'medium' | 'difficult'>>({});
+  const [showDifficultOnly, setShowDifficultOnly] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'study' | 'quiz'>('study');
-  const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
-  const [showMarkedOnly, setShowMarkedOnly] = useState<boolean>(false);
+  const [quizSelection, setQuizSelection] = useState<number | null>(null);
 
-  // Sync if initialFlashcards changes
+  // Sync deck when selected topic changes
   useEffect(() => {
-    setDeck(initialFlashcards);
+    const targetDeck = selectedTopicId === 'overall'
+      ? overallDeck
+      : (topicDecks[selectedTopicId] || overallDeck);
+    setDeck(targetDeck);
     setCurrentIndex(0);
-  }, [initialFlashcards]);
+    setIsFlipped(false);
+  }, [selectedTopicId, topicDecks, overallDeck]);
 
-  const activeCards = showMarkedOnly
-    ? deck.filter(c => markedForReview.has(c.id))
-    : deck;
+  const activeCards = useMemo(() => {
+    if (showDifficultOnly) {
+      return deck.filter(c => markedDifficult.has(c.id) || cardRatings[c.id] === 'difficult');
+    }
+    return deck;
+  }, [deck, showDifficultOnly, markedDifficult, cardRatings]);
 
-  const currentCard = activeCards[currentIndex] || activeCards[0] || initialFlashcards[0];
+  const currentCard = activeCards[currentIndex] || activeCards[0] || deck[0];
 
-  // Reset flip and quiz selection when index changes
+  // Reset flip and quiz selection on card navigation
   useEffect(() => {
     setIsFlipped(false);
     setQuizSelection(null);
-  }, [currentIndex, viewMode, showMarkedOnly]);
+  }, [currentIndex, viewMode, showDifficultOnly]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -71,11 +106,11 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
       } else if (e.code === 'ArrowLeft') {
         handlePrev();
       } else if (isFlipped && e.key === '1') {
-        handleGrade(0);
+        handleRateCard('easy');
       } else if (isFlipped && e.key === '2') {
-        handleGrade(1);
+        handleRateCard('medium');
       } else if (isFlipped && (e.key === '3' || e.key === '4')) {
-        handleGrade(2);
+        handleRateCard('difficult');
       }
     };
 
@@ -102,8 +137,26 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
     setIsFlipped(false);
   };
 
-  const handleToggleMarkForReview = (cardId: string) => {
-    setMarkedForReview(prev => {
+  const handleRateCard = (rating: 'easy' | 'medium' | 'difficult') => {
+    if (!currentCard) return;
+    setCardRatings(prev => ({ ...prev, [currentCard.id]: rating }));
+
+    if (rating === 'difficult') {
+      setMarkedDifficult(prev => new Set(prev).add(currentCard.id));
+      onUpdateMastery(documentId, currentCard.id, 0); // unlearned
+    } else if (rating === 'medium') {
+      onUpdateMastery(documentId, currentCard.id, 1); // learning
+    } else {
+      onUpdateMastery(documentId, currentCard.id, 2); // mastered
+    }
+
+    if (currentIndex < activeCards.length - 1) {
+      handleNext();
+    }
+  };
+
+  const handleToggleDifficult = (cardId: string) => {
+    setMarkedDifficult(prev => {
       const next = new Set(prev);
       if (next.has(cardId)) {
         next.delete(cardId);
@@ -114,326 +167,386 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
     });
   };
 
-  const handleGrade = (level: number) => {
-    if (currentCard) {
-      onUpdateMastery(documentId, currentCard.id, level);
-      if (currentIndex < activeCards.length - 1) {
-        handleNext();
-      }
-    }
-  };
+  const totalDifficultCount = deck.filter(c => markedDifficult.has(c.id) || cardRatings[c.id] === 'difficult').length;
+  const masteredCount = deck.filter(f => cardRatings[f.id] === 'easy' || f.masteryLevel === 2).length;
+  const learningCount = deck.filter(f => cardRatings[f.id] === 'medium' || f.masteryLevel === 1).length;
+  const unlearnedCount = deck.filter(f => cardRatings[f.id] === 'difficult' || (!cardRatings[f.id] && f.masteryLevel === 0)).length;
 
-  const masteredCount = deck.filter(f => f.masteryLevel === 2).length;
-  const learningCount = deck.filter(f => f.masteryLevel === 1).length;
-  const unlearnedCount = deck.filter(f => f.masteryLevel === 0).length;
-
-  if (activeCards.length === 0) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center p-8 text-center space-y-4">
-        <Bookmark className="w-12 h-12 text-slate-300 dark:text-slate-700 mx-auto" />
-        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200">No cards marked for review</h3>
-        <p className="text-xs text-slate-500 max-w-sm">
-          Mark difficult definitions or formulas during study to group them here for focused revision.
-        </p>
-        <button
-          onClick={() => setShowMarkedOnly(false)}
-          className="px-4 py-2 rounded-xl bg-purple-600 text-white font-bold text-xs"
-        >
-          View Full Deck ({deck.length} Cards)
-        </button>
-      </div>
-    );
-  }
-
-  const isCurrentCardMarked = currentCard ? markedForReview.has(currentCard.id) : false;
+  const currentCardRating = currentCard ? (cardRatings[currentCard.id] || currentCard.difficulty || 'medium') : 'medium';
+  const isCurrentDifficult = currentCard ? (markedDifficult.has(currentCard.id) || cardRatings[currentCard.id] === 'difficult') : false;
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-slate-900 p-6 space-y-6 overflow-y-auto">
-      {/* Top Bar: Progress and Modes */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
-        <div className="flex items-center space-x-2">
-          <span className="p-2 rounded-xl bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400">
+    <div className="h-full flex flex-col bg-white dark:bg-slate-900 p-6 space-y-5 overflow-y-auto">
+      {/* Header & Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+        <div className="flex items-center space-x-2.5">
+          <span className="p-2.5 rounded-xl bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400">
             <Layers className="w-5 h-5" />
           </span>
           <div>
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-              Spaced Repetition Flashcards & Practice
+            <h2 className="text-lg font-black text-slate-900 dark:text-white">
+              Topic-Wise Flashcards & Revision
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Card {currentIndex + 1} of {activeCards.length} • Press Space to Flip • 1, 2, 3 to Grade
+              Revise by individual topic or study the complete deck with self-rated difficulty tracking.
             </p>
           </div>
         </div>
 
-        {/* View Switcher & Action Tools */}
-        <div className="flex items-center gap-2">
-          {/* Shuffle Button */}
+        {/* Action Controls */}
+        <div className="flex items-center flex-wrap gap-2">
+          {/* Shuffle */}
           <button
             onClick={handleShuffle}
-            title="Shuffle card order"
-            className="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-1 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 transition-colors"
+            title="Shuffle cards"
           >
             <Shuffle className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Shuffle</span>
+            <span>Shuffle</span>
           </button>
 
-          {/* Mark for Review Toggle */}
+          {/* Revisit Difficult Cards Filter */}
           <button
-            onClick={() => currentCard && handleToggleMarkForReview(currentCard.id)}
-            title="Mark card for focused review"
-            className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1 transition-colors ${
-              isCurrentCardMarked
-                ? 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-700 font-bold'
-                : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+            onClick={() => {
+              setShowDifficultOnly(!showDifficultOnly);
+              setCurrentIndex(0);
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              showDifficultOnly
+                ? 'bg-amber-500 text-white shadow-sm'
+                : 'border border-amber-300 dark:border-amber-700/60 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30'
             }`}
           >
-            {isCurrentCardMarked ? <BookmarkCheck className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
-            <span className="hidden md:inline">{isCurrentCardMarked ? 'Marked' : 'Mark for Review'}</span>
+            <Star className="w-3.5 h-3.5 fill-current" />
+            <span>Difficult Cards ({totalDifficultCount})</span>
           </button>
 
-          {/* Filter Marked Only */}
-          {markedForReview.size > 0 && (
-            <button
-              onClick={() => {
-                setShowMarkedOnly(m => !m);
-                setCurrentIndex(0);
-              }}
-              className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold border flex items-center gap-1 ${
-                showMarkedOnly
-                  ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
-                  : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100'
-              }`}
-            >
-              <Filter className="w-3.5 h-3.5" />
-              <span>{showMarkedOnly ? 'Showing Marked' : `Review (${markedForReview.size})`}</span>
-            </button>
-          )}
-
           {/* Mode Switcher */}
-          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-semibold">
+          <div className="flex items-center p-0.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold">
             <button
               onClick={() => setViewMode('study')}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
+              className={`px-3 py-1 rounded-lg transition-colors ${
                 viewMode === 'study'
-                  ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-300 shadow-sm'
+                  ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-400 shadow-sm font-bold'
                   : 'text-slate-600 dark:text-slate-400'
               }`}
             >
-              Study Flip
+              Study Cards
             </button>
             <button
               onClick={() => setViewMode('quiz')}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
+              className={`px-3 py-1 rounded-lg transition-colors ${
                 viewMode === 'quiz'
-                  ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-300 shadow-sm'
+                  ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-400 shadow-sm font-bold'
                   : 'text-slate-600 dark:text-slate-400'
               }`}
             >
-              Practice Quiz
+              Practice
             </button>
           </div>
         </div>
       </div>
 
-      {/* Progress Metric Bar */}
+      {/* Topic Selector Tabs */}
       <div className="space-y-1.5">
-        <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-          <span className="text-emerald-600 dark:text-emerald-400 font-medium">Mastered: {masteredCount}</span>
-          <span className="text-amber-600 dark:text-amber-400 font-medium">Reviewing: {learningCount}</span>
-          <span className="text-slate-500 font-medium">New: {unlearnedCount}</span>
+        <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+          <Tag className="w-3.5 h-3.5" />
+          <span>Select Topic to Study:</span>
         </div>
-        <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
-          <div style={{ width: `${(masteredCount / deck.length) * 100}%` }} className="bg-emerald-500 h-full" />
-          <div style={{ width: `${(learningCount / deck.length) * 100}%` }} className="bg-amber-400 h-full" />
-          <div style={{ width: `${(unlearnedCount / deck.length) * 100}%` }} className="bg-slate-300 dark:bg-slate-700 h-full" />
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+          <button
+            onClick={() => setSelectedTopicId('overall')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all ${
+              selectedTopicId === 'overall'
+                ? 'bg-purple-600 text-white shadow-sm shadow-purple-600/20'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+            }`}
+          >
+            All Topics ({overallDeck.length})
+          </button>
+          {Object.entries(topicTitles)
+            .filter(([id]) => id !== 'overall')
+            .map(([id, title]) => {
+              const cardCount = topicDecks[id]?.length || 0;
+              return (
+                <button
+                  key={id}
+                  onClick={() => setSelectedTopicId(id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-medium shrink-0 transition-all ${
+                    selectedTopicId === id
+                      ? 'bg-purple-600 text-white shadow-sm font-bold'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  {title} ({cardCount})
+                </button>
+              );
+            })}
         </div>
       </div>
 
-      {/* Main Flashcard Card Container */}
-      <div className="flex-1 flex flex-col items-center justify-center min-h-[360px]">
-        {viewMode === 'study' ? (
+      {/* Progress & Counters */}
+      <div className="flex items-center justify-between text-xs px-1">
+        <div className="flex items-center gap-4">
+          <span className="font-bold text-slate-700 dark:text-slate-300">
+            Card {activeCards.length > 0 ? currentIndex + 1 : 0} of {activeCards.length}
+          </span>
+          <div className="hidden sm:flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" /> Easy: {masteredCount}
+            </span>
+            <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 font-semibold">
+              <span className="w-2 h-2 rounded-full bg-amber-500" /> Medium: {learningCount}
+            </span>
+            <span className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 font-semibold">
+              <span className="w-2 h-2 rounded-full bg-rose-500" /> Difficult: {unlearnedCount}
+            </span>
+          </div>
+        </div>
+
+        {/* Progress Bar */}
+        <div className="w-36 h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
           <div
-            onClick={() => setIsFlipped(f => !f)}
-            className="w-full max-w-xl min-h-[320px] rounded-3xl bg-slate-50 dark:bg-slate-800/80 border-2 border-slate-200 dark:border-slate-700 hover:border-purple-400 p-8 flex flex-col justify-between shadow-lg hover:shadow-xl transition-all cursor-pointer relative"
+            className="h-full bg-purple-600 transition-all duration-300"
+            style={{
+              width: `${activeCards.length > 0 ? ((currentIndex + 1) / activeCards.length) * 100 : 0}%`
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Empty State for Difficult Cards */}
+      {activeCards.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800">
+          <Bookmark className="w-12 h-12 text-slate-300 dark:text-slate-700 mx-auto" />
+          <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">
+            No cards currently marked as Difficult
+          </h3>
+          <p className="text-xs text-slate-500 max-w-sm">
+            Rate cards as "Difficult" during your study session to group them here for focused re-testing.
+          </p>
+          <button
+            onClick={() => setShowDifficultOnly(false)}
+            className="px-4 py-2 rounded-xl bg-purple-600 text-white font-bold text-xs"
           >
-            {/* Card Header */}
-            <div className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300">
-                  {currentCard.category}
-                </span>
-                {isCurrentCardMarked && (
-                  <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-bold text-[10px]">
-                    ★ Marked for Review
+            Show All {deck.length} Cards
+          </button>
+        </div>
+      ) : (
+        /* Active Flashcard Canvas */
+        <div className="flex-1 flex flex-col items-center justify-center max-w-3xl mx-auto w-full">
+          {viewMode === 'study' ? (
+            /* Flip Card View */
+            <div
+              onClick={() => setIsFlipped(!isFlipped)}
+              className="w-full min-h-[340px] p-8 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl hover:shadow-2xl hover:border-purple-300 dark:hover:border-purple-700 transition-all cursor-pointer flex flex-col justify-between relative group select-none"
+            >
+              {/* Card Meta Header */}
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 font-bold uppercase tracking-wider text-[10px]">
+                    {currentCard?.topicTitle || 'Topic Concept'}
                   </span>
+                  <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] font-semibold text-slate-600 dark:text-slate-300">
+                    {currentCard?.category?.toUpperCase() || 'CORE'}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (currentCard) handleToggleDifficult(currentCard.id);
+                    }}
+                    className={`p-1.5 rounded-lg transition-colors ${
+                      isCurrentDifficult
+                        ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/60'
+                        : 'text-slate-400 hover:text-amber-500'
+                    }`}
+                    title={isCurrentDifficult ? 'Marked as Difficult' : 'Mark as Difficult'}
+                  >
+                    <Star className="w-4 h-4 fill-current" />
+                  </button>
+                  <span className="text-[11px] font-medium text-slate-400">
+                    {isFlipped ? 'Answer (Click to flip back)' : 'Question (Click to flip)'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Card Content */}
+              <div className="py-6 flex flex-col items-center justify-center text-center">
+                {!isFlipped ? (
+                  <div className="space-y-3">
+                    <span className="inline-block px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-500">
+                      Question
+                    </span>
+                    <h3 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white leading-relaxed max-w-xl">
+                      {currentCard?.front}
+                    </h3>
+                  </div>
+                ) : (
+                  <div className="space-y-4 max-w-xl">
+                    <span className="inline-block px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                      Answer
+                    </span>
+                    <p className="text-base sm:text-lg font-medium text-slate-800 dark:text-slate-100 leading-relaxed whitespace-pre-line">
+                      {currentCard?.back}
+                    </p>
+                  </div>
                 )}
               </div>
 
-              <span className="flex items-center gap-1 text-slate-400 text-xs">
-                <RotateCw className="w-3.5 h-3.5" />
-                <span>{isFlipped ? 'Answer Side' : 'Question Side (Click to Flip)'}</span>
-              </span>
-            </div>
+              {/* Card Footer: Citation & Flip prompt */}
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                {currentCard?.sourceCitation ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onNavigateToCitation(currentCard.sourceCitation);
+                    }}
+                    className="inline-flex items-center gap-1 text-slate-500 hover:text-purple-600 transition-colors font-medium text-[11px]"
+                  >
+                    <BookOpen className="w-3.5 h-3.5 text-purple-500" />
+                    <span>Page {currentCard.sourceCitation.pageNumber} ({currentCard.sourceCitation.sectionTitle})</span>
+                    <ExternalLink className="w-3 h-3 ml-0.5 opacity-60" />
+                  </button>
+                ) : (
+                  <div />
+                )}
 
-            {/* Content (Front vs Back) */}
-            <div className="my-6 text-center">
-              {!isFlipped ? (
-                <div className="space-y-3">
-                  <h3 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white leading-snug">
-                    {currentCard.front}
-                  </h3>
-                  <p className="text-xs text-slate-400 italic">Click card or press Space to reveal answer</p>
-                </div>
-              ) : (
-                <div className="space-y-4 text-left">
-                  <div className="text-xs font-semibold uppercase text-emerald-600 dark:text-emerald-400 tracking-wider">
-                    Verified Answer:
-                  </div>
-                  <div className="text-base sm:text-lg font-medium text-slate-800 dark:text-slate-100 whitespace-pre-line leading-relaxed font-sans">
-                    {currentCard.back}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Card Footer */}
-            <div className="pt-4 border-t border-slate-200 dark:border-slate-700/80 flex items-center justify-between text-xs">
-              <span className="text-slate-400">
-                Mastery: {currentCard.masteryLevel === 2 ? '⭐⭐ Mastered' : currentCard.masteryLevel === 1 ? '⭐ Reviewing' : '⚪ Unlearned'}
-              </span>
-
-              {isFlipped && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onNavigateToCitation(currentCard.sourceCitation);
-                  }}
-                  className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 hover:underline font-semibold"
-                >
-                  <span>Source p.{currentCard.sourceCitation.pageNumber}</span>
-                  <ExternalLink className="w-3 h-3" />
-                </button>
-              )}
-            </div>
-          </div>
-        ) : (
-          /* Practice Quiz Mode */
-          <div className="w-full max-w-xl min-h-[340px] rounded-3xl bg-slate-50 dark:bg-slate-800/80 border-2 border-slate-200 dark:border-slate-700 p-8 flex flex-col justify-between shadow-lg">
-            <div>
-              <div className="flex items-center justify-between text-xs mb-4">
-                <span className="px-2.5 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
-                  Multiple-Choice Practice
+                <span className="text-[11px] text-slate-400 group-hover:text-purple-600 transition-colors flex items-center gap-1 font-semibold">
+                  <RotateCw className="w-3.5 h-3.5" />
+                  Space or Enter to flip
                 </span>
-                <span className="text-xs text-slate-400">Card {currentIndex + 1}</span>
+              </div>
+            </div>
+          ) : (
+            /* Practice Multiple Choice Mode */
+            <div className="w-full p-8 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl space-y-6">
+              <div className="space-y-1">
+                <span className="px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 font-bold uppercase tracking-wider text-[10px]">
+                  {currentCard?.topicTitle}
+                </span>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white pt-2">
+                  {currentCard?.front}
+                </h3>
               </div>
 
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white leading-snug mb-5">
-                {currentCard.front}
-              </h3>
-
-              {/* Options */}
               <div className="space-y-2.5">
-                {(currentCard.practiceOptions || [
-                  { text: currentCard.back, isCorrect: true, explanation: 'Directly stated in the source text.' },
-                  { text: 'None of the above conditions apply.', isCorrect: false, explanation: 'Incorrect statement.' }
-                ]).map((opt, oIdx) => {
+                {(currentCard?.practiceOptions && currentCard.practiceOptions.length > 0
+                  ? currentCard.practiceOptions
+                  : [
+                      { text: currentCard?.back || '', isCorrect: true, explanation: 'Direct verified definition.' },
+                      { text: 'Inverted condition that contradicts source invariants.', isCorrect: false, explanation: 'Incorrect formulation.' },
+                      { text: 'Approximation valid only when external dependencies are zero.', isCorrect: false, explanation: 'Unsupported condition.' }
+                    ]
+                ).map((opt, oIdx) => {
                   const isSelected = quizSelection === oIdx;
                   return (
                     <button
                       key={oIdx}
                       onClick={() => setQuizSelection(oIdx)}
-                      className={`w-full p-3.5 rounded-xl text-left text-xs font-medium border transition-all flex items-start gap-2.5 ${
-                        quizSelection === null
-                          ? 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-purple-400'
-                          : opt.isCorrect
-                          ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-400 text-emerald-900 dark:text-emerald-200 font-semibold'
-                          : isSelected
-                          ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-400 text-rose-900 dark:text-rose-200'
-                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 opacity-60'
+                      className={`w-full p-4 rounded-2xl border text-left text-xs sm:text-sm font-medium transition-all ${
+                        isSelected
+                          ? opt.isCorrect
+                            ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500 text-emerald-900 dark:text-emerald-200 font-bold'
+                            : 'bg-rose-50 dark:bg-rose-950/40 border-rose-500 text-rose-900 dark:text-rose-200 font-bold'
+                          : 'border-slate-200 dark:border-slate-800 hover:border-purple-300 dark:hover:border-purple-700 text-slate-700 dark:text-slate-200'
                       }`}
                     >
-                      <span className="w-5 h-5 rounded-full border flex items-center justify-center shrink-0 text-[10px] font-bold">
-                        {String.fromCharCode(65 + oIdx)}
-                      </span>
-                      <div className="flex-1">
-                        <div>{opt.text}</div>
-                        {quizSelection !== null && isSelected && (
-                          <div className="mt-1 text-[11px] opacity-90 italic">
-                            {opt.explanation}
-                          </div>
+                      <div className="flex items-center justify-between">
+                        <span>{opt.text}</span>
+                        {isSelected && (
+                          opt.isCorrect ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <AlertCircle className="w-4 h-4 text-rose-500" />
                         )}
                       </div>
+                      {isSelected && (
+                        <p className="mt-2 text-xs opacity-80 border-t border-slate-200/40 dark:border-slate-700/40 pt-1.5 font-normal">
+                          {opt.explanation}
+                        </p>
+                      )}
                     </button>
                   );
                 })}
               </div>
             </div>
+          )}
 
-            <div className="pt-4 mt-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs">
-              <span className="text-slate-400">Select an answer to verify</span>
+          {/* Rating Buttons (Easy, Medium, Difficult) */}
+          <div className="w-full mt-5 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
+              Rate your understanding of this card:
+            </span>
+            <div className="flex items-center gap-2">
               <button
-                onClick={() => onNavigateToCitation(currentCard.sourceCitation)}
-                className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 hover:underline font-semibold"
+                type="button"
+                onClick={() => handleRateCard('easy')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  currentCardRating === 'easy'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'bg-white dark:bg-slate-700 border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50'
+                }`}
+                title="Shortcut: Press 1"
               >
-                <span>Verify with Source Passage</span>
-                <ExternalLink className="w-3 h-3" />
+                <Check className="w-3.5 h-3.5" />
+                <span>🟢 Easy</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleRateCard('medium')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  currentCardRating === 'medium'
+                    ? 'bg-amber-500 text-white shadow-sm'
+                    : 'bg-white dark:bg-slate-700 border border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300 hover:bg-amber-50'
+                }`}
+                title="Shortcut: Press 2"
+              >
+                <span>🟡 Medium</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleRateCard('difficult')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  currentCardRating === 'difficult' || isCurrentDifficult
+                    ? 'bg-rose-600 text-white shadow-sm'
+                    : 'bg-white dark:bg-slate-700 border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 hover:bg-rose-50'
+                }`}
+                title="Shortcut: Press 3"
+              >
+                <Star className="w-3.5 h-3.5 fill-current" />
+                <span>🔴 Difficult</span>
               </button>
             </div>
           </div>
-        )}
 
-        {/* Self-Grading Buttons (Mark as Easy, Medium, or Difficult) */}
-        {viewMode === 'study' && isFlipped && (
-          <div className="flex items-center gap-2 mt-5">
+          {/* Navigation Controls */}
+          <div className="flex items-center justify-between w-full mt-4">
             <button
-              onClick={() => handleGrade(0)}
-              className="px-4 py-2 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 font-semibold text-xs border border-rose-300 dark:border-rose-800 transition-colors flex items-center gap-1.5 cursor-pointer"
-              title="Mark as Difficult (1)"
+              onClick={handlePrev}
+              disabled={currentIndex === 0}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 text-xs font-bold text-slate-700 dark:text-slate-300 transition-colors"
             >
-              <span>🔴 Difficult</span>
+              <ChevronLeft className="w-4 h-4" />
+              <span>Previous</span>
             </button>
+
+            <span className="text-xs text-slate-400 font-medium">
+              Use arrow keys to navigate
+            </span>
+
             <button
-              onClick={() => handleGrade(1)}
-              className="px-4 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 font-semibold text-xs border border-amber-300 dark:border-amber-800 transition-colors flex items-center gap-1.5 cursor-pointer"
-              title="Mark as Medium (2)"
+              onClick={handleNext}
+              disabled={currentIndex === activeCards.length - 1}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-xs font-bold text-white transition-colors shadow-sm"
             >
-              <span>🟡 Medium</span>
-            </button>
-            <button
-              onClick={() => handleGrade(2)}
-              className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-md shadow-emerald-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
-              title="Mark as Easy (3)"
-            >
-              <span>🟢 Easy</span>
+              <span>Next</span>
+              <ChevronRight className="w-4 h-4" />
             </button>
           </div>
-        )}
-      </div>
-
-      {/* Navigation Controls */}
-      <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800">
-        <button
-          onClick={handlePrev}
-          disabled={currentIndex === 0}
-          className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 transition-colors flex items-center gap-1"
-        >
-          <ChevronLeft className="w-4 h-4" />
-          <span>Previous Card</span>
-        </button>
-
-        <span className="text-xs font-mono text-slate-500">
-          Card {currentIndex + 1} / {activeCards.length}
-        </span>
-
-        <button
-          onClick={handleNext}
-          disabled={currentIndex === activeCards.length - 1}
-          className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 transition-colors flex items-center gap-1"
-        >
-          <span>Next Card</span>
-          <ChevronRight className="w-4 h-4" />
-        </button>
-      </div>
+        </div>
+      )}
     </div>
   );
 };
