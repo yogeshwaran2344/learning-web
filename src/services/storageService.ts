@@ -76,12 +76,57 @@ export class StorageService {
         nodes: [{ id: 'core', label: doc.title || 'Core Concept', group: 'core' }],
         links: []
       },
-      audioLesson: doc.audioLesson || {
-        title: doc.title || 'Audio Lecture',
-        totalDurationSeconds: 120,
-        keyAuditoryTakeaway: 'Master the fundamental principles.',
-        segments: []
-      }
+      audioLesson: (doc.audioLesson && Array.isArray(doc.audioLesson.sections) && doc.audioLesson.sections.length > 0)
+        ? doc.audioLesson
+        : {
+            id: doc.audioLesson?.id || `audio-${doc.id || 'doc'}`,
+            title: doc.audioLesson?.title || `${doc.title || 'Academic'} (Audio Overview)`,
+            totalDurationSeconds: doc.audioLesson?.totalDurationSeconds || 120,
+            sections: (Array.isArray((doc.audioLesson as any)?.segments) && (doc.audioLesson as any).segments.length > 0)
+              ? (doc.audioLesson as any).segments.map((seg: any, sIdx: number) => ({
+                  id: seg.id || `audio-sec-${sIdx + 1}`,
+                  sectionTitle: seg.title || seg.sectionTitle || `Section ${sIdx + 1}`,
+                  durationSeconds: seg.durationSeconds || 60,
+                  scriptText: seg.scriptText || seg.narration || seg.content || 'Content for audio narration.',
+                  sourceCitation: seg.sourceCitation || {
+                    id: `cite-${sIdx + 1}`,
+                    documentId: doc.id || 'general',
+                    pageNumber: seg.pageNumber || 1,
+                    sectionTitle: seg.title || `Section ${sIdx + 1}`,
+                    exactQuote: (seg.scriptText || 'Audio lesson content').slice(0, 100),
+                    contextSnippet: (seg.scriptText || 'Audio lesson content').slice(0, 200)
+                  }
+                }))
+              : (Array.isArray(doc.sections) && doc.sections.length > 0)
+                ? doc.sections.map((sec: any, sIdx: number) => ({
+                    id: `audio-sec-${sIdx + 1}`,
+                    sectionTitle: `${sIdx + 1}. ${sec.title || `Topic ${sIdx + 1}`}`,
+                    durationSeconds: Math.max(30, Math.round(((sec.content || '').split(/\s+/).length || 60) / 2.5)),
+                    scriptText: `Section ${sIdx + 1}: ${sec.title}. ${sec.content?.slice(0, 320) || 'Verified academic content.'}`,
+                    sourceCitation: {
+                      id: `acite-${sIdx + 1}`,
+                      documentId: doc.id || 'general',
+                      pageNumber: sec.pageNumber || 1,
+                      sectionTitle: sec.title || `Topic ${sIdx + 1}`,
+                      exactQuote: (sec.content || '').slice(0, 140) + '...',
+                      contextSnippet: (sec.content || '').slice(0, 220)
+                    }
+                  }))
+                : [{
+                    id: 'audio-sec-1',
+                    sectionTitle: '1. Overview & Core Principles',
+                    durationSeconds: 120,
+                    scriptText: `Welcome to this audio lesson on ${doc.title || 'the study material'}. In this lesson, we examine the fundamental principles and established formulations.`,
+                    sourceCitation: {
+                      id: 'cite-default',
+                      documentId: doc.id || 'general',
+                      pageNumber: 1,
+                      sectionTitle: 'Overview',
+                      exactQuote: 'Fundamental principles and established formulations.',
+                      contextSnippet: 'Fundamental principles and established formulations.'
+                    }
+                  }]
+          }
     };
   }
 
