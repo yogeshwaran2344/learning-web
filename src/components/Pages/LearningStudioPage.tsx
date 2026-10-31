@@ -39,6 +39,8 @@ import {
 import { OriginalDocumentView } from '../Workspace/OriginalDocumentView';
 import { PageWiseTeacherView } from '../Workspace/PageWiseTeacherView';
 import { ConceptMapView } from '../Workspace/ConceptMapView';
+import { DetailedNotesView } from '../Workspace/DetailedNotesView';
+import { WorkedExamplesView } from '../Workspace/WorkedExamplesView';
 import { FlashcardView } from '../Workspace/FlashcardView';
 import { AudioLessonView } from '../Workspace/AudioLessonView';
 import { PracticeQuizView } from '../Workspace/PracticeQuizView';
@@ -1031,196 +1033,21 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
 
             {/* 04 Detailed Notes */}
             {activeTab === 'notes' && (
-              <div className="p-6 space-y-6">
-                <div className="space-y-1">
-                  <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
-                    <BookOpen className="w-4 h-4" />
-                    <span>04. Structured Detailed Notes ({currentLanguage} • {difficulty})</span>
-                  </span>
-                  <h2 className="text-2xl font-black text-slate-900 dark:text-white">
-                    {currentNotes.title}
-                  </h2>
-                </div>
-
-                {currentNotes.overview && (
-                  <div className="p-4 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
-                    <span className="font-bold text-indigo-900 dark:text-indigo-300">Curriculum Scope: </span>
-                    {currentNotes.overview}
-                  </div>
-                )}
-
-                {/* Multi-Section Academic Notes */}
-                {currentNotes.sections && currentNotes.sections.length > 0 ? (
-                  <div className="space-y-5">
-                    {currentNotes.sections.map((secItem: any, sIdx: number) => (
-                      <div key={sIdx} className="p-6 rounded-3xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                              Page / Slide {secItem.pageOrSlide}
-                            </span>
-                            <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                              {secItem.heading}
-                            </h3>
-                          </div>
-                          {secItem.sourceCitation && (
-                            <button
-                              onClick={() => handleCitationClick(secItem.sourceCitation)}
-                              className="px-2.5 py-1 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-bold text-xs flex items-center gap-1 transition-colors"
-                            >
-                              <span>View Source</span>
-                              <ExternalLink className="w-3 h-3" />
-                            </button>
-                          )}
-                        </div>
-
-                        {/* Rigorous Academic Breakdown */}
-                        <p className="text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed font-serif">
-                          {secItem.rigorousBreakdown || secItem.overview}
-                        </p>
-
-                        {/* Definitions */}
-                        {secItem.definitions && secItem.definitions.length > 0 && (
-                          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2 text-xs">
-                            <div className="font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider text-[10px]">
-                              Formal Definitions:
-                            </div>
-                            {secItem.definitions.map((def: any, defIdx: number) => (
-                              <div key={defIdx} className="space-y-0.5">
-                                <span className="font-bold text-slate-900 dark:text-white">{def.term}: </span>
-                                <span className="text-slate-600 dark:text-slate-300">{def.definition}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Preserved Equations */}
-                        {secItem.equations && secItem.equations.length > 0 && (
-                          <div className="p-4 rounded-2xl bg-slate-100 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 space-y-2 text-xs">
-                            <div className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-[10px]">
-                              Preserved Formulations (Zero Alterations):
-                            </div>
-                            {secItem.equations.map((eq: any, eqIdx: number) => (
-                              <div key={eqIdx} className="font-mono bg-white dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
-                                <div className="text-brand-600 dark:text-brand-400 font-bold">{eq.latex}</div>
-                                <p className="text-slate-500 text-[11px] mt-1 font-sans">{eq.meaning}</p>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Boundary Conditions */}
-                        {secItem.conditions && secItem.conditions.length > 0 && (
-                          <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2">
-                            <span className="font-bold shrink-0">Invariant Condition:</span>
-                            <span>{secItem.conditions.join('; ')}</span>
-                          </div>
-                        )}
-
-                        {/* Key Takeaways */}
-                        {secItem.keyPoints && secItem.keyPoints.length > 0 && (
-                          <ul className="space-y-1 text-xs text-slate-600 dark:text-slate-300 pt-2 border-t border-slate-200 dark:border-slate-700/60">
-                            {secItem.keyPoints.map((kp: string, kpIdx: number) => (
-                              <li key={kpIdx} className="flex items-start gap-2">
-                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-1.5 shrink-0" />
-                                <span>{kp}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="p-6 rounded-3xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-4">
-                    <p className="text-sm sm:text-base text-slate-800 dark:text-slate-200 leading-relaxed font-serif">
-                      {currentNotes.rigorousBreakdown}
-                    </p>
-                  </div>
-                )}
-              </div>
+              <DetailedNotesView
+                document={document}
+                onNavigateToCitation={handleCitationClick}
+                onSaveNotes={(updatedSuite) => {
+                  (document as any).notes = updatedSuite;
+                }}
+              />
             )}
 
             {/* 05 Worked Examples */}
             {activeTab === 'worked' && (
-              <div className="p-6 space-y-6">
-                <div className="space-y-1">
-                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                    <FlaskConical className="w-4 h-4" />
-                    <span>05. Step-by-Step Worked Problem & Calculation ({currentLanguage})</span>
-                  </span>
-                  <h2 className="text-2xl font-black text-slate-900 dark:text-white">
-                    {currentWorked.title}
-                  </h2>
-                </div>
-
-                <div className="p-6 rounded-3xl bg-slate-900 text-slate-100 border border-slate-800 space-y-5 text-xs sm:text-sm">
-                  {/* Problem Statement Card */}
-                  <div className="p-5 rounded-2xl bg-slate-950 border border-emerald-500/30 space-y-3">
-                    <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-emerald-400">
-                      <span>Problem Statement & Parameters</span>
-                      <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 text-[10px]">
-                        Invariant Verified
-                      </span>
-                    </div>
-                    <p className="text-slate-200 font-sans leading-relaxed text-sm">
-                      {currentWorked.problemStatement}
-                    </p>
-
-                    {/* Given Parameters */}
-                    {currentWorked.givenParameters && currentWorked.givenParameters.length > 0 && (
-                      <div className="pt-2 border-t border-slate-800 space-y-1 font-mono text-xs text-slate-400">
-                        <div className="text-[11px] font-bold text-slate-300 uppercase">Given Variables:</div>
-                        {currentWorked.givenParameters.map((p: string, pIdx: number) => (
-                          <div key={pIdx} className="text-emerald-300/90">• {p}</div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Formula Applied */}
-                  {currentWorked.formulaApplied && (
-                    <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between font-mono text-xs">
-                      <span className="text-slate-400">Governing Formulation:</span>
-                      <code className="text-emerald-400 font-bold text-sm">{currentWorked.formulaApplied}</code>
-                    </div>
-                  )}
-
-                  {/* Step-by-Step Solution */}
-                  <div className="space-y-3 font-sans">
-                    <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                      Rigorous Step-by-Step Derivation & Verification
-                    </div>
-                    {Array.isArray(currentWorked.solutionSteps) ? (
-                      currentWorked.solutionSteps.map((step: string, sIdx: number) => (
-                        <div key={sIdx} className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 text-xs text-slate-200 leading-relaxed font-mono">
-                          {step}
-                        </div>
-                      ))
-                    ) : (
-                      <pre className="whitespace-pre-line text-xs font-mono p-4 rounded-2xl bg-slate-950 border border-slate-800">
-                        {currentWorked.solutionSteps}
-                      </pre>
-                    )}
-                  </div>
-
-                  {/* View Source Action */}
-                  {currentWorked.citation && (
-                    <div className="pt-4 border-t border-slate-800 flex items-center justify-between text-xs">
-                      <span className="text-slate-400 font-sans">
-                        Grounded against Page / Slide {currentWorked.citation.pageNumber} ({currentWorked.citation.sectionTitle})
-                      </span>
-                      <button
-                        onClick={() => handleCitationClick(currentWorked.citation)}
-                        className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-colors"
-                      >
-                        <span>View Source Passage</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <WorkedExamplesView
+                document={document}
+                onNavigateToCitation={handleCitationClick}
+              />
             )}
 
             {/* 06 Flashcards */}

@@ -382,6 +382,78 @@ export interface MeaningPreservationReport {
   verifiedByEngine: boolean;
 }
 
+export type AcademicContentType =
+  | 'theory'
+  | 'mathematics'
+  | 'numerical'
+  | 'programming'
+  | 'diagrams'
+  | 'tables'
+  | 'equations'
+  | 'scanned_notes';
+
+export interface TopicNoteSection {
+  id: string;
+  topicId: string;
+  topicTitle: string;
+  chapterTitle?: string;
+  pageOrSlide: number | string;
+  contentType: AcademicContentType;
+  introduction: string;
+  detailedExplanation: string;
+  shortSummary: string; // for short notes mode
+  definitions: { term: string; definition: string; conditions?: string }[];
+  keyPrinciples: string[];
+  equations: { latex: string; label: string; meaning: string; derivation?: string }[];
+  diagrams?: { title: string; components: string[]; working: string; asciiOrSvg?: string }[];
+  tables?: { caption: string; headers: string[]; rows: string[][]; comparisonSummary?: string }[];
+  conditionsAndExceptions: string[];
+  examRevisionPoints: string[];
+  sourceCitation: SourceCitation;
+  isFlaggedUncertain?: boolean;
+  uncertaintyReason?: string;
+  isUserEdited?: boolean;
+}
+
+export interface DetailedNotesSuite {
+  documentId: string;
+  documentTitle: string;
+  overview: string;
+  sections: TopicNoteSection[];
+  mode: 'short' | 'detailed';
+  lastGeneratedAt?: string;
+}
+
+export interface WorkedStep {
+  stepNumber: number;
+  statement: string;
+  calculation?: string;
+  rationale: string; // "Why this step is performed"
+  intermediateResult?: string;
+}
+
+export interface WorkedExampleItem {
+  id: string;
+  topicId?: string;
+  topicTitle: string;
+  title: string;
+  problemStatement: string;
+  givenParameters: string[];
+  formulaApplied: string;
+  methodRequired: string;
+  solutionSteps: WorkedStep[];
+  finalAnswer: string;
+  verification: string;
+  citation: SourceCitation;
+}
+
+export interface WorkedExamplesSuite {
+  documentId: string;
+  documentTitle: string;
+  title: string;
+  examples: WorkedExampleItem[];
+}
+
 export interface AcademicDocument {
   id: string;
   title: string;
@@ -407,6 +479,8 @@ export interface AcademicDocument {
   flashcards: Flashcard[];
   audioLesson: AudioLesson;
   meaningPreservation: MeaningPreservationReport;
+  notes?: DetailedNotesSuite;
+  worked?: WorkedExamplesSuite;
   lastStudiedAt?: string;
   studyProgressPercent?: number;
 }

@@ -238,8 +238,8 @@ export class AssessmentService {
     const questions: QuizQuestion[] = [];
     const sections = document.sections || [];
     const docLower = (document.title + ' ' + (document.summary || '') + ' ' + sections.map(s => s.title + ' ' + s.content).join(' ')).toLowerCase();
-    const isOsDocument = docLower.includes('cpu scheduling') || docLower.includes('process') || docLower.includes('fcfs') || docLower.includes('round robin');
     const isPhysicsOrBio = docLower.includes('photosynthesis') || docLower.includes('quantum') || docLower.includes('wave') || docLower.includes('elasticity');
+    const isOsDocument = !isPhysicsOrBio && (docLower.includes('cpu scheduling') || docLower.includes('process scheduling') || docLower.includes('process concept') || docLower.includes('process state') || docLower.includes('fcfs') || docLower.includes('round robin') || docLower.includes('operating system'));
 
     // Filter relevant sections/topics based on scope
     let relevantSections = sections;
