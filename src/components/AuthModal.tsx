@@ -240,7 +240,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center">
             One-Click Instant Sign In
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-1.5">
+            <button
+              type="button"
+              disabled={isLoading}
+              onClick={async () => {
+                setIsLoading(true);
+                setErrorMessage('');
+                try {
+                  const res = await ApiClient.login('pooja@university.edu', 'student123');
+                  onSuccess(res.user);
+                } catch (e: any) {
+                  setErrorMessage(e.message || 'Login failed');
+                } finally {
+                  setIsLoading(false);
+                }
+              }}
+              className="py-2 px-2 rounded-xl bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 text-[11px] font-bold transition-all text-center cursor-pointer"
+            >
+              🎓 Student (Pooja)
+            </button>
             <button
               type="button"
               disabled={isLoading}
@@ -256,7 +275,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   setIsLoading(false);
                 }
               }}
-              className="py-2 px-3 rounded-xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-bold transition-all text-center cursor-pointer"
+              className="py-2 px-2 rounded-xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-[11px] font-bold transition-all text-center cursor-pointer"
             >
               🎓 Student (Alex)
             </button>
@@ -275,9 +294,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   setIsLoading(false);
                 }
               }}
-              className="py-2 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold transition-all text-center cursor-pointer"
+              className="py-2 px-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[11px] font-bold transition-all text-center cursor-pointer"
             >
-              👨‍🏫 Faculty (Prof. Ramesh)
+              👨‍🏫 Faculty
             </button>
           </div>
         </div>

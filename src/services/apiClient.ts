@@ -107,6 +107,38 @@ export class ApiClient {
     });
 
     if (!res.ok) {
+      // Auto-recover from 401 in development mode if session expired or lost
+      if (res.status === 401 && typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+        console.warn('[ApiClient] 401 session expired or invalid in dev mode. Auto-recovering student session...');
+        try {
+          const loginRes = await fetch(`${API_BASE}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: 'alex.rivera@university.edu', password: 'student123' })
+          });
+          if (loginRes.ok) {
+            const loginData = await loginRes.json();
+            if (loginData?.token) {
+              this.setToken(loginData.token);
+              // Retry with fresh token
+              const retryHeaders = {
+                ...headers,
+                'Authorization': `Bearer ${loginData.token}`
+              };
+              const retryRes = await fetch(`${API_BASE}${endpoint}`, {
+                ...options,
+                headers: retryHeaders
+              });
+              if (retryRes.ok) {
+                return retryRes.json();
+              }
+            }
+          }
+        } catch (recoverErr) {
+          console.warn('[ApiClient] Auto-reauthentication attempt failed:', recoverErr);
+        }
+      }
+
       if (res.status === 401) {
         this.logout();
         if (typeof window !== 'undefined') {
