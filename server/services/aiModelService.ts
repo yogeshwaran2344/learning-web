@@ -540,7 +540,7 @@ ${sec.content.slice(0, 2500)}`;
     language: AppLanguage,
     difficulty: DifficultyLevel
   ): Promise<GeneratedFormatResult | null> {
-    const targetSections = sections.slice(0, 4);
+    const targetSections = sections;
     const promptContext = targetSections.map((s, idx) => `
 [Section ${idx + 1} (Page ${s.pageNumber || s.slideNumber || idx + 1}): "${s.title}"]
 ${s.content}
@@ -626,7 +626,7 @@ ${promptContext}`;
     language: AppLanguage,
     difficulty: DifficultyLevel
   ): Promise<GeneratedFormatResult | null> {
-    const targetSections = sections.slice(0, 4);
+    const targetSections = sections;
     const promptContext = targetSections.map((s, idx) => `
 [Section ${idx + 1} (Page ${s.pageNumber || s.slideNumber || idx + 1}): "${s.title}"]
 ${s.content}

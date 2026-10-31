@@ -33,13 +33,36 @@ export interface DocumentUnderstandingResult {
   extractionConfidence: number; // Optical & syntactic reliability score
 }
 
+// Comprehensive institutional and administrative noise classifier
+const INSTITUTION_NOISE_PATTERNS = [
+  /^(?:college|university|institute|school|department|dept\.?|faculty)\s+of\b/i,
+  /\b(?:institute of technology|autonomous college|affiliated to|deemed to be university)\b/i,
+  /\b(?:internal assessment|semester examination|mid-term|end-semester|model question paper)\b/i,
+  /\b(?:course code|subject code|scheme|branch|sub code|usn|roll no|reg(?:istration)?\.?\s*no)\s*[:.\-]/i,
+  /\b(?:maximum marks|max marks|time limit|duration\s*:\s*\d+\s*(?:hours|hrs|mins?))\b/i,
+  /\b(?:prepared by|guided by|presented by|submitted by|submitted to|instructor\s*:|faculty\s*:)\b/i,
+  /\b(?:lecture notes for\s+\w+|for internal circulation only|confidential|all rights reserved)\b/i,
+  /\b(?:copyright\s*©?|downloaded from|visit\s*:\s*www\.|www\.[a-z0-9-]+\.[a-z]{2,})\b/i,
+  /^(?:page\s*\d+\s*of\s*\d+|slide\s*\d+\s*of\s*\d+)$/i
+];
+
+function isAdministrativeNoise(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.length < 3) return false;
+  // Guard: Never remove formulas, equations, definitions, or academic content
+  if (/^(\$\$?[^$]+\$\$?|[a-z]\s*=|def(inition)?\b|theorem\b|lemma\b|algorithm\b|proof\b)/i.test(trimmed)) {
+    return false;
+  }
+  return INSTITUTION_NOISE_PATTERNS.some(pat => pat.test(trimmed));
+}
+
 export class DocumentUnderstandingService {
   /**
    * Intermediate understanding stage:
-   * 1. Identifies chapters, topics, and hierarchical structure.
+   * 1. Identifies genuine chapters, topics, and hierarchical structure.
    * 2. Separates headings, definitions, examples, formulas, tables, and conditions.
-   * 3. Identifies prerequisite and causal relationships between concepts.
-   * 4. Detects and removes repeated content (e.g. slide footers, page boilerplate).
+   * 3. Identifies evidenced prerequisite and derivation relationships between concepts.
+   * 4. Detects and removes administrative metadata, college headers, and repeated boilerplate.
    * 5. Divides document into pedagogically meaningful sections with exact source anchors.
    */
   static analyze(
@@ -52,7 +75,7 @@ export class DocumentUnderstandingService {
     const relationships: ConceptRelationship[] = [];
     let deduplicatedCount = 0;
 
-    // Detect repeated boilerplate lines (such as "Page X of Y", course codes, slide footers)
+    // Detect repeated boilerplate lines (such as "Page X of Y", slide footers)
     const lineFrequency: Record<string, number> = {};
     for (const sec of rawSections) {
       const lines = sec.content.split('\n').map(l => l.trim()).filter(l => l.length > 5 && l.length < 80);
@@ -69,7 +92,7 @@ export class DocumentUnderstandingService {
     }
 
     const processedSections: ExtractedSectionRecord[] = [];
-    const allExtractedConcepts: { name: string; page: number }[] = [];
+    const allExtractedConcepts: { name: string; page: number; contextSnippet: string }[] = [];
 
     // Process each section
     for (let sIdx = 0; sIdx < rawSections.length; sIdx++) {
@@ -77,10 +100,10 @@ export class DocumentUnderstandingService {
       const pageNum = rawSec.pageNumber || sIdx + 1;
       const slideNum = rawSec.slideNumber;
 
-      // 1. Remove repeated boilerplate lines
+      // 1. Remove repeated boilerplate lines AND administrative institutional noise
       const cleanLines = rawSec.content.split('\n').filter(line => {
         const trimmed = line.trim();
-        if (boilerplateLines.has(trimmed)) {
+        if (boilerplateLines.has(trimmed) || isAdministrativeNoise(trimmed)) {
           deduplicatedCount++;
           return false;
         }
@@ -101,6 +124,14 @@ export class DocumentUnderstandingService {
 
       // 3. Extract Definitions
       const definitions = [...(rawSec.definitions || [])];
+
+      // Seed pre-existing definitions from raw section into allExtractedConcepts
+      (rawSec.definitions || []).forEach(d => {
+        if (!allExtractedConcepts.some(c => c.name.toLowerCase() === d.term.toLowerCase())) {
+          allExtractedConcepts.push({ name: d.term, page: pageNum, contextSnippet: cleanContent });
+        }
+      });
+
       const sentences = cleanContent.split(/(?<=[.?!])\s+/);
       sentences.forEach((sent, idx) => {
         if (/is defined as|refers to|denotes|is defined by|is called|is a mechanism|means/i.test(sent)) {
@@ -114,7 +145,9 @@ export class DocumentUnderstandingService {
                 definition: defText,
                 conditions: 'Extracted academic definition'
               });
-              allExtractedConcepts.push({ name: term, page: pageNum });
+              if (!allExtractedConcepts.some(c => c.name.toLowerCase() === term.toLowerCase())) {
+                allExtractedConcepts.push({ name: term, page: pageNum, contextSnippet: sent });
+              }
               elements.push({
                 id: `elem-def-${sIdx + 1}-${idx}`,
                 type: 'definition',
@@ -227,25 +260,45 @@ export class DocumentUnderstandingService {
       });
     }
 
-    // 8. Identify Relationships between concepts (Prerequisite & Derivation Flow)
+    // 8. Identify Relationships between concepts with genuine lexical/semantic evidence
+    // Never assume arbitrary prerequisite based merely on page numbers!
+    const DEPENDENCY_KEYWORDS = [
+      'requires', 'depends on', 'utilizes', 'uses', 'builds upon', 'extends',
+      'is derived from', 'derived from', 'governed by', 'constrained by',
+      'prerequisite', 'is an instance of', 'is based on', 'derives'
+    ];
+
     for (let i = 0; i < allExtractedConcepts.length; i++) {
-      for (let j = i + 1; j < allExtractedConcepts.length; j++) {
+      for (let j = 0; j < allExtractedConcepts.length; j++) {
+        if (i === j) continue;
         const c1 = allExtractedConcepts[i];
         const c2 = allExtractedConcepts[j];
-        if (c1.name !== c2.name) {
+        if (c1.name.toLowerCase() === c2.name.toLowerCase()) continue;
+
+        // Check if c2 context explicitly mentions c1 outside c2's own name occurrence
+        const c2Text = c2.contextSnippet.toLowerCase();
+        const c1Term = c1.name.toLowerCase();
+        const c2WithoutSelf = c2Text.split(c2.name.toLowerCase()).join('');
+        if (c2WithoutSelf.includes(c1Term)) {
+          const isDerivation = c2Text.includes('derived from') || c2Text.includes('derives') || c2Text.includes('derivation');
+          const isPrerequisite = DEPENDENCY_KEYWORDS.some(kw => c2Text.includes(kw));
+
           relationships.push({
             sourceConcept: c1.name,
             targetConcept: c2.name,
-            relationshipType: c1.page < c2.page ? 'prerequisite' : 'derivation',
-            confidence: 88,
-            sourcePage: c1.page
+            relationshipType: isDerivation ? 'derivation' : isPrerequisite ? 'prerequisite' : 'applies_to',
+            confidence: 92,
+            sourcePage: c1.page,
+            targetPage: c2.page,
+            evidence: `Textual evidence linking ${c1.name} with ${c2.name}`
           });
         }
       }
     }
 
-    // 9. Identify Chapters & Topic Groupings Grounded in Actual Document Structure
+    // 9. Identify Genuine Chapters & Topic Groupings Grounded in Actual Document Structure
     // Never arbitrarily divide sections into equal-sized chunks or fixed slices of 3.
+    // If a document has no explicit chapters, group topics by genuine section headings or mark as Unclassified.
     const chapters: { title: string; startPage: number; endPage: number; keyTopics: string[] }[] = [];
     let currentChapter: { title: string; startPage: number; endPage: number; keyTopics: string[] } | null = null;
 
@@ -253,26 +306,38 @@ export class DocumentUnderstandingService {
       const title = (sec.title || '').trim();
       const explicitChapter = (sec.chapterTitle || '').trim();
 
-      // Check for explicit chapter / unit / module or top-level numbered headings
+      // Check for explicit chapter / unit / module or top-level numbered headings (e.g. "1. ", "Chapter 1", "Module 2")
       const chapterMatch = title.match(/^(?:chapter|module|unit|part)\s+(\d+|[ivxlcdm]+)[:.\s\-–—]+(.+)/i);
-      const numberedMatch = title.match(/^(\d+)\.\s+([A-Z][^.\n]+)/);
-      const isNewChapterExplicit = explicitChapter && (!currentChapter || currentChapter.title !== explicitChapter);
-      const isNewChapterDetected = Boolean(chapterMatch || (numberedMatch && !title.match(/^\d+\.\d+/)));
+      const majorHeadingMatch = title.match(/^(\d+)\.\s+([A-Z][^.\n]+)/);
+      const isSubtopicMatch = Boolean(title.match(/^\d+\.\d+/)); // e.g. "2.1 Process Concept" -> subtopic, not new chapter
 
-      if (isNewChapterExplicit || isNewChapterDetected || !currentChapter) {
+      const isNewChapterExplicit = explicitChapter && (!currentChapter || currentChapter.title !== explicitChapter);
+      const isNewChapterDetected = Boolean(chapterMatch || (majorHeadingMatch && !isSubtopicMatch));
+
+      if (isNewChapterExplicit || isNewChapterDetected) {
         if (currentChapter) {
           chapters.push(currentChapter);
         }
-        const chapterTitle = explicitChapter || (chapterMatch ? title : (numberedMatch ? title : `Topic Group ${chapters.length + 1}: ${title}`));
+        const chapterTitle = explicitChapter || (chapterMatch ? title : (majorHeadingMatch ? title : title));
         currentChapter = {
           title: chapterTitle,
           startPage: sec.pageNumber || 1,
           endPage: sec.pageNumber || 1,
           keyTopics: [title]
         };
+      } else if (!currentChapter) {
+        // First chapter title: use explicitChapter, or section title, or "Unclassified Section"
+        const initialTitle = explicitChapter || (chapterMatch ? title : (majorHeadingMatch ? title : (title || 'Unclassified Section')));
+        currentChapter = {
+          title: initialTitle,
+          startPage: sec.pageNumber || 1,
+          endPage: sec.pageNumber || 1,
+          keyTopics: [title]
+        };
       } else {
+        // Topic belongs to current chapter or continues previous topic
         currentChapter.endPage = Math.max(currentChapter.endPage, sec.pageNumber || currentChapter.startPage);
-        if (currentChapter.keyTopics.length < 8 && !currentChapter.keyTopics.includes(title)) {
+        if (currentChapter.keyTopics.length < 12 && !currentChapter.keyTopics.includes(title)) {
           currentChapter.keyTopics.push(title);
         }
       }

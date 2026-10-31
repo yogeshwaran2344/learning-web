@@ -68,6 +68,7 @@ interface LearningStudioPageProps {
   onOpenFeedback: () => void;
   voiceGender?: 'female' | 'male';
   onVoiceGenderChange?: (gender: 'female' | 'male') => void;
+  onOpenTopicExplorer?: () => void;
 }
 
 export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
@@ -82,7 +83,8 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
   onSaveItem,
   onOpenFeedback,
   voiceGender,
-  onVoiceGenderChange
+  onVoiceGenderChange,
+  onOpenTopicExplorer
 }) => {
   const [activeTab, setActiveTab] = useState<StudioTab>(initialTab);
   const [isSplitView, setIsSplitView] = useState<boolean>(true);
@@ -497,6 +499,17 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {onOpenTopicExplorer && (
+              <button
+                onClick={onOpenTopicExplorer}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-800 flex items-center gap-1.5 transition-all self-start md:self-auto shadow-sm cursor-pointer"
+                title="Open dedicated Explore Your Topics view"
+              >
+                <FolderTree className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                <span>Explore Topics</span>
+              </button>
+            )}
+
             {/* Step 38: Export Package Button */}
             <button
               onClick={() => setIsExportModalOpen(true)}

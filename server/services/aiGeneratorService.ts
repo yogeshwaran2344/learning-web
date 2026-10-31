@@ -32,15 +32,21 @@ export class AiGeneratorService {
   ): Promise<GeneratedFormatResult> {
     // 1. Try real external AI model if configured
     if (AiModelService.hasExternalAiProvider()) {
-      const aiResult = await AiModelService.generateWithAi(
-        documentId,
-        docTitle,
-        sections,
-        formatType,
-        language,
-        difficulty
-      );
-      if (aiResult) return aiResult;
+      try {
+        const aiResult = await AiModelService.generateWithAi(
+          documentId,
+          docTitle,
+          sections,
+          formatType,
+          language,
+          difficulty
+        );
+        if (aiResult) return aiResult;
+      } catch (err: any) {
+        console.error(`[AiGeneratorService] External AI provider error for ${formatType}:`, err);
+        throw new Error(`AI generation failed: ${err.message || 'External AI provider unavailable'}. Please verify your API key or retry.`);
+      }
+      throw new Error(`AI generation failed: External AI provider returned empty or malformed output for ${formatType}. Please retry.`);
     }
 
     // 2. High-fidelity deterministic academic generation logic
@@ -546,6 +552,22 @@ export class AiGeneratorService {
       };
       citations.push(citation);
 
+      const cardDistractors = sections.filter((_, oIdx) => oIdx !== idx).slice(0, 3).map((os) => {
+        const osText = os.definitions?.[0]?.definition || os.content.split(/[.?!]\s+/)[0] || `Principles of ${os.title}`;
+        return {
+          text: osText.slice(0, 100),
+          isCorrect: false,
+          explanation: `Incorrect: This statement describes "${os.title}", not "${sec.title}".`
+        };
+      });
+      while (cardDistractors.length < 3) {
+        cardDistractors.push({
+          text: `Alternative interpretation inconsistent with "${sec.title}".`,
+          isCorrect: false,
+          explanation: `Incorrect: Does not align with statements on Page ${sec.pageNumber || 1}.`
+        });
+      }
+
       flashcards.push({
         id: `fc-${documentId}-${idx + 1}`,
         front,
@@ -560,9 +582,7 @@ export class AiGeneratorService {
         explanation: `Sourced from Page ${sec.pageNumber || 1}: ${sec.title}`,
         practiceOptions: [
           { text: back, isCorrect: true, explanation: 'Directly stated in the source document.' },
-          { text: 'Contradicts the invariant parameter bounds.', isCorrect: false, explanation: 'Incorrect: contradicts verified invariants.' },
-          { text: 'Unverified approximation without proof.', isCorrect: false, explanation: 'Incorrect: not supported by source.' },
-          { text: 'Legacy assumption omitted in modern models.', isCorrect: false, explanation: 'Incorrect: not applicable.' }
+          ...cardDistractors.slice(0, 3)
         ]
       });
 
@@ -580,10 +600,44 @@ export class AiGeneratorService {
         };
         citations.push(eqCitation);
 
+        const otherEquations = sections.flatMap(s => s.equations || []).filter(e => e.latex !== eq.latex);
+        const eqDistractors = otherEquations.slice(0, 3).map(oe => ({
+          text: oe.latex,
+          isCorrect: false,
+          explanation: `Incorrect: This formulation represents "${oe.label || 'another concept'}", not "${eq.label || sec.title}".`
+        }));
+        if (eqDistractors.length < 3) {
+          eqDistractors.push({
+            text: eq.latex.replace(/([+*])/g, '-'),
+            isCorrect: false,
+            explanation: 'Incorrect: Contains inverted mathematical operators.'
+          });
+        }
+        if (eqDistractors.length < 3) {
+          eqDistractors.push({
+            text: eq.latex.replace(/\b\d+\b/g, (m) => String(Number(m) + 1)),
+            isCorrect: false,
+            explanation: 'Incorrect: Contains altered constant parameters.'
+          });
+        }
+        if (eqDistractors.length < 3) {
+          eqDistractors.push({
+            text: eq.latex + ' + \\Delta',
+            isCorrect: false,
+            explanation: 'Incorrect: Introduces unverified offset parameter.'
+          });
+        }
+
+        let eqFront = `What is the equation for ${eq.label || sec.title}?`;
+        if (eqFront.length > 140) eqFront = eqFront.slice(0, 137) + '...';
+
+        let eqBack = `${eq.latex} — ${eq.meaning || 'Core theoretical model'}`;
+        if (eqBack.length > 200) eqBack = eqBack.slice(0, 197) + '...';
+
         flashcards.push({
           id: `fc-${documentId}-eq-${idx + 1}`,
-          front: `What is the equation for ${eq.label || sec.title}?`,
-          back: `${eq.latex} — ${eq.meaning || 'Core theoretical model'}`,
+          front: eqFront,
+          back: eqBack,
           pageOrSlide: sec.pageNumber || sec.slideNumber || idx + 1,
           sectionTitle: sec.title,
           category: 'equation',
@@ -594,9 +648,7 @@ export class AiGeneratorService {
           explanation: `Equation verified from Page ${sec.pageNumber || 1}.`,
           practiceOptions: [
             { text: eq.latex, isCorrect: true, explanation: 'Verified mathematical formulation.' },
-            { text: 'Formula missing normalization constant', isCorrect: false, explanation: 'Incorrect: normalization is mandatory.' },
-            { text: 'Linear regression without boundary limits', isCorrect: false, explanation: 'Incorrect model.' },
-            { text: 'Heuristic estimate with empirical noise', isCorrect: false, explanation: 'Incorrect.' }
+            ...eqDistractors.slice(0, 3)
           ]
         });
       }
@@ -678,7 +730,7 @@ export class AiGeneratorService {
     };
   }
 
-  // --- 7. Practice Quizzes: Clear Questions & Explanations for All Options ---
+  // --- 7. Practice Quizzes: Diverse Questions (MCQ, T/F, Fill-in, Short Answer, Numerical) with Dynamic Distractors ---
   private static generatePracticeQuiz(
     documentId: string,
     sections: ExtractedSectionRecord[],
@@ -687,14 +739,10 @@ export class AiGeneratorService {
   ): GeneratedFormatResult {
     const citations: SourceCitationRecord[] = [];
 
-    const questions = sections.slice(0, 4).map((sec, idx) => {
-      const sentence = sec.content.split(/[.?!]\s+/)[0] + '.';
-      let question = `What does Section ${idx + 1} ("${sec.title}") verify regarding system operations?`;
-      if (language === 'Kannada') {
-        question = `ವಿಭಾಗ ${idx + 1} ("${sec.title}") ರ ಪ್ರಕಾರ ಕೆಳಗಿನ ಯಾವ ಹೇಳಿಕೆಯು ಸರಿಯಾಗಿದೆ?`;
-      } else if (language === 'Hindi') {
-        question = `अध्याय ${idx + 1} ("${sec.title}") के संदर्भ में कौन सा कथन सही और सत्यापित है?`;
-      }
+    const questions = sections.map((sec, idx) => {
+      const sentences = sec.content.split(/[.?!]\s+/).map(s => s.trim()).filter(s => s.length > 15);
+      const mainSentence = sentences[0] || sec.content.slice(0, 150) + '.';
+      const otherSections = sections.filter((_, oIdx) => oIdx !== idx);
 
       const citation: SourceCitationRecord = {
         id: `q-cite-${idx + 1}`,
@@ -702,37 +750,261 @@ export class AiGeneratorService {
         pageNumber: sec.pageNumber || 1,
         slideNumber: sec.slideNumber,
         sectionTitle: sec.title,
-        exactQuote: sentence,
+        exactQuote: mainSentence,
         contextSnippet: sec.content.slice(0, 200)
       };
       citations.push(citation);
 
+      // Determine question type dynamically based on academic content & index
+      const hasEquations = sec.equations && sec.equations.length > 0;
+      const questionType = hasEquations
+        ? 'numerical'
+        : idx % 4 === 1
+        ? 'true_false'
+        : idx % 4 === 2
+        ? 'fill_blank'
+        : idx % 4 === 3
+        ? 'short_answer'
+        : 'multiple_choice';
+
+      // 1. Numerical / Equation-based question
+      if (questionType === 'numerical' && hasEquations) {
+        const eq = sec.equations![0];
+        let qText = `According to Section "${sec.title}", what is the mathematically verified formulation for ${eq.label || sec.title}?`;
+        if (language === 'Kannada') {
+          qText = `ವಿಭಾಗ "${sec.title}" ರ ಪ್ರಕಾರ, ${eq.label || sec.title} ಗಾಗಿ ಪರಿಶೀಲಿಸಲಾದ ಗಣಿತದ ಸಮೀಕರಣ ಯಾವುದು?`;
+        } else if (language === 'Hindi') {
+          qText = `अनुभाग "${sec.title}" के अनुसार, ${eq.label || sec.title} के लिए सत्यापित गणितीय समीकरण क्या है?`;
+        }
+
+        const otherEqs = sections.flatMap(s => s.equations || []).filter(e => e.latex !== eq.latex);
+        const distractors = otherEqs.slice(0, 3).map(oe => ({
+          text: oe.latex,
+          isCorrect: false,
+          explanation: `Incorrect: This formulation defines "${oe.label || 'another concept'}", not "${eq.label || sec.title}".`
+        }));
+        if (distractors.length < 3) {
+          distractors.push({
+            text: eq.latex.replace(/([+*])/g, '-'),
+            isCorrect: false,
+            explanation: 'Incorrect: Contains altered mathematical operators.'
+          });
+        }
+        if (distractors.length < 3) {
+          distractors.push({
+            text: eq.latex.replace(/\b\d+\b/g, (m) => String(Number(m) + 1)),
+            isCorrect: false,
+            explanation: 'Incorrect: Contains altered numeric coefficients.'
+          });
+        }
+        if (distractors.length < 3) {
+          distractors.push({
+            text: eq.latex + ' \\cdot \\gamma',
+            isCorrect: false,
+            explanation: 'Incorrect: Introduces unverified scaling parameter.'
+          });
+        }
+
+        return {
+          id: `q-${documentId}-${idx + 1}`,
+          type: 'numerical',
+          question: qText,
+          category: 'equation',
+          difficulty,
+          formula: eq.latex,
+          options: [
+            {
+              text: eq.latex,
+              isCorrect: true,
+              explanation: `Correct: Verified equation directly sourced from Page ${sec.pageNumber || 1}.`
+            },
+            ...distractors.slice(0, 3)
+          ],
+          sourceCitation: citation
+        };
+      }
+
+      // 2. True / False question (4-option evaluation format)
+      if (questionType === 'true_false') {
+        const isTrueStatement = idx % 2 === 0;
+        let qText = isTrueStatement
+          ? `True or False: In ${sec.title}, "${mainSentence}"`
+          : `True or False: In ${sec.title}, the process operates without boundary conditions or state invariants.`;
+
+        if (language === 'Kannada') {
+          qText = isTrueStatement
+            ? `ಸರಿ ಅಥವಾ ತಪ್ಪು: ${sec.title} ಪ್ರಕಾರ, "${mainSentence}"`
+            : `ಸರಿ ಅಥವಾ ತಪ್ಪು: ${sec.title} ನಲ್ಲಿ ಯಾವುದೇ ನಿಯಮ ಅಥವಾ ಮಿತಿಗಳಿಲ್ಲದೆ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತದೆ.`;
+        } else if (language === 'Hindi') {
+          qText = isTrueStatement
+            ? `सही या गलत: ${sec.title} के अनुसार, "${mainSentence}"`
+            : `सही या गलत: ${sec.title} बिना किसी सीमा शर्तों या नियमों के संचालित होता है।`;
+        }
+
+        return {
+          id: `q-${documentId}-${idx + 1}`,
+          type: 'true_false',
+          question: qText,
+          category: 'definition',
+          difficulty,
+          options: [
+            {
+              text: 'True',
+              isCorrect: isTrueStatement,
+              explanation: isTrueStatement
+                ? `Correct: This fact is explicitly confirmed in Page ${sec.pageNumber || 1}.`
+                : `Incorrect: This contradicts the explicit statements in "${sec.title}".`
+            },
+            {
+              text: 'False',
+              isCorrect: !isTrueStatement,
+              explanation: !isTrueStatement
+                ? `Correct: The source explicitly establishes clear conditions on Page ${sec.pageNumber || 1}.`
+                : `Incorrect: The source validates this statement directly.`
+            },
+            {
+              text: 'Partially True (under unstated conditions)',
+              isCorrect: false,
+              explanation: `Incorrect: The lecture notes for "${sec.title}" state these boundaries unambiguously.`
+            },
+            {
+              text: 'Cannot be determined from the material',
+              isCorrect: false,
+              explanation: `Incorrect: This concept is explicitly verified from Page ${sec.pageNumber || 1}.`
+            }
+          ],
+          sourceCitation: citation
+        };
+      }
+
+      // 3. Fill in the Blank question
+      if (questionType === 'fill_blank') {
+        const def = sec.definitions?.[0];
+        const keyTerm = def ? def.term : sec.title;
+        const sentenceToMask = def ? def.definition : mainSentence;
+        const maskedText = sentenceToMask.slice(0, 160).replace(new RegExp(`\\b${keyTerm}\\b`, 'i'), '_______');
+
+        let qText = `Fill in the blank for ${sec.title}: "${maskedText}"`;
+        if (language === 'Kannada') {
+          qText = `ಖಾಲಿ ಜಾಗವನ್ನು ಭರ್ತಿ ಮಾಡಿ (${sec.title}): "${maskedText}"`;
+        } else if (language === 'Hindi') {
+          qText = `रिक्त स्थान की पूर्ति करें (${sec.title}): "${maskedText}"`;
+        }
+
+        const altTerms = otherSections.map(os => os.definitions?.[0]?.term || os.title).filter(t => t.toLowerCase() !== keyTerm.toLowerCase());
+        const distractors = altTerms.slice(0, 3).map(term => ({
+          text: term,
+          isCorrect: false,
+          explanation: `Incorrect: "${term}" belongs to a different section in the document.`
+        }));
+        while (distractors.length < 3) {
+          const fallbackTerm = `Alternative Principle ${distractors.length + 1}`;
+          distractors.push({
+            text: fallbackTerm,
+            isCorrect: false,
+            explanation: `Incorrect: Does not match the concept defined in "${sec.title}".`
+          });
+        }
+
+        return {
+          id: `q-${documentId}-${idx + 1}`,
+          type: 'fill_blank',
+          question: qText,
+          category: 'definition',
+          difficulty,
+          options: [
+            {
+              text: keyTerm,
+              isCorrect: true,
+              explanation: `Correct: Sourced directly from Page ${sec.pageNumber || 1}.`
+            },
+            ...distractors.slice(0, 3)
+          ],
+          sourceCitation: citation
+        };
+      }
+
+      // 4. Short Answer / Application question
+      if (questionType === 'short_answer') {
+        let qText = `What is the core principle and operational purpose of "${sec.title}"?`;
+        if (language === 'Kannada') {
+          qText = `"${sec.title}" ದ ಮುಖ್ಯ ತತ್ವ ಮತ್ತು ಉದ್ದೇಶವೇನು?`;
+        } else if (language === 'Hindi') {
+          qText = `"${sec.title}" का मुख्य सिद्धांत और उद्देश्य क्या है?`;
+        }
+
+        const distractorPoints = otherSections.slice(0, 3).map(os => {
+          const osSummary = os.content.split(/[.?!]\s+/)[0] || os.title;
+          return {
+            text: osSummary.slice(0, 120),
+            isCorrect: false,
+            explanation: `Incorrect: This describes "${os.title}", not "${sec.title}".`
+          };
+        });
+        while (distractorPoints.length < 3) {
+          distractorPoints.push({
+            text: `An alternative operational mechanism outside the scope of ${sec.title}.`,
+            isCorrect: false,
+            explanation: `Incorrect: Not supported by the verified material on Page ${sec.pageNumber || 1}.`
+          });
+        }
+
+        return {
+          id: `q-${documentId}-${idx + 1}`,
+          type: 'short_answer',
+          question: qText,
+          category: 'definition',
+          difficulty,
+          expectedAnswer: mainSentence,
+          options: [
+            {
+              text: mainSentence,
+              isCorrect: true,
+              explanation: `Correct: Verbatim explanation from Page ${sec.pageNumber || 1}.`
+            },
+            ...distractorPoints.slice(0, 3)
+          ],
+          sourceCitation: citation
+        };
+      }
+
+      // 5. Standard Multiple Choice (MCQ) with Dynamic In-Document Distractors
+      let question = `What does Section ${idx + 1} ("${sec.title}") establish regarding its core mechanism?`;
+      if (language === 'Kannada') {
+        question = `ವಿಭಾಗ ${idx + 1} ("${sec.title}") ರ ಪ್ರಕಾರ ಕೆಳಗಿನ ಯಾವ ಹೇಳಿಕೆಯು ಸರಿಯಾಗಿದೆ?`;
+      } else if (language === 'Hindi') {
+        question = `अध्याय ${idx + 1} ("${sec.title}") के संदर्भ में कौन सा कथन सही और सत्यापित है?`;
+      }
+
+      const distractorOptions = otherSections.slice(0, 3).map(os => {
+        const osSummary = os.definitions?.[0]?.definition || os.content.split(/[.?!]\s+/)[0] || `Operational model of ${os.title}`;
+        return {
+          text: osSummary.slice(0, 120),
+          isCorrect: false,
+          explanation: `Incorrect: This statement defines "${os.title}", not "${sec.title}".`
+        };
+      });
+      while (distractorOptions.length < 3) {
+        distractorOptions.push({
+          text: `An unverified hypothesis not documented in "${sec.title}".`,
+          isCorrect: false,
+          explanation: `Incorrect: This violates the invariants established on Page ${sec.pageNumber || 1}.`
+        });
+      }
+
       return {
         id: `q-${documentId}-${idx + 1}`,
+        type: 'multiple_choice',
         question,
         category: sec.equations && sec.equations.length > 0 ? 'equation' : 'definition',
         difficulty,
         options: [
           {
-            text: sentence,
+            text: mainSentence,
             isCorrect: true,
             explanation: `Correct: Directly verified from Page/Slide ${sec.pageNumber || 1} in Section "${sec.title}".`
           },
-          {
-            text: 'System parameters are purely empirical and boundary conditions may be omitted.',
-            isCorrect: false,
-            explanation: 'Incorrect: Academic invariants must strictly hold true under all operational conditions.'
-          },
-          {
-            text: 'Applicable only under unconstrained, zero-latency environments.',
-            isCorrect: false,
-            explanation: `Incorrect: Section "${sec.title}" explicitly defines governing bounds grounded in the source text.`
-          },
-          {
-            text: 'Equations require heuristic approximations without normalization constants.',
-            isCorrect: false,
-            explanation: 'Incorrect: Normalization constants (such as 1/√d_k) are mathematically mandatory.'
-          }
+          ...distractorOptions.slice(0, 3)
         ],
         sourceCitation: citation
       };

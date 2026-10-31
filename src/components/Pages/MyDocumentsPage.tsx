@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   FolderOpen,
+  FolderTree,
   Search,
   Filter,
   FileText,
@@ -21,6 +22,7 @@ import { AcademicDocument, DocumentFileType } from '../../types';
 interface MyDocumentsPageProps {
   documents: AcademicDocument[];
   onSelectDocument: (doc: AcademicDocument) => void;
+  onNavigateToTopicExplorer?: (doc: AcademicDocument) => void;
   onOpenUpload: () => void;
   onDeleteDocument: (id: string) => void;
   onRenameDocument: (id: string, newTitle: string) => void;
@@ -30,6 +32,7 @@ interface MyDocumentsPageProps {
 export const MyDocumentsPage: React.FC<MyDocumentsPageProps> = ({
   documents,
   onSelectDocument,
+  onNavigateToTopicExplorer,
   onOpenUpload,
   onDeleteDocument,
   onRenameDocument,
@@ -261,10 +264,21 @@ export const MyDocumentsPage: React.FC<MyDocumentsPageProps> = ({
                   </div>
 
                   {/* Actions buttons */}
-                  <div className="flex items-center space-x-1" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
+                    {onNavigateToTopicExplorer && (
+                      <button
+                        onClick={() => onNavigateToTopicExplorer(doc)}
+                        className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                        title="Explore detected chapters and topics"
+                      >
+                        <FolderTree className="w-3.5 h-3.5" />
+                        <span>Explore Topics</span>
+                      </button>
+                    )}
+
                     <button
                       onClick={(e) => handleStartRename(doc, e)}
-                      className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                      className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                       title="Rename document"
                     >
                       <Edit2 className="w-4 h-4" />
@@ -272,7 +286,7 @@ export const MyDocumentsPage: React.FC<MyDocumentsPageProps> = ({
 
                     <button
                       onClick={() => onSelectDocument(doc)}
-                      className="p-2 rounded-xl text-slate-400 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950 transition-colors"
+                      className="p-2 rounded-xl text-slate-400 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950 transition-colors cursor-pointer"
                       title="Open in Learning Studio"
                     >
                       <ExternalLink className="w-4 h-4" />

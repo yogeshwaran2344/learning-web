@@ -1756,6 +1756,89 @@ async function runPedagogySuite() {
     `Verified intermediate arithmetic operations and step rationales across all ${generatedWorked.content.solutionSteps?.length} steps.`
   );
 
+  // 19.5 Evidenced Concept Relationships (No Page-Order Prerequisites)
+  const relSections = [
+    {
+      id: 'rs-1',
+      pageNumber: 1,
+      title: 'Process Concept',
+      content: 'A Process is defined as a program in execution with active program counter state.',
+      equations: [],
+      definitions: [{ term: 'Process', definition: 'a program in execution' }],
+      conditions: [],
+      examples: []
+    },
+    {
+      id: 'rs-2',
+      pageNumber: 2,
+      title: 'Process Scheduling',
+      content: 'Process Scheduling requires a Process to evaluate priority and state before CPU allocation.',
+      equations: [],
+      definitions: [{ term: 'Process Scheduling', definition: 'mechanism of selecting runnable process' }],
+      conditions: [],
+      examples: []
+    },
+    {
+      id: 'rs-3',
+      pageNumber: 3,
+      title: 'Unrelated Appendix',
+      content: 'Standard reference index for library functions and bibliography.',
+      equations: [],
+      definitions: [],
+      conditions: [],
+      examples: []
+    }
+  ];
+  const relResult = DocumentUnderstandingService.analyze('doc-rel-test', relSections as any, 'pdf');
+  const hasEvidencedRel = relResult.conceptRelationships.some(
+    r => r.sourceConcept === 'Process' && r.targetConcept === 'Process Scheduling' && r.relationshipType === 'prerequisite'
+  );
+  const noBogusAppendixRel = !relResult.conceptRelationships.some(
+    r => r.targetConcept === 'Unrelated Appendix' || r.sourceConcept === 'Unrelated Appendix'
+  );
+  assertTest(
+    'Step 19.5: Concept relationships require textual dependency evidence and do not fabricate links based solely on page order',
+    hasEvidencedRel && noBogusAppendixRel,
+    `Verified prerequisite relationship established only with explicit textual dependency evidence; zero unevidenced relationships created.`
+  );
+
+  // 19.6 Institutional Noise and Administrative Metadata Cleanly Stripped
+  const noisyDocSections = [
+    {
+      id: 'ns-1',
+      pageNumber: 1,
+      title: 'Course Examination',
+      content: 'Department of Computer Science & Engineering\nBangalore Institute of Technology\nInternal Assessment Test - 1\nCourse Code: CS-401\nUSN: 1BT21CS001\nMaximum Marks: 100\nDuration: 3 Hours\nProcess Control Block is defined as the core data structure storing registers and process state.\nPrepared by: Prof. Sharma',
+      equations: [],
+      definitions: [],
+      conditions: [],
+      examples: []
+    }
+  ];
+  const cleanResult = DocumentUnderstandingService.analyze('doc-clean-test', noisyDocSections as any, 'pdf');
+  const cleanedText = cleanResult.sections[0].content;
+  const strippedCollege = !cleanedText.includes('Bangalore Institute of Technology');
+  const strippedDept = !cleanedText.includes('Department of Computer Science');
+  const strippedExam = !cleanedText.includes('Internal Assessment Test - 1');
+  const preservedAcademicDef = cleanResult.sections[0].definitions.some(d => d.term === 'Process Control Block');
+  assertTest(
+    'Step 19.6: Institutional administrative headers and exam metadata stripped while academic definitions are strictly preserved',
+    strippedCollege && strippedDept && strippedExam && preservedAcademicDef,
+    `Verified administrative lines (college, dept, exam code, marks) stripped; core academic definition preserved.`
+  );
+
+  // 19.7 Diverse Quiz Question Types (MCQ, True/False, Fill Blank, Short Answer, Numerical) with Dynamic Distractors
+  const generatedQuiz = AiGeneratorService.generateFormat('doc-os-test', 'Operating Systems', osSections, 'quiz', 'English', 'intermediate');
+  const quizQuestions = generatedQuiz.content as any[];
+  const questionTypes = new Set(quizQuestions.map(q => q.type || 'multiple_choice'));
+  const hasZeroCannedDistractors = !JSON.stringify(quizQuestions).includes('Contradicts the invariant parameter bounds.') &&
+    !JSON.stringify(quizQuestions).includes('Linear regression without boundary limits');
+  assertTest(
+    'Step 19.7: Practice Quiz generates diverse question types across all sections with 0 canned distractors',
+    quizQuestions.length === osSections.length && questionTypes.size >= 3 && hasZeroCannedDistractors,
+    `Generated ${quizQuestions.length} questions across ${questionTypes.size} question types with dynamic document-grounded distractors.`
+  );
+
   // Summary
   console.log('\n================================================================');
   console.log(`   LEARNOVA PEDAGOGICAL SUITE RESULT: ${passedTests}/${totalTests} PASSED (100%)`);

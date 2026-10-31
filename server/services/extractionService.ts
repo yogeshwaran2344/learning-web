@@ -64,7 +64,10 @@ export class ExtractionService {
           uncertainSymbols: s.uncertainSymbols
         }));
       } else if (fileType === 'pptx') {
-        const pptxRes = RealExtractor.extractPptx(filePath, originalFileName);
+        const isLegacyPpt = originalFileName.toLowerCase().endsWith('.ppt') && !originalFileName.toLowerCase().endsWith('.pptx');
+        const pptxRes = isLegacyPpt
+          ? RealExtractor.extractLegacyPpt(filePath, originalFileName)
+          : RealExtractor.extractPptx(filePath, originalFileName);
         warnings.push(...pptxRes.warnings);
         pageCount = pptxRes.pageCount;
         totalWordCount = pptxRes.wordCount;

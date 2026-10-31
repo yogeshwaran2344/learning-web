@@ -29,7 +29,8 @@ import {
   FileText,
   Flame,
   TrendingUp,
-  BrainCircuit
+  BrainCircuit,
+  FolderTree
 } from 'lucide-react';
 import { AcademicDocument, NavigationPage, StudioTab, AppLanguage, SavedItem } from '../../types';
 import { ApiClient } from '../../services/apiClient';
@@ -375,6 +376,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           </div>
 
           <div className="flex flex-col sm:flex-row items-center gap-2 shrink-0">
+            <button
+              onClick={() => onNavigate && onNavigate('topic-explorer')}
+              className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 text-blue-700 dark:text-blue-300 font-semibold text-xs border border-blue-200 dark:border-blue-800 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              title="Explore detected chapter and topic hierarchy"
+            >
+              <FolderTree className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              <span>Explore Topics</span>
+            </button>
+
             <button
               onClick={() => onSelectDocument(primaryDoc, 'flashcards')}
               className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-purple-50 dark:bg-purple-950/50 hover:bg-purple-100 text-purple-700 dark:text-purple-300 font-semibold text-xs border border-purple-200 dark:border-purple-800 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"

@@ -201,6 +201,11 @@ export function App() {
     setCurrentPage('studio');
   };
 
+  const handleNavigateToTopicExplorer = (doc: AcademicDocument) => {
+    setActiveDocument(doc);
+    setCurrentPage('topic-explorer');
+  };
+
   const handleDocumentCreated = (newDoc: AcademicDocument) => {
     StorageService.addDocument(newDoc);
     const updated = StorageService.getDocuments();
@@ -368,6 +373,7 @@ export function App() {
             <MyDocumentsPage
               documents={documents}
               onSelectDocument={handleSelectDocument}
+              onNavigateToTopicExplorer={handleNavigateToTopicExplorer}
               onOpenUpload={() => setCurrentPage('upload')}
               onDeleteDocument={handleDeleteDocument}
               onRenameDocument={handleRenameDocument}
@@ -448,6 +454,7 @@ export function App() {
                 onOpenFeedback={() => setIsFeedbackOpen(true)}
                 voiceGender={preferences.voiceGender}
                 onVoiceGenderChange={(g) => handleUpdatePreferences({ voiceGender: g })}
+                onOpenTopicExplorer={() => setCurrentPage('topic-explorer')}
               />
             ) : (
               <div className="p-12 text-center space-y-4">

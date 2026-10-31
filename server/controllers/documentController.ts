@@ -88,11 +88,8 @@ export class DocumentController {
         }
 
         if (ext.endsWith('.ppt') && !ext.endsWith('.pptx')) {
-          if (fs.existsSync(file.path)) { try { fs.unlinkSync(file.path); } catch (_) {} }
-          return res.status(400).json({
-            error: 'Legacy binary .ppt files are not supported. Please upload modern .pptx or export as PDF.',
-            processingStatus: 'failed'
-          });
+          // OLE2 Compound Document or binary PPT
+          fileType = 'pptx';
         } else if (ext.endsWith('.pptx')) {
           if (!bufferHeader.slice(0, 2).equals(Buffer.from([0x50, 0x4B]))) { // PK
             if (fs.existsSync(file.path)) { try { fs.unlinkSync(file.path); } catch (_) {} }
