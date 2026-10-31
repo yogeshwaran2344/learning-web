@@ -23,6 +23,7 @@ export function enrichDocumentWithMaterials(doc: DocumentRecord): any {
   const flashcardsMat = materials.find(m => m.formatType === 'flashcards')?.content;
   const audioMat = materials.find(m => m.formatType === 'audio')?.content;
   const quizMat = materials.find(m => m.formatType === 'quiz')?.content;
+  const hierarchyMat = materials.find(m => m.formatType === ('topic_hierarchy' as any))?.content;
 
   const conceptMap = unwrap(mapMat) || null;
   const simplified = unwrap(simplifiedMat) || null;
@@ -31,6 +32,7 @@ export function enrichDocumentWithMaterials(doc: DocumentRecord): any {
   const flashcards = unwrap(flashcardsMat) || [];
   const audioLesson = unwrap(audioMat) || null;
   const quiz = unwrap(quizMat) || [];
+  const topicHierarchy = unwrap(hierarchyMat) || (doc as any).topicHierarchy || null;
 
   const explanations = simplified ? (Array.isArray(simplified) ? simplified : [simplified]) : [];
 
@@ -38,6 +40,7 @@ export function enrichDocumentWithMaterials(doc: DocumentRecord): any {
     ...doc,
     sections,
     materials,
+    topicHierarchy,
     meaningPreservation: verification || undefined,
     verificationStatus: verification && verification.overallFidelityScore > 0 ? (verification.overallFidelityScore >= 90 ? 'verified' : 'needs_review') : 'not_verified',
     conceptMap,
@@ -161,12 +164,26 @@ export class DocumentController {
         extractionQuality: extraction.qualityReport,
         pageCount: extraction.pageCount,
         wordCount: extraction.wordCount,
-        summary: extraction.summary
+        summary: extraction.summary,
+        topicHierarchy: extraction.understanding?.hierarchy
       };
 
       // Save document & extracted sections
       Database.createDocument(docRecord);
       Database.saveSections(docId, extraction.sections);
+      if (extraction.understanding?.hierarchy) {
+        Database.saveMaterial({
+          id: `mat-hierarchy-${docId}`,
+          documentId: docId,
+          formatType: 'topic_hierarchy' as any,
+          language: 'English',
+          difficultyLevel: 'intermediate',
+          content: extraction.understanding.hierarchy,
+          isAiFallback: false,
+          modelName: 'LEARNOVA Document Understanding Engine',
+          generationSource: 'ai_model'
+        });
+      }
 
       // Step 3 & 4: Run Meaning Preservation Engine audit
       const auditReport = MeaningPreservationEngine.auditDocument(docId, extraction.sections, hasWarning);
@@ -322,6 +339,34 @@ export class DocumentController {
     }
     const updated = Database.renameDocument(req.params.id, title.trim());
     res.json({ document: updated });
+  }
+
+  static updateHierarchy(req: AuthenticatedRequest, res: Response) {
+    const doc = Database.getDocumentById(req.params.id);
+    if (!doc) {
+      return res.status(404).json({ error: 'Document not found.' });
+    }
+    const userId = req.user?.id;
+    const role = req.user?.role;
+    if (doc.ownerId !== userId && role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied: You do not have permission to edit this document hierarchy.' });
+    }
+    const { hierarchy } = req.body;
+    if (!hierarchy || !hierarchy.chapters) {
+      return res.status(400).json({ error: 'Valid topic hierarchy with chapters is required.' });
+    }
+    Database.saveMaterial({
+      id: `mat-hierarchy-${doc.id}`,
+      documentId: doc.id,
+      formatType: 'topic_hierarchy' as any,
+      language: 'English',
+      difficultyLevel: 'intermediate',
+      content: hierarchy,
+      isAiFallback: false,
+      modelName: 'User Verified Hierarchy',
+      generationSource: 'ai_model'
+    });
+    res.json({ message: 'Topic hierarchy updated successfully.', topicHierarchy: hierarchy });
   }
 
   static delete(req: AuthenticatedRequest, res: Response) {

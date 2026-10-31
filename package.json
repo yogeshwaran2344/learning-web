@@ -12,7 +12,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "pack:zip": "node scripts/packZip.js",
-    "test": "tsx server/testSecurity.ts && tsx server/testDocumentExtraction.ts && tsx server/testOcrAccuracy.ts && tsx server/testLearnovaPedagogy.ts && tsx server/runSystemTracker.ts && tsx server/runRoadmapAudit.ts"
+    "test": "tsx server/testSecurity.ts && tsx server/testDocumentExtraction.ts && tsx server/testOcrAccuracy.ts && tsx server/testLearnovaPedagogy.ts && tsx server/testDocumentUnderstandingEngine.ts && tsx server/runSystemTracker.ts && tsx server/runRoadmapAudit.ts"
   },
   "dependencies": {
     "@types/pdfkit": "^0.17.7",

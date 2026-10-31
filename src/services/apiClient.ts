@@ -160,6 +160,13 @@ export class ApiClient {
     });
   }
 
+  static async updateDocumentHierarchy(id: string, hierarchy: any): Promise<any> {
+    return this.request(`/documents/${id}/hierarchy`, {
+      method: 'PUT',
+      body: JSON.stringify({ hierarchy })
+    });
+  }
+
   static async deleteDocument(id: string): Promise<any> {
     return this.request(`/documents/${id}`, {
       method: 'DELETE'

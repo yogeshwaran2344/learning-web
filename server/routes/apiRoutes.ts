@@ -30,6 +30,7 @@ apiRouter.get('/documents/:id/status', authMiddleware, (req, res) => DocumentCon
 apiRouter.get('/documents/:id/extraction', authMiddleware, (req, res) => DocumentController.getExtraction(req, res));
 apiRouter.get('/extraction/benchmark', authMiddleware, (req, res) => DocumentController.getBenchmark(req, res));
 apiRouter.put('/documents/:id/rename', authMiddleware, (req, res) => DocumentController.rename(req, res));
+apiRouter.put('/documents/:id/hierarchy', authMiddleware, (req, res) => DocumentController.updateHierarchy(req, res));
 apiRouter.post('/documents/clear-all', authMiddleware, (req, res) => DocumentController.clearAll(req, res));
 apiRouter.delete('/documents/:id', authMiddleware, (req, res) => DocumentController.delete(req, res));
 

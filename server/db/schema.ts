@@ -58,6 +58,7 @@ export interface DocumentRecord {
   pageCount: number;
   wordCount: number;
   summary: string;
+  topicHierarchy?: any;
 }
 
 export interface ExtractedSectionRecord {
@@ -73,6 +74,12 @@ export interface ExtractedSectionRecord {
   tables?: { caption: string; headers: string[]; rows: string[][] }[];
   definitions: { term: string; definition: string; conditions?: string }[];
   conditions: string[];
+  examples?: string[];
+  algorithms?: { language?: string; codeOrPseudocode: string; description: string; pageNumber: number }[];
+  diagrams?: { title: string; description: string; pageNumber: number }[];
+  flowcharts?: { title: string; description: string; pageNumber: number }[];
+  graphs?: { title: string; description: string; pageNumber: number }[];
+  numericalProblems?: { problem: string; solutionSteps: string[]; finalAnswer: string; pageNumber: number }[];
   examples: string[];
   uncertainSymbols?: string[];
 }

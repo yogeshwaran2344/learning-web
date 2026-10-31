@@ -42,6 +42,7 @@ import {
 } from '../../types';
 import { TopicHierarchyService } from '../../services/topicHierarchyService';
 import { StorageService } from '../../services/storageService';
+import { ApiClient } from '../../services/apiClient';
 
 interface TopicExplorerPageProps {
   document: AcademicDocument;
@@ -113,6 +114,8 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
       updatedDoc,
       ...StorageService.getDocuments().filter(d => d.id !== document.id)
     ]);
+    // Persist to backend SQLite store
+    ApiClient.updateDocumentHierarchy(document.id, newHierarchy).catch(() => {});
     if (onDocumentUpdate) {
       onDocumentUpdate(updatedDoc);
     }
@@ -418,13 +421,17 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                       const isEditing = editingTopicId === topic.id;
 
                       // Determine Content Type badge
-                      const contentType = topic.associatedNumericalExamples.length > 0
-                        ? 'Numerical'
-                        : topic.associatedDiagrams.length > 0
-                        ? 'Diagram'
-                        : topic.title.toLowerCase().includes('vs') || topic.title.toLowerCase().includes('comparison')
-                        ? 'Comparison'
-                        : 'Theory';
+                      const contentType = topic.contentType
+                        ? (topic.contentType.charAt(0).toUpperCase() + topic.contentType.slice(1))
+                        : (topic.associatedNumericalExamples && topic.associatedNumericalExamples.length > 0
+                          ? 'Numerical'
+                          : topic.associatedDiagrams && topic.associatedDiagrams.length > 0
+                          ? 'Diagram'
+                          : topic.associatedAlgorithms && topic.associatedAlgorithms.length > 0
+                          ? 'Programming'
+                          : topic.title.toLowerCase().includes('vs') || topic.title.toLowerCase().includes('comparison')
+                          ? 'Comparison'
+                          : 'Theory');
 
                       return (
                         <div

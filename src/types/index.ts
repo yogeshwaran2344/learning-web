@@ -103,6 +103,11 @@ export interface DocumentSubtopic {
   diagramsCount: number;
   tablesCount: number;
   numericalExamplesCount?: number;
+  algorithmsCount?: number;
+  flowchartsCount?: number;
+  graphsCount?: number;
+  isUncertain?: boolean;
+  uncertaintyReason?: string;
 }
 
 export interface DocumentTopic {
@@ -114,6 +119,7 @@ export interface DocumentTopic {
   pageRange: [number, number];
   isMultiPage: boolean;
   contentType?: PageContentType;
+  contentTypesFound?: string[];
   description?: string;
   subtopics: DocumentSubtopic[];
   importantConcepts: string[];
@@ -121,7 +127,11 @@ export interface DocumentTopic {
   associatedDiagrams: { title: string; description: string; pageNumber: number }[];
   associatedTables: { caption: string; headers: string[]; rows: string[][]; pageNumber: number }[];
   associatedNumericalExamples: { problem: string; solutionSteps: string[]; finalAnswer: string; pageNumber: number }[];
+  associatedAlgorithms?: { language?: string; codeOrPseudocode: string; description: string; pageNumber: number }[];
   sourceCitations: SourceCitation[];
+  isUncertain?: boolean;
+  uncertaintyReason?: string;
+  confidence?: number;
 }
 
 export interface DocumentChapter {
@@ -142,9 +152,12 @@ export interface DocumentTopicHierarchy {
   userAdjustmentsCount?: number;
   extractionEvidenceLevel: 'high' | 'medium' | 'sparse';
   unresolvedWarnings?: string[];
+  unreadablePages?: number[];
+  duplicateSections?: string[];
+  uncertainExtractions?: { pageNumber: number; reason: string }[];
 }
 
-export type PageContentType = 'theory' | 'numerical' | 'diagram' | 'comparison' | 'continuation' | 'unreadable';
+export type PageContentType = 'theory' | 'numerical' | 'diagram' | 'programming' | 'flowchart' | 'graph' | 'table' | 'comparison' | 'continuation' | 'unreadable';
 
 export interface PageWiseExplanation {
   pageNumber: number;
