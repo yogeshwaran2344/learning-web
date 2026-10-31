@@ -17,11 +17,13 @@ import {
   Clock,
   XCircle
 } from 'lucide-react';
-import { AcademicDocument, AppLanguage, DocumentFileType } from '../../types';
+import { AcademicDocument, AppLanguage, DocumentFileType, DocumentTopicHierarchy } from '../../types';
 import { ApiClient } from '../../services/apiClient';
 import { DocumentProcessor } from '../../services/documentProcessor';
 import { StorageService } from '../../services/storageService';
 import { PageTeacherService } from '../../services/pageTeacherService';
+import { TopicHierarchyService } from '../../services/topicHierarchyService';
+import { TopicHierarchyReviewModal } from '../Workspace/TopicHierarchyReviewModal';
 
 interface UploadMaterialPageProps {
   onDocumentCreated: (doc: AcademicDocument) => void;
@@ -56,6 +58,8 @@ export const UploadMaterialPage: React.FC<UploadMaterialPageProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [diagnosticWarnings, setDiagnosticWarnings] = useState<string[]>([]);
   const [createdBackendDoc, setCreatedBackendDoc] = useState<AcademicDocument | null>(null);
+  const [pendingDocForReview, setPendingDocForReview] = useState<AcademicDocument | null>(null);
+  const [isReviewHierarchyModalOpen, setIsReviewHierarchyModalOpen] = useState<boolean>(false);
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -181,9 +185,12 @@ Condition: Dimensions of x and F must match or be projected via shortcut matrix 
         setDiagnosticWarnings(warnings);
         setLifecycleState('needs_review');
       } else {
+        if (!backendDoc.topicHierarchy) {
+          backendDoc.topicHierarchy = TopicHierarchyService.buildHierarchy(backendDoc);
+        }
+        setPendingDocForReview(backendDoc);
+        setIsReviewHierarchyModalOpen(true);
         setLifecycleState('completed');
-        await new Promise(r => setTimeout(r, 300));
-        onDocumentCreated(backendDoc);
       }
     } catch (e: any) {
       console.warn('[UploadMaterialPage] Server upload error, attempting seamless fallback so student is never blocked:', e);
@@ -220,15 +227,23 @@ Condition: Dimensions of x and F must match or be projected via shortcut matrix 
     setLifecycleState('verifying');
     await new Promise(r => setTimeout(r, 400));
 
+    if (!processedDoc.topicHierarchy) {
+      processedDoc.topicHierarchy = TopicHierarchyService.buildHierarchy(processedDoc);
+    }
+
     StorageService.saveDocuments([processedDoc, ...StorageService.getDocuments()]);
+    setPendingDocForReview(processedDoc);
+    setIsReviewHierarchyModalOpen(true);
     setLifecycleState('completed');
-    await new Promise(r => setTimeout(r, 200));
-    onDocumentCreated(processedDoc);
   };
 
   const handleProceedWithWarnings = () => {
     if (createdBackendDoc) {
-      onDocumentCreated(createdBackendDoc);
+      if (!createdBackendDoc.topicHierarchy) {
+        createdBackendDoc.topicHierarchy = TopicHierarchyService.buildHierarchy(createdBackendDoc);
+      }
+      setPendingDocForReview(createdBackendDoc);
+      setIsReviewHierarchyModalOpen(true);
     }
   };
 
@@ -614,6 +629,29 @@ Condition: Dimensions of x and F must match or be projected via shortcut matrix 
             </button>
           </div>
         </div>
+      )}
+
+      {/* Requirement 8 & 9: Show extracted topic hierarchy to student before generating learning materials */}
+      {pendingDocForReview && pendingDocForReview.topicHierarchy && (
+        <TopicHierarchyReviewModal
+          hierarchy={pendingDocForReview.topicHierarchy}
+          isOpen={isReviewHierarchyModalOpen}
+          documentTitle={pendingDocForReview.title}
+          pageCount={pendingDocForReview.pageCount}
+          onClose={() => {
+            setIsReviewHierarchyModalOpen(false);
+            onDocumentCreated(pendingDocForReview);
+          }}
+          onConfirm={(confirmedHierarchy) => {
+            const finalDoc = {
+              ...pendingDocForReview,
+              topicHierarchy: confirmedHierarchy
+            };
+            StorageService.saveDocuments([finalDoc, ...StorageService.getDocuments().filter(d => d.id !== finalDoc.id)]);
+            setIsReviewHierarchyModalOpen(false);
+            onDocumentCreated(finalDoc);
+          }}
+        />
       )}
     </div>
   );

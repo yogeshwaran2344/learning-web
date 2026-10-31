@@ -82,6 +82,56 @@ export interface DocumentSection {
   uncertainSymbols?: string[];
 }
 
+export interface DocumentSubtopic {
+  id: string;
+  title: string;
+  level: number;
+  pageRange: [number, number];
+  summary?: string;
+  importantConcepts: string[];
+  equationsCount: number;
+  diagramsCount: number;
+  tablesCount: number;
+  numericalExamplesCount: number;
+}
+
+export interface DocumentTopic {
+  id: string;
+  topicNumber: string;
+  title: string;
+  chapterTitle: string;
+  chapterNumber: number;
+  pageRange: [number, number];
+  isMultiPage: boolean;
+  subtopics: DocumentSubtopic[];
+  importantConcepts: string[];
+  associatedEquations: { latex: string; label: string; meaning: string; pageNumber: number }[];
+  associatedDiagrams: { title: string; description: string; pageNumber: number }[];
+  associatedTables: { caption: string; headers: string[]; rows: string[][]; pageNumber: number }[];
+  associatedNumericalExamples: { problem: string; solutionSteps: string[]; finalAnswer: string; pageNumber: number }[];
+  sourceCitations: SourceCitation[];
+}
+
+export interface DocumentChapter {
+  id: string;
+  chapterNumber: number;
+  title: string;
+  pageRange: [number, number];
+  topics: DocumentTopic[];
+}
+
+export interface DocumentTopicHierarchy {
+  documentId: string;
+  documentTitle: string;
+  chapters: DocumentChapter[];
+  totalTopicsCount: number;
+  totalSubtopicsCount: number;
+  isUserVerified: boolean;
+  userAdjustmentsCount?: number;
+  extractionEvidenceLevel: 'high' | 'medium' | 'sparse';
+  unresolvedWarnings?: string[];
+}
+
 export type PageContentType = 'theory' | 'numerical' | 'diagram' | 'comparison' | 'continuation' | 'unreadable';
 
 export interface PageWiseExplanation {
@@ -235,6 +285,7 @@ export interface AcademicDocument {
   extractionWarnings?: string[];
   extractionQuality?: ExtractionQualityReport;
   sections: DocumentSection[];
+  topicHierarchy?: DocumentTopicHierarchy;
   conceptMap: ConceptMapData;
   explanations: ExplanationLevel[];
   pageWiseExplanations?: PageWiseExplanation[];

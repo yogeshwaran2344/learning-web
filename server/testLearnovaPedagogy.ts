@@ -18,6 +18,7 @@ import { MeaningPreservationEngine } from './services/meaningPreservationEngine'
 import { DomainGroundingEngine } from './services/domainGroundingEngine';
 import { ExtractedSectionRecord } from './db/schema';
 import { PageTeacherService } from '../src/services/pageTeacherService';
+import { TopicHierarchyService } from '../src/services/topicHierarchyService';
 import { SAMPLE_DOCUMENTS } from '../src/data/sampleDocuments';
 
 // Test harness
@@ -1030,6 +1031,176 @@ async function runPedagogySuite() {
       all59Explanations.every(p => p.sourceCitation.pageNumber === p.pageNumber) &&
       all59Explanations.every(p => !p.whatIsIt.includes('INSTITUTE OF TECHNOLOGY')),
     `Successfully generated individual, clean explanations for all ${all59Explanations.length} pages.`
+  );
+
+  // =================================================================
+  // STEP 14: DOCUMENT STRUCTURE & SUBHEADING DETECTION (NEW STEP 1)
+  // =================================================================
+  console.log('\n--- STEP 14: DOCUMENT STRUCTURE & SUBHEADING DETECTION (NEW STEP 1) ---');
+
+  // 14.1 Extraction of Chapter Titles, Main Headings, and Subheadings from 59-page document
+  const osHierarchy = TopicHierarchyService.buildHierarchy(osDoc);
+  assertTest(
+    'Step 14.1: Identify chapter titles, main headings, and subheadings across the uploaded document',
+    osHierarchy.chapters.length >= 4 &&
+      osHierarchy.totalTopicsCount >= 8 &&
+      osHierarchy.totalSubtopicsCount >= 10,
+    `Identified ${osHierarchy.chapters.length} chapters, ${osHierarchy.totalTopicsCount} topics, and ${osHierarchy.totalSubtopicsCount} subtopics.`
+  );
+
+  // 14.2 Hierarchical Structure: Chapter -> Topic -> Subtopic
+  const chapter1 = osHierarchy.chapters.find(c => c.chapterNumber === 1);
+  const chapter2 = osHierarchy.chapters.find(c => c.chapterNumber === 2);
+  const chapter3 = osHierarchy.chapters.find(c => c.chapterNumber === 3);
+  const chapter4 = osHierarchy.chapters.find(c => c.chapterNumber === 4);
+
+  assertTest(
+    'Step 14.2: Build hierarchical structure: Chapter -> Topic -> Subtopic -> Important concepts',
+    chapter1 !== undefined &&
+      chapter2 !== undefined &&
+      chapter3 !== undefined &&
+      chapter4 !== undefined &&
+      chapter1.title.toLowerCase().includes('introduction') &&
+      chapter2.title.toLowerCase().includes('process management') &&
+      chapter3.title.toLowerCase().includes('cpu scheduling') &&
+      chapter4.title.toLowerCase().includes('memory management') &&
+      chapter1.topics[0]?.subtopics.length >= 1,
+    `Chapters: "${chapter1?.title}", "${chapter2?.title}", "${chapter3?.title}", "${chapter4?.title}".`
+  );
+
+  // 14.3 Multi-Page Topic Tracking across pages
+  const multiPageTopics = osHierarchy.chapters
+    .flatMap(c => c.topics)
+    .filter(t => t.isMultiPage && t.pageRange[1] > t.pageRange[0]);
+  assertTest(
+    'Step 14.3: Detect topics that continue across multiple pages with accurate page ranges',
+    multiPageTopics.length >= 4 &&
+      multiPageTopics.some(t => t.title.includes('Process Concept') && t.pageRange[0] === 1 && t.pageRange[1] === 2) &&
+      multiPageTopics.some(t => t.title.includes('FCFS') && t.pageRange[1] > t.pageRange[0]) &&
+      multiPageTopics.some(t => t.title.includes('Virtual Memory') && t.pageRange[0] >= 48 && t.pageRange[1] <= 59),
+    `Verified ${multiPageTopics.length} multi-page topics spanning multiple document pages.`
+  );
+
+  // 14.4 Identify Diagrams, Equations, Tables, and Numerical Examples associated with each topic
+  const fcfsTopic = osHierarchy.chapters
+    .flatMap(c => c.topics)
+    .find(t => t.title.includes('First-Come First-Served') || t.title.includes('FCFS'));
+  const pagingTopic = osHierarchy.chapters
+    .flatMap(c => c.topics)
+    .find(t => t.title.includes('Paging') || t.title.includes('TLB'));
+
+  assertTest(
+    'Step 14.4: Identify diagrams, equations, tables, and numerical problems associated with each topic',
+    fcfsTopic !== undefined &&
+      fcfsTopic.associatedEquations.length >= 1 &&
+      fcfsTopic.associatedDiagrams.length >= 1 &&
+      fcfsTopic.associatedTables.length >= 1 &&
+      fcfsTopic.associatedNumericalExamples.length >= 1 &&
+      pagingTopic !== undefined &&
+      pagingTopic.associatedEquations.length >= 1 &&
+      pagingTopic.associatedNumericalExamples.length >= 1,
+    `Topic "${fcfsTopic?.title}" associated with ${fcfsTopic?.associatedEquations.length} eqs, ${fcfsTopic?.associatedDiagrams.length} diagrams, ${fcfsTopic?.associatedTables.length} tables, ${fcfsTopic?.associatedNumericalExamples.length} worked problems.`
+  );
+
+  // 14.5 Removal of Institutional Boilerplate from Topic Structure
+  const noisyDoc = {
+    id: 'doc-noisy-college',
+    title: 'K.S. Institute of Technology - CS8391 Operating Systems',
+    sections: [
+      {
+        id: 'sec-noise-1',
+        title: 'Department of Computer Science - Process Concept (Approved by AICTE)',
+        content: 'Internal Assessment Test. A process is a program in execution.',
+        pageNumber: 1
+      },
+      {
+        id: 'sec-noise-2',
+        title: 'Course Code CS8391 - CPU Scheduling Algorithms',
+        content: 'Model Exam Paper. FCFS and Round Robin scheduling algorithms.',
+        pageNumber: 2
+      }
+    ],
+    pageCount: 2
+  };
+  const noisyHierarchy = TopicHierarchyService.buildHierarchy(noisyDoc);
+  const allExtractedTitles = noisyHierarchy.chapters.flatMap(c => [c.title, ...c.topics.map(t => t.title)]).join(' ');
+
+  assertTest(
+    'Step 14.5: Remove college names, department names, course codes, and administrative noise from generated hierarchy',
+    !allExtractedTitles.includes('K.S. Institute of Technology') &&
+      !allExtractedTitles.includes('Department of Computer Science') &&
+      !allExtractedTitles.includes('Approved by AICTE') &&
+      !allExtractedTitles.includes('CS8391') &&
+      !allExtractedTitles.includes('Internal Assessment') &&
+      allExtractedTitles.includes('Process Concept') &&
+      allExtractedTitles.includes('CPU Scheduling'),
+    `Sanitized titles: "${noisyHierarchy.chapters[0]?.topics.map(t => t.title).join(', ')}"`
+  );
+
+  // 14.6 Original Page References Preservation
+  const allTopicsHavePageRange = osHierarchy.chapters
+    .flatMap(c => c.topics)
+    .every(t => t.pageRange[0] >= 1 && t.pageRange[1] >= t.pageRange[0] && t.sourceCitations.length > 0);
+  assertTest(
+    'Step 14.6: Preserve original page references and source citations on all topics',
+    allTopicsHavePageRange,
+    '100% of topics maintain validated pageRange bounds [startPage, endPage] and exact source citations.'
+  );
+
+  // 14.7 Student Correction API: Editing / Correcting Heading
+  const firstTopicId = osHierarchy.chapters[0]?.topics[0]?.id!;
+  const correctedHierarchy = TopicHierarchyService.updateTopicTitle(
+    osHierarchy,
+    firstTopicId,
+    'Process Foundations & Execution Mechanics'
+  );
+  const updatedTopic = correctedHierarchy.chapters[0]?.topics.find(t => t.id === firstTopicId);
+
+  assertTest(
+    'Step 14.7: Allow students to correct an incorrectly detected heading with immediate state synchronization',
+    updatedTopic?.title === 'Process Foundations & Execution Mechanics' &&
+      correctedHierarchy.isUserVerified === true &&
+      (correctedHierarchy.userAdjustmentsCount || 0) >= 1,
+    `Updated topic heading: "${updatedTopic?.title}", Verified: ${correctedHierarchy.isUserVerified}`
+  );
+
+  // 14.8 Student Topic Customization: Adding and Removing Topics
+  const chapter1Id = correctedHierarchy.chapters[0]?.id!;
+  const withAddedTopic = TopicHierarchyService.addTopicToChapter(
+    correctedHierarchy,
+    chapter1Id,
+    'Student Custom Topic: Inter-Process Communication (IPC)',
+    [3, 4]
+  );
+  const addedTopicFound = withAddedTopic.chapters[0]?.topics.some(t => t.title.includes('IPC'));
+
+  const topicToRemoveId = withAddedTopic.chapters[0]?.topics.find(t => t.title.includes('Comparison'))?.id!;
+  const withRemovedTopic = TopicHierarchyService.removeTopic(withAddedTopic, topicToRemoveId);
+  const topicStillExists = withRemovedTopic.chapters[0]?.topics.some(t => t.id === topicToRemoveId);
+
+  assertTest(
+    'Step 14.8: Allow students to add custom topics and remove irrelevant topics from the hierarchy',
+    addedTopicFound && !topicStillExists,
+    'Successfully added custom topic and removed unneeded topic from chapter hierarchy.'
+  );
+
+  // 14.9 Evidence Grounded Extraction: Zero Hallucination on Sparse Documents
+  const sparseDoc = {
+    id: 'doc-sparse-minimal',
+    title: 'Short Note',
+    sections: [],
+    pageCount: 1,
+    rawText: 'Minimal single sentence without academic chapters.'
+  };
+  const sparseHierarchy = TopicHierarchyService.buildHierarchy(sparseDoc);
+  assertTest(
+    'Step 14.9: Never invent headings or topics when document lacks evidence (flags sparse level)',
+    sparseHierarchy.extractionEvidenceLevel === 'sparse' &&
+      sparseHierarchy.totalTopicsCount === 1 &&
+      sparseHierarchy.unresolvedWarnings !== undefined &&
+      !sparseHierarchy.chapters[0]?.topics[0]?.title.includes('Transformer') &&
+      !sparseHierarchy.chapters[0]?.topics[0]?.title.includes('Byzantine'),
+    `Sparse document handled safely: EvidenceLevel="${sparseHierarchy.extractionEvidenceLevel}", Warning="${sparseHierarchy.unresolvedWarnings?.[0]}"`
   );
 
   // Summary

@@ -23,7 +23,8 @@ import {
   Settings,
   MessageSquare,
   Loader2,
-  GraduationCap
+  GraduationCap,
+  FolderTree
 } from 'lucide-react';
 import {
   AcademicDocument,
@@ -32,7 +33,8 @@ import {
   SavedItem,
   AppLanguage,
   DifficultyLevel,
-  FormatVerificationResult
+  FormatVerificationResult,
+  DocumentTopicHierarchy
 } from '../../types';
 import { OriginalDocumentView } from '../Workspace/OriginalDocumentView';
 import { PageWiseTeacherView } from '../Workspace/PageWiseTeacherView';
@@ -46,6 +48,8 @@ import { VerificationAuditModal } from '../Workspace/VerificationAuditModal';
 import { CortexCompanionChat } from '../Workspace/CortexCompanionChat';
 import { AiGeneratorTestModal } from '../AiGeneratorTestModal';
 import { ExportModal } from '../ExportModal';
+import { TopicHierarchyReviewModal } from '../Workspace/TopicHierarchyReviewModal';
+import { TopicHierarchyService } from '../../services/topicHierarchyService';
 import { ApiClient } from '../../services/apiClient';
 import { SAMPLE_DOCUMENTS } from '../../data/sampleDocuments';
 
@@ -105,6 +109,14 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState<boolean>(false);
   const [isFormatDropdownOpen, setIsFormatDropdownOpen] = useState<boolean>(false);
+  const [isHierarchyModalOpen, setIsHierarchyModalOpen] = useState<boolean>(false);
+  const [currentHierarchy, setCurrentHierarchy] = useState<DocumentTopicHierarchy>(
+    () => document.topicHierarchy || TopicHierarchyService.buildHierarchy(document)
+  );
+
+  useEffect(() => {
+    setCurrentHierarchy(document.topicHierarchy || TopicHierarchyService.buildHierarchy(document));
+  }, [document]);
   const mainContainerRef = useRef<HTMLDivElement>(null);
   const tabsScrollRef = useRef<HTMLDivElement>(null);
 
@@ -666,6 +678,16 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
               </div>
             )}
           </div>
+
+          {/* Step 1 & 2: Topic Hierarchy & Structure Explorer Button */}
+          <button
+            onClick={() => setIsHierarchyModalOpen(true)}
+            className="px-3 py-2 rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50/70 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-xs font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-1.5 transition-colors min-h-[38px] shrink-0 cursor-pointer shadow-xs"
+            title="Inspect and refine extracted Chapter & Topic hierarchy"
+          >
+            <FolderTree className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Topics ({currentHierarchy.chapters.length})</span>
+          </button>
         </div>
       </div>
 
@@ -1276,6 +1298,19 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
             contextSnippet: sectionTitle
           };
           handleCitationClick(cite);
+        }}
+      />
+      {/* Step 1 & 2 Topic Hierarchy Review & Refinement Modal */}
+      <TopicHierarchyReviewModal
+        hierarchy={currentHierarchy}
+        isOpen={isHierarchyModalOpen}
+        documentTitle={document.title}
+        pageCount={document.pageCount}
+        onClose={() => setIsHierarchyModalOpen(false)}
+        onConfirm={(confirmedHierarchy) => {
+          setCurrentHierarchy(confirmedHierarchy);
+          document.topicHierarchy = confirmedHierarchy;
+          setIsHierarchyModalOpen(false);
         }}
       />
     </div>

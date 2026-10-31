@@ -9,6 +9,7 @@ import {
   PreservedFactCheck,
   SourceCitation
 } from '../types';
+import { TopicHierarchyService } from './topicHierarchyService';
 
 export class DocumentProcessor {
   /**
@@ -69,19 +70,30 @@ export class DocumentProcessor {
       );
     }
 
-    // 2. Generate Concept Map
+    const pageCount = Math.max(1, Math.ceil(wordCount / 350));
+
+    // 2. Build Topic Hierarchy (Chapter -> Topic -> Subtopic)
+    const topicHierarchy = TopicHierarchyService.buildHierarchy({
+      id: docId,
+      title: title || 'Academic Study Document',
+      sections,
+      pageCount,
+      rawText
+    });
+
+    // 3. Generate Concept Map
     const conceptMap = this.generateConceptMap(docId, title, sections);
 
-    // 3. Generate Explanations with Source Citations
+    // 4. Generate Explanations with Source Citations
     const explanations = this.generateExplanations(docId, title, sections);
 
-    // 4. Generate Flashcards & Practice Questions
+    // 5. Generate Flashcards & Practice Questions
     const flashcards = this.generateFlashcards(docId, sections);
 
-    // 5. Generate Audio Lesson
+    // 6. Generate Audio Lesson
     const audioLesson = this.generateAudioLesson(docId, title, sections);
 
-    // 6. Run Meaning Preservation Engine
+    // 7. Run Meaning Preservation Engine
     const meaningPreservation = this.runMeaningPreservationEngine(
       sections,
       conceptMap,
@@ -99,11 +111,12 @@ export class DocumentProcessor {
       fileSizeMb: 2.1,
       category,
       uploadDate: new Date().toISOString().split('T')[0],
-      pageCount: Math.max(1, Math.ceil(wordCount / 350)),
+      pageCount,
       wordCount,
       summary: sections[0]?.content.slice(0, 260) + '...',
       processingStatus: 'ready',
       sections,
+      topicHierarchy,
       conceptMap,
       explanations,
       flashcards,

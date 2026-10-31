@@ -1,4 +1,5 @@
 import { AcademicDocument } from '../types';
+import { TopicHierarchyService } from '../services/topicHierarchyService';
 
 export const SAMPLE_DOCUMENTS: AcademicDocument[] = [
   {
@@ -1045,6 +1046,7 @@ Curve C must be strictly simple (non-self-intersecting) and traversed counter-cl
     pageCount: 59,
     wordCount: 18450,
     summary: 'Comprehensive 59-page university lecture deck and textbook covering Process Concepts, Process States, PCB, Context Switching, and CPU Scheduling algorithms with step-by-step Turnaround and Waiting Time derivations.',
+    topicHierarchy: TopicHierarchyService.buildHierarchy({ id: 'doc-os-scheduling', title: 'Operating Systems: Process Concept & CPU Scheduling', sections: [], pageCount: 59 }),
     sections: [
       {
         id: 'sec-os-1',
