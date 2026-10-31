@@ -630,7 +630,7 @@ export class AssessmentService {
       if (!topicStats[topicKey]) {
         topicStats[topicKey] = {
           title: topicKey,
-          pageNumber: q.citation.pageNumber || 1,
+          pageNumber: q.citation?.pageNumber || (q as any).sourceCitation?.pageNumber || 1,
           correct: 0,
           total: 0
         };
@@ -643,7 +643,7 @@ export class AssessmentService {
         userChoice,
         isCorrect,
         explanation: q.explanation,
-        citation: q.citation
+        citation: q.citation || (q as any).sourceCitation
       };
     });
 
@@ -667,7 +667,7 @@ export class AssessmentService {
     Object.values(topicStats).forEach((stat) => {
       const accuracy = Math.round((stat.correct / stat.total) * 100);
       if (accuracy < 70) {
-        const advice = `Review "${stat.title}" on Page ${stat.pageNumber}. Revisit foundational definitions, boundary invariants, and practice the worked calculations.`;
+        const advice = `Review "${stat.title}" on Page ${stat.pageNumber}. Revisit foundational definitions, key principles, and practice the worked calculations.`;
         weakTopics.push({
           topicTitle: stat.title,
           pageNumber: stat.pageNumber,
@@ -686,7 +686,7 @@ export class AssessmentService {
     if (revisionSuggestions.length === 0 && questions.length > 0) {
       revisionSuggestions.push({
         topicTitle: questions[0].topicTitle || 'All Document Topics',
-        pageNumber: questions[0].citation.pageNumber || 1,
+        pageNumber: questions[0].citation?.pageNumber || (questions[0] as any).sourceCitation?.pageNumber || 1,
         advice: 'Mastery demonstrated! Solidify your understanding with advanced application scenarios and worked derivations.'
       });
     }

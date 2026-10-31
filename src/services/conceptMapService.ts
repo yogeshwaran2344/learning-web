@@ -63,8 +63,8 @@ export class ConceptMapService {
         id: `child-${topic.id}`,
         label: topic.title.length > 28 ? topic.title.slice(0, 26) + '...' : topic.title,
         explanation: topic.description || `Core topic covering pages ${topic.pageRange[0]}–${topic.pageRange[1]} with ${topic.subtopics.length} verified subtopics.`,
-        category: topic.associatedEquations.length > 0 ? 'equation' : topic.associatedDiagrams.length > 0 ? 'mechanism' : 'core',
-        sourceCitation: topic.sourceCitations[0] || chapterCitation,
+        category: (topic.associatedEquations?.length || 0) > 0 ? 'equation' : (topic.associatedDiagrams?.length || 0) > 0 ? 'mechanism' : 'core',
+        sourceCitation: topic.sourceCitations?.[0] || chapterCitation,
         isImportant: true
       }));
 
@@ -135,7 +135,7 @@ export class ConceptMapService {
     const titleLower = topic.title.toLowerCase();
     const chapterLower = (chapter.title || '').toLowerCase();
     const centralConcept = topic.title.toUpperCase();
-    const primaryCitation = topic.sourceCitations[0] || {
+    const primaryCitation = topic.sourceCitations?.[0] || {
       id: `cite-${topic.id}`,
       documentId: document.id,
       pageNumber: topic.pageRange[0],

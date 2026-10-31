@@ -421,7 +421,7 @@ async function main() {
       assert.ok(script.includes('Part 2: Simple Intuitive Explanation') || script.includes('Part 2: Intuitive Explanation') || script.includes('Intuitive Explanation:'), `Topic ${idx + 1} missing Part 2 Simple Explanation`);
       assert.ok(script.includes('Part 3: Formal Technical Definitions') || script.includes('Part 3: Core Definitions') || script.includes('Formal Definitions:'), `Topic ${idx + 1} missing Part 3 Definitions`);
       assert.ok(script.includes('Part 4: Real-World Examples') || script.includes('Part 4: Practical Examples') || script.includes('Practical Example:'), `Topic ${idx + 1} missing Part 4 Examples`);
-      assert.ok(script.includes('Part 5: Governing Invariants') || script.includes('Part 5: Mathematical Invariants') || script.includes('Governing Invariants:'), `Topic ${idx + 1} missing Part 5 Invariants`);
+      assert.ok(script.includes('Part 5: Governing Invariants') || script.includes('Part 5: Mathematical Invariants') || script.includes('Governing Invariants:') || script.includes('Part 5: Governing Formulation') || script.includes('Part 5: Core Principle'), `Topic ${idx + 1} missing Part 5 Invariants`);
       assert.ok(script.includes('Part 6: Examination Revision Summary') || script.includes('Part 6: Summary') || script.includes('Revision Summary:'), `Topic ${idx + 1} missing Part 6 Summary`);
     }
   });

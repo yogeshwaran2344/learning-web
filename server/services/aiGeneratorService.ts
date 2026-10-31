@@ -252,9 +252,9 @@ export class AiGeneratorService {
       overallAnalogy = difficulty === 'beginner'
         ? `Conceptual Mental Model: Think of ${docTitle} in everyday terms. ${everydayAnalogy}`
         : difficulty === 'advanced'
-        ? `Architectural Overview: ${docTitle} establishes formal state mappings across observed operational parameters, enforcing boundary constraints: ${domainContext.boundaryConditions[0] || 'verified invariants'}.`
+        ? `Advanced Curriculum Synthesis: In ${docTitle}, ${sections[0]?.content.slice(0, 160) || docTitle}. Grounded in foundational principles: ${domainContext.boundaryConditions[0] || 'core subject fundamentals'}.`
         : `Intuitive Analogy: ${everydayAnalogy}`;
-      additionalContext = 'Pedagogical analogy provided as supplementary conceptual anchor (beyond raw uploaded text; technical invariants remain strictly preserved).';
+      additionalContext = 'Pedagogical analogy provided as supplementary conceptual anchor (beyond raw uploaded text; grounded in source topics).';
     }
 
     // 3. Section Walkthrough following the 6-Part Structure
@@ -277,7 +277,7 @@ export class AiGeneratorService {
       const whatIsIt = difficulty === 'beginner'
         ? `In simple terms: ${coreIdea.slice(0, 150)} This defines what the section accomplishes without using overly dense jargon.`
         : difficulty === 'advanced'
-        ? `Rigorous Definition: ${coreIdea}. Governs high-order state transitions with strict boundary invariance.`
+        ? `Rigorous Definition: ${coreIdea}. This formalizes the core theoretical principle presented in "${sec.title}".`
         : `Conceptual Overview: ${coreIdea}. Establishes the governing relationship among the primary variables.`;
 
       const whyItMatters = sentences[1]
@@ -467,7 +467,7 @@ export class AiGeneratorService {
     const eqSec = sections.find(s => (s.numericalProblems && s.numericalProblems.length > 0) || (s.equations && s.equations.length > 0)) || sections[0];
     const firstEq = eqSec.equations?.[0]?.latex || 'Y = f(X) + C';
     const eqMeaning = eqSec.equations?.[0]?.meaning || 'Governing theoretical formulation';
-    const condition = eqSec.conditions?.[0] || (eqSec.equations?.[0]?.meaning ? `Valid when ${eqSec.equations[0].meaning} is satisfied.` : `Parameters must satisfy properties defined in ${eqSec.title}.`);
+    const condition = eqSec.conditions?.[0] || (eqSec.equations?.[0]?.meaning ? `Valid when ${eqSec.equations[0].meaning} is satisfied.` : `Under conditions established in "${eqSec.title}".`);
 
     // 1. If section contains pre-extracted numerical problems, solve with exact steps
     if (eqSec.numericalProblems && eqSec.numericalProblems.length > 0) {
@@ -494,7 +494,7 @@ export class AiGeneratorService {
           ],
           formulaApplied: firstEq,
           solutionSteps: steps,
-          finalAnswer: np.finalAnswer || 'Computed result adhering to source invariants.',
+          finalAnswer: np.finalAnswer || (np.solutionSteps ? np.solutionSteps[np.solutionSteps.length - 1] : `Computed solution for ${eqSec.title}`),
           citation: {
             id: `cite-worked-${documentId}`,
             documentId,
@@ -569,7 +569,7 @@ export class AiGeneratorService {
       ? `ಉದಾಹರಣೆ ಲೆಕ್ಕಾಚಾರ: ${eqSec.title}`
       : language === 'Hindi'
       ? `हल उदाहरण: ${eqSec.title}`
-      : `Worked Problem: Applying ${eqSec.title} and Verifying Boundary Invariants`;
+      : `Worked Problem: Applying ${eqSec.title} Step-by-Step`;
 
     // Extract actual numerical values and variable names from the source section
     const numMatches = (eqSec.content.match(/\b\d+(?:\.\d+)?\b/g) || []).map(Number);
@@ -793,7 +793,7 @@ export class AiGeneratorService {
       let script = '';
       const summarySentences = sec.content.split(/[.?!]\s+/).filter(s => s.trim().length > 15);
       const mainConcept = summarySentences[0] || sec.content.slice(0, 180);
-      const mainCondition = sec.conditions?.[0] || 'All governing parameters and boundary invariants are preserved.';
+      const mainCondition = sec.conditions?.[0] || (sec.equations?.[0] ? `Governed by: ${sec.equations[0].label || sec.equations[0].latex}` : `Key takeaway: ${mainConcept.slice(0, 120).trim()}`);
 
       // 1. Introduction
       const intro = idx === 0
@@ -823,14 +823,14 @@ export class AiGeneratorService {
         examplesText = ` [Part 4: Real-World Examples] Applied in experimental, industrial, and analytical scenarios across ${sec.title}. [PAUSE: 1s]`;
       }
 
-      // 5. Important Formulas or Invariants
+      // 5. Important Formulas or Core Principles
       let formulaText = '';
       if (sec.equations && sec.equations.length > 0) {
-        formulaText = ` [Part 5: Governing Invariants] The governing mathematical formulation is ${sec.equations[0].label || sec.equations[0].latex}. [PAUSE: 1s]`;
+        formulaText = ` [Part 5: Governing Invariants & Formulation] The governing mathematical formulation is ${sec.equations[0].label || sec.equations[0].latex}. [PAUSE: 1s]`;
       } else if (sec.conditions && sec.conditions.length > 0) {
-        formulaText = ` [Part 5: Governing Invariants] Crucial boundary condition: ${sec.conditions[0]}. [PAUSE: 1s]`;
+        formulaText = ` [Part 5: Governing Invariants & Principles] Essential condition: ${sec.conditions[0]}. [PAUSE: 1s]`;
       } else {
-        formulaText = ` [Part 5: Governing Invariants] Invariant condition: Invariant parameter bounds must remain consistent throughout. [PAUSE: 1s]`;
+        formulaText = ` [Part 5: Governing Invariants & Principles] Key principle: ${sec.content.slice(0, 120).trim()}. [PAUSE: 1s]`;
       }
 
       // 6. Revision Summary
@@ -987,7 +987,7 @@ export class AiGeneratorService {
         const isTrueStatement = idx % 2 === 0;
         let qText = isTrueStatement
           ? `True or False: In ${sec.title}, "${mainSentence}"`
-          : `True or False: In ${sec.title}, the process operates without boundary conditions or state invariants.`;
+          : `True or False: In ${sec.title}, the opposite holds true: "${sec.title} contradicts the principles presented in the source document."`;
 
         if (language === 'Kannada') {
           qText = isTrueStatement
@@ -1146,7 +1146,7 @@ export class AiGeneratorService {
         distractorOptions.push({
           text: `An unverified hypothesis not documented in "${sec.title}".`,
           isCorrect: false,
-          explanation: `Incorrect: This violates the invariants established on Page ${sec.pageNumber || 1}.`
+          explanation: `Incorrect: As stated in ${sec.title} on Page ${sec.pageNumber || 1}, this does not align with the source material.`
         });
       }
 

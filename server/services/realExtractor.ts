@@ -32,6 +32,7 @@ export interface RealExtractionResult {
   isScanned: boolean;
   hasTables: boolean;
   hasEquations: boolean;
+  hasDiagrams?: boolean;
   isMultilingual: boolean;
 }
 
@@ -91,6 +92,7 @@ export class RealExtractor {
     const warnings: string[] = [];
     let hasTables = false;
     let hasEquations = false;
+    let hasDiagrams = false;
     let isMultilingual = false;
 
     rawPages.forEach((p, idx) => {
@@ -164,6 +166,7 @@ export class RealExtractor {
       isScanned: warnings.length > 0,
       hasTables,
       hasEquations,
+      hasDiagrams,
       isMultilingual
     };
   }
@@ -205,6 +208,7 @@ export class RealExtractor {
     const warnings: string[] = [];
     let hasTables = false;
     let hasEquations = false;
+    let hasDiagrams = false;
     let isMultilingual = false;
 
     slideEntries.forEach((slideEntry, index) => {
@@ -305,6 +309,7 @@ export class RealExtractor {
       isScanned: false,
       hasTables,
       hasEquations,
+      hasDiagrams,
       isMultilingual
     };
   }

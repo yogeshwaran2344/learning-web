@@ -54,9 +54,35 @@ export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
   const [playbackState, setPlaybackState] = useState<AudioState>('idle');
   const [speed, setSpeed] = useState<number>(1.0);
   const [progressChar, setProgressChar] = useState<number>(0);
+  const [sectionProgressMap, setSectionProgressMap] = useState<Record<string, number>>({});
   const [activeVoiceGender, setActiveVoiceGender] = useState<'female' | 'male'>(
     voiceGender || AudioService.getGender() || 'female'
   );
+
+  // Load progress records for all sections in playlist
+  useEffect(() => {
+    const map: Record<string, number> = {};
+    sections.forEach(sec => {
+      const key = `audio_progress_${documentId || 'default'}_${sec.id}`;
+      try {
+        const val = localStorage.getItem(key);
+        if (val) {
+          const parsed = JSON.parse(val);
+          map[sec.id] = parsed.progressPct || 0;
+        }
+      } catch (e) {}
+    });
+    setSectionProgressMap(map);
+  }, [sections, documentId]);
+
+  const saveProgress = (secId: string, charIdx: number, totalLen: number) => {
+    const pct = totalLen > 0 ? Math.min(100, Math.round((charIdx / totalLen) * 100)) : 0;
+    const key = `audio_progress_${documentId || 'default'}_${secId}`;
+    try {
+      localStorage.setItem(key, JSON.stringify({ charIndex: charIdx, progressPct: pct, timestamp: Date.now() }));
+    } catch (e) {}
+    setSectionProgressMap(prev => ({ ...prev, [secId]: pct }));
+  };
 
   useEffect(() => {
     if (voiceGender && voiceGender !== activeVoiceGender) {
@@ -80,12 +106,33 @@ export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
     }
   };
 
+  // Restore saved playback position when switching sections
+  useEffect(() => {
+    if (!currentSection?.id) return;
+    const key = `audio_progress_${documentId || 'default'}_${currentSection.id}`;
+    try {
+      const val = localStorage.getItem(key);
+      if (val) {
+        const parsed = JSON.parse(val);
+        if (typeof parsed.charIndex === 'number' && parsed.charIndex > 0) {
+          setProgressChar(parsed.charIndex);
+          return;
+        }
+      }
+    } catch (e) {}
+    setProgressChar(0);
+  }, [selectedSectionIdx, currentSection?.id, documentId]);
+
   useEffect(() => {
     const unsubscribe = AudioService.subscribe({
       onStateChange: (state) => setPlaybackState(state),
-      onProgress: (charIndex) => setProgressChar(charIndex),
+      onProgress: (charIndex) => {
+        setProgressChar(charIndex);
+        saveProgress(currentSection.id, charIndex, currentSection.scriptText.length);
+      },
       onEnd: () => {
         setPlaybackState('idle');
+        saveProgress(currentSection.id, currentSection.scriptText.length, currentSection.scriptText.length);
         // Auto play next section if available
         if (selectedSectionIdx < sections.length - 1) {
           setSelectedSectionIdx(idx => idx + 1);
@@ -97,7 +144,7 @@ export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
       unsubscribe();
       AudioService.stop();
     };
-  }, [selectedSectionIdx, sections.length]);
+  }, [selectedSectionIdx, sections.length, currentSection]);
 
   const handlePlayPause = () => {
     if (playbackState === 'playing') {
@@ -361,13 +408,28 @@ export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
                   {idx + 1}
                 </span>
 
-                <div>
-                  <h5 className="text-sm font-semibold text-slate-900 dark:text-white">
-                    {sec.sectionTitle}
-                  </h5>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h5 className="text-sm font-semibold text-slate-900 dark:text-white truncate">
+                      {sec.sectionTitle}
+                    </h5>
+                    {(sectionProgressMap[sec.id] || 0) > 0 && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300">
+                        {sectionProgressMap[sec.id]}%
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5">
                     {sec.scriptText.slice(0, 90)}...
                   </p>
+                  {(sectionProgressMap[sec.id] || 0) > 0 && (
+                    <div className="w-full max-w-[140px] bg-slate-200 dark:bg-slate-700 h-1 rounded-full overflow-hidden mt-1.5">
+                      <div
+                        className="bg-emerald-500 h-full rounded-full transition-all duration-300"
+                        style={{ width: `${sectionProgressMap[sec.id]}%` }}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 

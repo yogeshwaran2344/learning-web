@@ -55,11 +55,8 @@ export class TopicHierarchyService {
       return true;
     });
 
-    // 2. Reference sample mock deck check (e.g. 59-page OS sample deck with sparse mock sections)
-    const titleLower = doc.title.toLowerCase();
-    const isOsCurriculum = titleLower.includes('operat') || titleLower.includes('process') || titleLower.includes('scheduling');
-
-    if (isOsCurriculum && cleanSections.length < 8 && totalPages >= 20) {
+    // Only for the pre-seeded static sample document when mock sections are minimal
+    if (doc.id.startsWith('sample-os') && cleanSections.length < 5) {
       return this.buildOperatingSystemsCanonicalHierarchy(doc.id, doc.title, cleanSections, totalPages);
     }
 
@@ -948,19 +945,44 @@ export class TopicHierarchyService {
     // Detect chapter headings or partition into 2-4 semantic chapter clusters
     const rawChapterGroups: { title: string; sections: DocumentSection[] }[] = [];
 
+    const isMajorChapterHeading = (text?: string): boolean => {
+      if (!text) return false;
+      const t = text.trim();
+      if (/^(?:chapter|module|unit|part)\s+(\d+|[ivxlcdm]+)[:.\s\-–—]*/i.test(t)) return true;
+      if (/^[IVXLCDM]+\.\s+[A-Z]/i.test(t)) return true;
+      if (/^\d+\.\s+[A-Z]/.test(t) && !/^\d+\.\d+/.test(t)) return true;
+      return false;
+    };
+
+    const isSubtopicHeading = (text?: string): boolean => {
+      if (!text) return false;
+      return /^\d+\.\d+/.test(text.trim());
+    };
+
+    const hasAnyMajorChapters = sections.some(s => isMajorChapterHeading(s.title) || isMajorChapterHeading(s.chapterTitle));
+
     for (let i = 0; i < sections.length; i++) {
       const sec = sections[i];
-      const isChapterTitle = /^(?:chapter|unit|module|part)\s*\d+[:\s-]/i.test(sec.title) ||
-        (sec.chapterTitle && sec.chapterTitle.length > 3);
+      const validExplicitChap = (sec.chapterTitle && isMajorChapterHeading(sec.chapterTitle)) ? sec.chapterTitle : null;
+      const isChapTitle = isMajorChapterHeading(sec.title) && !isSubtopicHeading(sec.title);
+      const chapterName = validExplicitChap || (isChapTitle ? sec.title : null);
 
-      const chapterName = sec.chapterTitle || (isChapterTitle ? sec.title : null);
-
-      if (chapterName && (!rawChapterGroups.length || rawChapterGroups[rawChapterGroups.length - 1].title !== chapterName)) {
-        rawChapterGroups.push({ title: chapterName, sections: [sec] });
-      } else if (rawChapterGroups.length > 0) {
-        rawChapterGroups[rawChapterGroups.length - 1].sections.push(sec);
+      if (hasAnyMajorChapters) {
+        if (chapterName && (!rawChapterGroups.length || rawChapterGroups[rawChapterGroups.length - 1].title !== chapterName)) {
+          rawChapterGroups.push({ title: chapterName, sections: [sec] });
+        } else if (rawChapterGroups.length > 0) {
+          rawChapterGroups[rawChapterGroups.length - 1].sections.push(sec);
+        } else {
+          rawChapterGroups.push({ title: `Chapter 1: Foundational Topics`, sections: [sec] });
+        }
       } else {
-        rawChapterGroups.push({ title: `Chapter 1: Foundational Topics`, sections: [sec] });
+        // No explicit Chapter X or major numbers in document (e.g. single-topic presentation or scanned lecture)
+        // Group logically as one cohesive chapter with rich topics
+        if (rawChapterGroups.length === 0) {
+          rawChapterGroups.push({ title: `Chapter 1: ${docTitle}`, sections: [sec] });
+        } else {
+          rawChapterGroups[0].sections.push(sec);
+        }
       }
     }
 

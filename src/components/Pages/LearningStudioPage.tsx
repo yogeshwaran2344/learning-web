@@ -24,7 +24,8 @@ import {
   MessageSquare,
   Loader2,
   GraduationCap,
-  FolderTree
+  FolderTree,
+  AlertTriangle
 } from 'lucide-react';
 import {
   AcademicDocument,
@@ -181,6 +182,7 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
 
   // Dynamic overrides per format when student regenerates or switches language
   const [dynamicOverrides, setDynamicOverrides] = useState<Record<string, any>>({});
+  const [generationError, setGenerationError] = useState<string | null>(null);
 
   const availableDocs = allDocuments && allDocuments.length > 0 ? allDocuments : SAMPLE_DOCUMENTS;
   const documentTabs = [
@@ -322,8 +324,9 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
 
   // Section 5.2 & 5.5: Generate or Regenerate material with verification
   const handleRegenerate = async (targetLang?: AppLanguage, targetDiff?: DifficultyLevel) => {
-    if (activeTab === 'original') return;
+    if (activeTab === 'original' || activeTab === 'topics') return;
     setIsGenerating(true);
+    setGenerationError(null);
 
     const lang = targetLang || currentLanguage;
     const diff = targetDiff || difficulty;
@@ -339,9 +342,12 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
         if (res.verification) {
           setVerificationResult(res.verification);
         }
+      } else {
+        setGenerationError('AI generation did not complete successfully. Click retry to regenerate.');
       }
-    } catch (e) {
-      console.warn('Backend generation fallback:', e);
+    } catch (e: any) {
+      console.warn('Backend generation failed:', e);
+      setGenerationError(e?.message || 'Failed to generate study materials for this topic. Please retry.');
     } finally {
       setIsGenerating(false);
     }
@@ -880,6 +886,33 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
                         <FolderTree className="w-3.5 h-3.5" />
                         <span>Explore All Topics</span>
                       </button>
+                  </div>
+                )}
+
+                {/* AI Generation Error Notice with Retry */}
+                {generationError && (
+                  <div className="m-4 p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 flex items-center justify-between text-xs text-amber-800 dark:text-amber-200 shadow-sm animate-fadeIn">
+                    <div className="flex items-center gap-2.5">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <div>
+                        <span className="font-bold">Generation Notice: </span>
+                        <span>{generationError}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleRegenerate()}
+                        className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold transition cursor-pointer text-xs flex items-center gap-1"
+                      >
+                        <span>Retry Generation</span>
+                      </button>
+                      <button
+                        onClick={() => setGenerationError(null)}
+                        className="px-2 py-1 text-slate-400 hover:text-slate-600 font-bold text-xs"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </div>
                 )}
 

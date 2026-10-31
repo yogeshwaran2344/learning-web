@@ -623,14 +623,22 @@ export class DocumentUnderstandingService {
         (currentMajorNum && newChapNum && currentMajorNum === newChapNum)
       );
 
-      const isNewChapterExplicit = explicitChapter && (!currentChapter || currentChapter.title !== explicitChapter);
+      const isValidChapterString = (s?: string) => {
+        if (!s) return false;
+        if (/^p\d+-sec/i.test(s) || /^Slide\s+\d+$/i.test(s) || /^Section\s+\d+$/i.test(s) || /^Scanned Page\s+\d+$/i.test(s)) return false;
+        return true;
+      };
+
+      const isNewChapterExplicit = Boolean(explicitChapter && isValidChapterString(explicitChapter) && (!currentChapter || currentChapter.title !== explicitChapter));
       const isNewChapterDetected = Boolean(
         !isContinuationTitle &&
         !isSameChapterNumber &&
         (chapterMatch || (majorHeadingMatch && !isSubtopicMatch))
       );
 
-      const detectedChapterTitle = explicitChapter || (chapterMatch ? title : (majorHeadingMatch && !isSubtopicMatch ? title : title));
+      const detectedChapterTitle = (explicitChapter && isValidChapterString(explicitChapter))
+        ? explicitChapter
+        : (chapterMatch ? title : (majorHeadingMatch && !isSubtopicMatch ? title : (currentChapter?.title || title)));
 
       if (isNewChapterExplicit || isNewChapterDetected) {
         if (currentChapter) {
