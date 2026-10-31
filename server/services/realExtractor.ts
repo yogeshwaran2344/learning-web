@@ -514,11 +514,10 @@ export class RealExtractor {
     let confidenceCount = 0;
     let isMultilingual = false;
 
-    // Process at most 100 pages to maintain system responsiveness; warn user if document exceeds limit
-    const MAX_SCANNED_PAGES = 100;
-    const pagesToProcess = renderedPages.slice(0, MAX_SCANNED_PAGES);
-    if (renderedPages.length > MAX_SCANNED_PAGES) {
-      warnings.push(`The scanned PDF exceeds the 100-page limit (${renderedPages.length} pages found). Only the first 100 pages were processed for OCR analysis to maintain system responsiveness; subsequent pages were omitted.`);
+    // Process all rendered pages in sequential OCR batches without silent truncation or omission
+    const pagesToProcess = renderedPages;
+    if (renderedPages.length > 50) {
+      warnings.push(`Comprehensive multi-page scanned PDF processing active (${renderedPages.length} pages). All pages analyzed via optical character recognition without page omission.`);
     }
     const tempDir = path.resolve(process.cwd(), 'server', 'uploads');
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
@@ -528,6 +527,9 @@ export class RealExtractor {
       worker = await this.getMultilingualWorker();
 
       for (let pIdx = 0; pIdx < pagesToProcess.length; pIdx++) {
+        if (pIdx > 0 && pIdx % 10 === 0) {
+          console.log(`[RealExtractor OCR] Processed page ${pIdx} / ${pagesToProcess.length} (${Math.round((pIdx / pagesToProcess.length) * 100)}%)...`);
+        }
         const pageItem = pagesToProcess[pIdx];
         const pageNum = pageItem.pageNumber;
         const tempImgPath = path.join(tempDir, `temp_scan_${Date.now()}_${pIdx}.png`);

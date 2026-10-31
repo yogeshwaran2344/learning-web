@@ -23,6 +23,21 @@ apiRouter.post('/auth/login', (req, res) => AuthController.login(req, res));
 apiRouter.get('/auth/me', authMiddleware, (req, res) => AuthController.me(req, res));
 
 // 2. Document Upload & Library
+apiRouter.get('/documents/supported-formats', (req, res) => {
+  res.json({
+    supportedFormats: [
+      { extension: '.pdf', type: 'PDF Document', description: 'Modern text-based PDFs and scanned image PDFs with OCR.' },
+      { extension: '.pptx', type: 'PowerPoint Presentation', description: 'Modern XML-based PowerPoint presentations with slide text, tables, notes, and shape structures.' },
+      { extension: '.ppt', type: 'Legacy PowerPoint', description: 'Legacy binary PowerPoint files. Converted via OLE2 binary stream extraction. For full layout and vector fidelity, saving as .pptx is recommended.' },
+      { extension: '.png, .jpg, .jpeg', type: 'Scanned Notes & Images', description: 'High-contrast scanned handwritten or printed notes processed with multilingual OCR.' },
+      { extension: '.txt, .md', type: 'Text / Markdown', description: 'Plain text and markdown notes.' }
+    ],
+    maxFileSizeMb: 25,
+    conversionGuidance: {
+      legacyPpt: 'Legacy .ppt files (binary format) are supported via stream extraction. For complex vector animations or embedded slide masters, export the file as modern .pptx in PowerPoint or LibreOffice before uploading.'
+    }
+  });
+});
 apiRouter.post('/documents/upload', authMiddleware, uploadMiddleware.single('file'), (req, res) => DocumentController.upload(req, res));
 apiRouter.get('/documents', authMiddleware, (req, res) => DocumentController.list(req, res));
 apiRouter.get('/documents/:id', authMiddleware, (req, res) => DocumentController.getById(req, res));

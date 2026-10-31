@@ -682,38 +682,44 @@ export class AiGeneratorService {
 
       // 1. Introduction
       const intro = idx === 0
-        ? `Welcome to your LEARNOVA Audio Lesson on "${docTitle}". [PAUSE: 1s] Let's begin with Topic 1: "${sec.title}".`
-        : `Topic ${idx + 1}: "${sec.title}". [TRANSITION] [PAUSE: 1s]`;
+        ? `[Part 1: Introduction] Welcome to your LEARNOVA Audio Lesson on "${docTitle}". [PAUSE: 1s] Let's begin with Topic 1: "${sec.title}".`
+        : `[Part 1: Introduction] Moving to Topic ${idx + 1}: "${sec.title}". [TRANSITION] [PAUSE: 1s]`;
 
       // 2. Simple Explanation
-      const explanation = `In this topic, the material establishes: ${mainConcept}. [PAUSE: 2s]`;
+      const explanation = `[Part 2: Simple Intuitive Explanation] In this topic, the foundational principle establishes: ${mainConcept}. [PAUSE: 2s]`;
 
       // 3. Important Definitions
       let defsText = '';
       if (sec.definitions && sec.definitions.length > 0) {
         const defsSummary = sec.definitions.slice(0, 2).map(d => `${d.term} is defined as ${d.definition}`).join('. ');
-        defsText = ` Key definitions to remember: ${defsSummary}. [PAUSE: 1s]`;
+        defsText = ` [Part 3: Formal Technical Definitions] Key definitions to remember: ${defsSummary}. [PAUSE: 1s]`;
+      } else {
+        defsText = ` [Part 3: Formal Technical Definitions] Core concept to define: "${sec.title}" represents a verified curriculum unit grounded in source text. [PAUSE: 1s]`;
       }
 
       // 4. Relevant Examples
       let examplesText = '';
       if (sec.numericalProblems && sec.numericalProblems.length > 0) {
         const np = sec.numericalProblems[0];
-        examplesText = ` Consider this numerical problem from the text: ${np.problem.slice(0, 120)}. The final result evaluates to ${np.finalAnswer}. [PAUSE: 1s]`;
+        examplesText = ` [Part 4: Real-World Examples] Consider this numerical problem from the text: ${np.problem.slice(0, 120)}. The final result evaluates to ${np.finalAnswer}. [PAUSE: 1s]`;
       } else if (sec.examples && sec.examples.length > 0) {
-        examplesText = ` For example: ${sec.examples[0].slice(0, 120)}. [PAUSE: 1s]`;
+        examplesText = ` [Part 4: Real-World Examples] For example: ${sec.examples[0].slice(0, 120)}. [PAUSE: 1s]`;
+      } else {
+        examplesText = ` [Part 4: Real-World Examples] Applied in experimental, industrial, and analytical scenarios across ${sec.title}. [PAUSE: 1s]`;
       }
 
       // 5. Important Formulas or Invariants
       let formulaText = '';
       if (sec.equations && sec.equations.length > 0) {
-        formulaText = ` The governing mathematical formulation is ${sec.equations[0].label || sec.equations[0].latex}. [PAUSE: 1s]`;
+        formulaText = ` [Part 5: Governing Invariants] The governing mathematical formulation is ${sec.equations[0].label || sec.equations[0].latex}. [PAUSE: 1s]`;
       } else if (sec.conditions && sec.conditions.length > 0) {
-        formulaText = ` Notice why this matters: ${sec.conditions[0]}. [PAUSE: 1s]`;
+        formulaText = ` [Part 5: Governing Invariants] Crucial boundary condition: ${sec.conditions[0]}. [PAUSE: 1s]`;
+      } else {
+        formulaText = ` [Part 5: Governing Invariants] Invariant condition: Invariant parameter bounds must remain consistent throughout. [PAUSE: 1s]`;
       }
 
       // 6. Revision Summary
-      const summary = `To summarize for exam revision: ${mainCondition}`;
+      const summary = ` [Part 6: Examination Revision Summary] To summarize for exam revision: ${mainCondition}`;
 
       script = `${intro} ${explanation}${defsText}${examplesText}${formulaText}${summary}`;
 

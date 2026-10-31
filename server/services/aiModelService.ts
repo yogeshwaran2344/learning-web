@@ -304,7 +304,8 @@ Generate 2 to 3 targeted academic flashcards from this section in JSON format:
     language: AppLanguage,
     difficulty: DifficultyLevel
   ): Promise<GeneratedFormatResult | null> {
-    const promptContext = sections.slice(0, 6).map((s, idx) => `
+    const targetSections = sections.length > 25 ? sections.slice(0, 25) : sections;
+    const promptContext = targetSections.map((s, idx) => `
 [Section ${idx + 1} (Page/Slide ${s.pageNumber || s.slideNumber || idx + 1}): "${s.title}"]
 Content: ${s.content}
 ${s.equations?.length ? 'Equations: ' + s.equations.map(e => e.latex).join('; ') : ''}
@@ -399,7 +400,8 @@ ${promptContext}`;
     difficulty: DifficultyLevel
   ): Promise<GeneratedFormatResult | null> {
     const sec = sections[0] || { pageNumber: 1, title: docTitle, content: 'Academic exposition.' };
-    const promptContext = sections.slice(0, 3).map(s => `[Page ${s.pageNumber}: ${s.title}]\n${s.content}`).join('\n---\n');
+    const targetSections = sections.length > 15 ? sections.slice(0, 15) : sections;
+    const promptContext = targetSections.map(s => `[Page ${s.pageNumber}: ${s.title}]\n${s.content}`).join('\n---\n');
 
     const userPrompt = `Document: "${docTitle}"
 Language: ${language}
