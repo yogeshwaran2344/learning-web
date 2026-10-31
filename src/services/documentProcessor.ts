@@ -409,7 +409,7 @@ export class DocumentProcessor {
     docTitle: string,
     sections: DocumentSection[]
   ): AudioLesson {
-    const audioSections = sections.slice(0, 4).map((sec, idx) => {
+    const audioSections = sections.map((sec, idx) => {
       const scriptText = `Section ${idx + 1}: ${sec.title}. In this part of the material, the author explains: ${sec.content.slice(0, 320)}. Remember that understanding this concept establishes the foundation for subsequent derivations.`;
       
       return {

@@ -244,20 +244,42 @@ export class DocumentUnderstandingService {
       }
     }
 
-    // 9. Identify Chapters & Topic Groupings
+    // 9. Identify Chapters & Topic Groupings Grounded in Actual Document Structure
+    // Never arbitrarily divide sections into equal-sized chunks or fixed slices of 3.
     const chapters: { title: string; startPage: number; endPage: number; keyTopics: string[] }[] = [];
-    const sectionsPerChapter = Math.max(1, Math.ceil(processedSections.length / 3));
-    for (let c = 0; c < processedSections.length; c += sectionsPerChapter) {
-      const slice = processedSections.slice(c, c + sectionsPerChapter);
-      const startPage = slice[0]?.pageNumber || 1;
-      const endPage = slice[slice.length - 1]?.pageNumber || startPage;
-      const keyTopics = slice.map(s => s.title).slice(0, 4);
-      chapters.push({
-        title: slice[0]?.chapterTitle || `Topic Group ${chapters.length + 1}: ${slice[0]?.title || 'Core Material'}`,
-        startPage,
-        endPage,
-        keyTopics
-      });
+    let currentChapter: { title: string; startPage: number; endPage: number; keyTopics: string[] } | null = null;
+
+    for (const sec of processedSections) {
+      const title = (sec.title || '').trim();
+      const explicitChapter = (sec.chapterTitle || '').trim();
+
+      // Check for explicit chapter / unit / module or top-level numbered headings
+      const chapterMatch = title.match(/^(?:chapter|module|unit|part)\s+(\d+|[ivxlcdm]+)[:.\s\-–—]+(.+)/i);
+      const numberedMatch = title.match(/^(\d+)\.\s+([A-Z][^.\n]+)/);
+      const isNewChapterExplicit = explicitChapter && (!currentChapter || currentChapter.title !== explicitChapter);
+      const isNewChapterDetected = Boolean(chapterMatch || (numberedMatch && !title.match(/^\d+\.\d+/)));
+
+      if (isNewChapterExplicit || isNewChapterDetected || !currentChapter) {
+        if (currentChapter) {
+          chapters.push(currentChapter);
+        }
+        const chapterTitle = explicitChapter || (chapterMatch ? title : (numberedMatch ? title : `Topic Group ${chapters.length + 1}: ${title}`));
+        currentChapter = {
+          title: chapterTitle,
+          startPage: sec.pageNumber || 1,
+          endPage: sec.pageNumber || 1,
+          keyTopics: [title]
+        };
+      } else {
+        currentChapter.endPage = Math.max(currentChapter.endPage, sec.pageNumber || currentChapter.startPage);
+        if (currentChapter.keyTopics.length < 8 && !currentChapter.keyTopics.includes(title)) {
+          currentChapter.keyTopics.push(title);
+        }
+      }
+    }
+
+    if (currentChapter) {
+      chapters.push(currentChapter);
     }
 
     const totalEquations = processedSections.reduce((acc, s) => acc + (s.equations?.length || 0), 0);

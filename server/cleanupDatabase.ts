@@ -14,8 +14,8 @@ export function cleanupDatabase() {
   console.log('[Cleanup] Connecting to SQLite database at:', DB_PATH);
   const db = new DatabaseConstructor(DB_PATH);
 
-  // 1. Clean test users (Keep only canonical student and lecturer)
-  const delUsers = db.prepare(`DELETE FROM users WHERE id NOT IN ('usr-student-1', 'usr-lecturer-1')`).run();
+  // 1. Clean test users (Keep only canonical students and lecturer)
+  const delUsers = db.prepare(`DELETE FROM users WHERE id NOT IN ('usr-student-1', 'usr-student-pooja', 'usr-lecturer-1')`).run();
   console.log(`[Cleanup] Removed ${delUsers.changes} temporary/test users.`);
 
   // Ensure canonical users are present
@@ -24,7 +24,18 @@ export function cleanupDatabase() {
     VALUES (?, ?, ?, ?, ?, ?)
   `);
   insertUser.run('usr-student-1', 'alex.rivera@university.edu', 'Alex Rivera', 'sha256:student123', 'student', '2026-10-01T10:00:00Z');
+  insertUser.run('usr-student-pooja', 'pooja@university.edu', 'Pooja', 'sha256:student123', 'student', '2026-10-01T10:00:00Z');
   insertUser.run('usr-lecturer-1', 'prof.ramesh@iisc.ac.in', 'Prof. Ramesh K.', 'sha256:lecturer123', 'lecturer', '2026-09-15T09:00:00Z');
+
+  // Ensure canonical demo sessions are active and persistent
+  const insertSession = db.prepare(`
+    INSERT OR REPLACE INTO sessions (id, userId, token, expiresAt, createdAt)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+  const farFuture = Date.now() + 1000 * 60 * 60 * 24 * 365;
+  insertSession.run('sess-demo-alex', 'usr-student-1', 'token_demo_student_active_session', farFuture, new Date().toISOString());
+  insertSession.run('sess-demo-pooja', 'usr-student-pooja', 'token_demo_pooja_session', farFuture, new Date().toISOString());
+  insertSession.run('sess-demo-lecturer', 'usr-lecturer-1', 'token_demo_lecturer_active_session', farFuture, new Date().toISOString());
 
   // 2. Remove all test / duplicate documents
   const delDocs = db.prepare(`
@@ -44,7 +55,7 @@ export function cleanupDatabase() {
   db.prepare(`DELETE FROM verifications WHERE documentId NOT IN (SELECT id FROM documents)`).run();
   db.prepare(`DELETE FROM quiz_attempts WHERE documentId NOT IN (SELECT id FROM documents)`).run();
   db.prepare(`DELETE FROM feedback_reports WHERE documentId NOT IN (SELECT id FROM documents)`).run();
-  db.prepare(`DELETE FROM saved_items WHERE userId NOT IN ('usr-student-1', 'usr-lecturer-1')`).run();
+  db.prepare(`DELETE FROM saved_items WHERE userId NOT IN ('usr-student-1', 'usr-student-pooja', 'usr-lecturer-1')`).run();
 
   // 4. Seed Canonical Academic Documents
   const insertDoc = db.prepare(`

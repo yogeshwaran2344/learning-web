@@ -27,8 +27,8 @@ export class ApiClient {
     if (!this.token) {
       this.token = localStorage.getItem('learnova_auth_token') || localStorage.getItem('learnlens_auth_token');
     }
-    // If in development mode and token is missing, auto-bind default student session
-    if (!this.token && typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    // Auto-bind default student session if token is missing
+    if (!this.token && typeof window !== 'undefined') {
       this.token = 'token_demo_pooja_session';
       localStorage.setItem('learnova_auth_token', this.token);
     }
@@ -107,15 +107,22 @@ export class ApiClient {
     });
 
     if (!res.ok) {
-      // Auto-recover from 401 in development mode if session expired or lost
-      if (res.status === 401 && typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-        console.warn('[ApiClient] 401 session expired or invalid in dev mode. Auto-recovering student session...');
+      // Auto-recover from 401 if session expired or lost
+      if (res.status === 401 && typeof window !== 'undefined') {
+        console.warn('[ApiClient] 401 session expired or invalid. Auto-recovering student session...');
         try {
-          const loginRes = await fetch(`${API_BASE}/auth/login`, {
+          let loginRes = await fetch(`${API_BASE}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: 'alex.rivera@university.edu', password: 'student123' })
+            body: JSON.stringify({ email: 'pooja@university.edu', password: 'student123' })
           });
+          if (!loginRes.ok) {
+            loginRes = await fetch(`${API_BASE}/auth/login`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: 'alex.rivera@university.edu', password: 'student123' })
+            });
+          }
           if (loginRes.ok) {
             const loginData = await loginRes.json();
             if (loginData?.token) {

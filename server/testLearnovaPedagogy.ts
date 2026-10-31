@@ -13,6 +13,7 @@
 
 import { Database } from './db/database';
 import { AiGeneratorService } from './services/aiGeneratorService';
+import { DocumentUnderstandingService } from './services/documentUnderstandingService';
 import { ExplainThisService } from './services/explainThisService';
 import { MeaningPreservationEngine } from './services/meaningPreservationEngine';
 import { DomainGroundingEngine } from './services/domainGroundingEngine';
@@ -1698,6 +1699,61 @@ async function runPedagogySuite() {
       bioWorkedStep7.examples.length > 0 &&
       bioWorkedStep7.examples[0].formulaApplied.includes('6CO_2'),
     `Domain adaptability verified: Biology stoichimetric mass balance solved with ${bioWorkedStep7.examples[0].solutionSteps.length} derivation steps.`
+  );
+
+  // =================================================================
+  // STEP 19: ARCHITECTURAL OVERHAUL VERIFICATION (USER PRIORITY 1-6)
+  // =================================================================
+  console.log('\n--- STEP 19: ARCHITECTURAL OVERHAUL VERIFICATION (USER PRIORITY 1-6) ---');
+
+  // 19.1 Genuine Chapter and Topic Detection in DocumentUnderstandingService
+  const sixChapterSections = [
+    { id: 's-1', pageNumber: 1, title: 'Chapter 1: Process Management Concepts', content: 'Process execution model.', equations: [], definitions: [], conditions: [], examples: [] },
+    { id: 's-2', pageNumber: 5, title: 'Chapter 2: CPU Scheduling Criteria', content: 'CPU scheduling algorithms.', equations: [], definitions: [], conditions: [], examples: [] },
+    { id: 's-3', pageNumber: 12, title: 'Chapter 3: Memory Paging & Segmentation', content: 'Noncontiguous memory.', equations: [], definitions: [], conditions: [], examples: [] },
+    { id: 's-4', pageNumber: 22, title: 'Chapter 4: Virtual Memory Management', content: 'Demand paging model.', equations: [], definitions: [], conditions: [], examples: [] },
+    { id: 's-5', pageNumber: 35, title: 'Chapter 5: File System Interface', content: 'Directory structures and access methods.', equations: [], definitions: [], conditions: [], examples: [] },
+    { id: 's-6', pageNumber: 48, title: 'Chapter 6: I/O Systems and Device Drivers', content: 'Direct Memory Access and polling.', equations: [], definitions: [], conditions: [], examples: [] }
+  ];
+  const understandingSix = DocumentUnderstandingService.analyze('doc-six-chap', sixChapterSections as any, 'pdf');
+  assertTest(
+    'Step 19.1: DocumentUnderstandingService reconstructs genuine chapter hierarchy without mechanical length/3 grouping',
+    understandingSix.chapters.length === 6 &&
+      understandingSix.chapters[0].title.includes('Chapter 1') &&
+      understandingSix.chapters[5].title.includes('Chapter 6'),
+    `Identified exactly ${understandingSix.chapters.length} genuine chapters (Chapter 1 through Chapter 6) instead of 3 equal-sized chunks.`
+  );
+
+  // 19.2 Zero Generic Boilerplate in AI Generator Fallback
+  const osSections = osDoc.sections as any;
+  const generatedNotes = AiGeneratorService.generateFormat('doc-os-test', 'Operating Systems', osSections, 'notes', 'English', 'intermediate');
+  const notesJson = JSON.stringify(generatedNotes.content);
+  const hasGenericBoilerplate1 = notesJson.includes('The theoretical framework establishes');
+  const hasGenericBoilerplate2 = notesJson.includes('Parameters must be real, non-negative, and bounded');
+  const hasGenericBoilerplate3 = notesJson.includes('All core constraints must be rigorously maintained');
+  assertTest(
+    'Step 19.2: Offline AI fallback generator contains 0 generic boilerplate phrases',
+    !hasGenericBoilerplate1 && !hasGenericBoilerplate2 && !hasGenericBoilerplate3,
+    `Verified 0 generic phrases in generated notes across ${osSections.length} sections.`
+  );
+
+  // 19.3 Audio Generator Produces Independent Lessons for ALL Sections (No slice(0, 4))
+  const generatedAudio = AiGeneratorService.generateFormat('doc-os-test', 'Operating Systems', osSections, 'audio', 'English', 'intermediate');
+  const audioSectionsCount = generatedAudio.content.sections?.length || 0;
+  assertTest(
+    'Step 19.3: Audio generator generates independent audio lessons for ALL sections without arbitrary slice(0, 4) truncation',
+    audioSectionsCount === osSections.length && audioSectionsCount > 4,
+    `Generated ${audioSectionsCount}/${osSections.length} independent audio lesson sections with dedicated topic citations.`
+  );
+
+  // 19.4 Worked Examples Compute Genuine Intermediate Calculations with Step Rationales
+  const generatedWorked = AiGeneratorService.generateFormat('doc-os-test', 'Operating Systems', osSections, 'worked', 'English', 'intermediate');
+  const hasCalculationsStep19 = generatedWorked.content.solutionSteps?.some((s: string) => s.includes('=') && s.includes('Average'));
+  const hasStepRationales = generatedWorked.content.solutionSteps?.every((s: string) => s.includes('[Why performed]:'));
+  assertTest(
+    'Step 19.4: Worked examples compute genuine intermediate arithmetic steps and include "Why performed" rationales',
+    Boolean(hasCalculationsStep19 && hasStepRationales && generatedWorked.content.finalAnswer),
+    `Verified intermediate arithmetic operations and step rationales across all ${generatedWorked.content.solutionSteps?.length} steps.`
   );
 
   // Summary
