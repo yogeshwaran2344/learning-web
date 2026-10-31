@@ -680,20 +680,57 @@ export class AiGeneratorService {
       const mainConcept = summarySentences[0] || sec.content.slice(0, 180);
       const mainCondition = sec.conditions?.[0] || 'All governing parameters and boundary invariants are preserved.';
 
-      if (idx === 0) {
-        script = `Welcome to your LEARNOVA Audio Lesson on "${docTitle}". [PAUSE: 1s] Let's begin with Section 1: ${sec.title}. In this topic, the material establishes: ${mainConcept}. [PAUSE: 2s] Notice why this matters: ${mainCondition}`;
-        if (language === 'Kannada') {
-          script = `ಸ್ವಾಗತ. ಇದು LEARNOVA ${docTitle} ಕುರಿತ ಧ್ವನಿ ಪಾಠ. [PAUSE: 1s] ಮೊದಲನೆಯದಾಗಿ, ಅಧ್ಯಾಯ 1: ${sec.title}. ಲೇಖಕರು ಇಲ್ಲಿ ಮುಖ್ಯ ಅಡಿಪಾಯವನ್ನು ವಿವರಿಸುತ್ತಾರೆ: ${mainConcept.slice(0, 180)}. [PAUSE: 2s] ಷರತ್ತು: ${mainCondition}`;
-        } else if (language === 'Hindi') {
-          script = `नमस्ते, LEARNOVA ऑडियो पाठ में आपका स्वागत है। विषय है "${docTitle}"। [PAUSE: 1s] अध्याय 1: ${sec.title}। लेखक बताते हैं: ${mainConcept.slice(0, 180)}। [PAUSE: 2s] मुख्य शर्त: ${mainCondition}`;
-        }
-      } else {
-        script = `Section ${idx + 1}: ${sec.title}. [TRANSITION] [PAUSE: 1s] Here we examine the core subject principle: ${mainConcept}. [PAUSE: 2s] An important takeaway to remember: ${mainCondition}`;
-        if (language === 'Kannada') {
-          script = `ಮುಂದಿನ ಅಧ್ಯಾಯ ${idx + 1}: ${sec.title}. [TRANSITION] [PAUSE: 1s] ಇಲ್ಲಿ ಮುಖ್ಯ ತತ್ವ: ${mainConcept.slice(0, 180)}. [PAUSE: 2s] ನೆನಪಿನಲ್ಲಿಡಿ: ${mainCondition}`;
-        } else if (language === 'Hindi') {
-          script = `अगला अध्याय ${idx + 1}: ${sec.title}। [TRANSITION] [PAUSE: 1s] यहाँ मुख्य सिद्धांत: ${mainConcept.slice(0, 180)}। [PAUSE: 2s] ध्यान देने योग्य बिंदु: ${mainCondition}`;
-        }
+      // 1. Introduction
+      const intro = idx === 0
+        ? `Welcome to your LEARNOVA Audio Lesson on "${docTitle}". [PAUSE: 1s] Let's begin with Topic 1: "${sec.title}".`
+        : `Topic ${idx + 1}: "${sec.title}". [TRANSITION] [PAUSE: 1s]`;
+
+      // 2. Simple Explanation
+      const explanation = `In this topic, the material establishes: ${mainConcept}. [PAUSE: 2s]`;
+
+      // 3. Important Definitions
+      let defsText = '';
+      if (sec.definitions && sec.definitions.length > 0) {
+        const defsSummary = sec.definitions.slice(0, 2).map(d => `${d.term} is defined as ${d.definition}`).join('. ');
+        defsText = ` Key definitions to remember: ${defsSummary}. [PAUSE: 1s]`;
+      }
+
+      // 4. Relevant Examples
+      let examplesText = '';
+      if (sec.numericalProblems && sec.numericalProblems.length > 0) {
+        const np = sec.numericalProblems[0];
+        examplesText = ` Consider this numerical problem from the text: ${np.problem.slice(0, 120)}. The final result evaluates to ${np.finalAnswer}. [PAUSE: 1s]`;
+      } else if (sec.examples && sec.examples.length > 0) {
+        examplesText = ` For example: ${sec.examples[0].slice(0, 120)}. [PAUSE: 1s]`;
+      }
+
+      // 5. Important Formulas or Invariants
+      let formulaText = '';
+      if (sec.equations && sec.equations.length > 0) {
+        formulaText = ` The governing mathematical formulation is ${sec.equations[0].label || sec.equations[0].latex}. [PAUSE: 1s]`;
+      } else if (sec.conditions && sec.conditions.length > 0) {
+        formulaText = ` Notice why this matters: ${sec.conditions[0]}. [PAUSE: 1s]`;
+      }
+
+      // 6. Revision Summary
+      const summary = `To summarize for exam revision: ${mainCondition}`;
+
+      script = `${intro} ${explanation}${defsText}${examplesText}${formulaText}${summary}`;
+
+      if (language === 'Kannada') {
+        const knDefs = sec.definitions && sec.definitions.length > 0
+          ? ` ಪ್ರಮುಖ ವ್ಯಾಖ್ಯಾನ: ${sec.definitions[0].term} - ${sec.definitions[0].definition.slice(0, 100)}.`
+          : '';
+        script = idx === 0
+          ? `ಸ್ವಾಗತ. ಇದು LEARNOVA ${docTitle} ಕುರಿತ ಸಮಗ್ರ ಧ್ವನಿ ಪಾಠ. [PAUSE: 1s] ವಿಷಯ 1: ${sec.title}. ಲೇಖಕರು ಇಲ್ಲಿ ಮುಖ್ಯ ಅಡಿಪಾಯವನ್ನು ವಿವರಿಸುತ್ತಾರೆ: ${mainConcept.slice(0, 180)}.[PAUSE: 2s]${knDefs} [PAUSE: 1s] ನೆನಪಿನಲ್ಲಿಡಿ: ${mainCondition}`
+          : `ವಿಷಯ ${idx + 1}: ${sec.title}. [TRANSITION] [PAUSE: 1s] ಇಲ್ಲಿ ಮುಖ್ಯ ತತ್ವ: ${mainConcept.slice(0, 180)}.[PAUSE: 2s]${knDefs} [PAUSE: 1s] ಪರೀಕ್ಷೆಯ ಸಾರಾಂಶ: ${mainCondition}`;
+      } else if (language === 'Hindi') {
+        const hiDefs = sec.definitions && sec.definitions.length > 0
+          ? ` मुख्य परिभाषा: ${sec.definitions[0].term} - ${sec.definitions[0].definition.slice(0, 100)}।`
+          : '';
+        script = idx === 0
+          ? `नमस्ते, LEARNOVA ऑडियो पाठ में आपका स्वागत है। विषय है "${docTitle}"। [PAUSE: 1s] विषय 1: ${sec.title}। लेखक बताते हैं: ${mainConcept.slice(0, 180)}। [PAUSE: 2s]${hiDefs} [PAUSE: 1s] मुख्य शर्त: ${mainCondition}`
+          : `विषय ${idx + 1}: ${sec.title}। [TRANSITION] [PAUSE: 1s] यहाँ मुख्य सिद्धांत: ${mainConcept.slice(0, 180)}। [PAUSE: 2s]${hiDefs} [PAUSE: 1s] परीक्षा सारांश: ${mainCondition}`;
       }
 
       const citation: SourceCitationRecord = {

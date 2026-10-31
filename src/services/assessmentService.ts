@@ -259,6 +259,11 @@ export class AssessmentService {
       pageNumber: 1
     };
 
+    const firstSentence = (primarySec.content || '').split(/[.?!]\s+/).map(s => s.trim()).filter(s => s.length > 15)[0] || primarySec.title;
+    const defTerm = (primarySec.definitions && primarySec.definitions[0]?.term) || primarySec.title;
+    const defMeaning = (primarySec.definitions && primarySec.definitions[0]?.definition) || firstSentence;
+    const otherTerms = relevantSections.slice(1).map(s => (s.definitions && s.definitions[0]?.term) || s.title).filter(t => t.toLowerCase() !== defTerm.toLowerCase());
+
     const citation: SourceCitation = {
       id: `cite-${primarySec.id}`,
       documentId: document.id,
@@ -278,31 +283,31 @@ export class AssessmentService {
         topicTitle: scope.title || primarySec.title,
         questionText: isOsDocument
           ? 'What is the standard definition of a "Process" in modern operating systems?'
-          : `Which statement accurately defines the fundamental concept of ${primarySec.title}?`,
+          : `According to Page ${citation.pageNumber}, what is the foundational definition and academic role of "${defTerm}"?`,
         options: [
           {
             id: 'opt-mcq-1',
-            text: isOsDocument ? 'A program currently in execution with active CPU state and memory.' : `The core governing formulation established on Page ${citation.pageNumber}.`,
+            text: isOsDocument ? 'A program currently in execution with active CPU state and memory.' : `${defMeaning.slice(0, 140)}.`,
             isCorrect: true,
             explanation: `Verified directly against source citation on Page ${citation.pageNumber}.`
           },
           {
             id: 'opt-mcq-2',
-            text: isOsDocument ? 'Static program code passively stored on the hard drive.' : 'A heuristic approximation that ignores boundary constraints.',
+            text: isOsDocument ? 'Static program code passively stored on the hard drive.' : `An operational mechanism belonging to ${otherTerms[0] || 'an unverified context'}.`,
             isCorrect: false,
             explanation: isOsDocument ? 'Static code on disk is a program, not a running process.' : 'Contradicts verified ground truth.'
           },
           {
             id: 'opt-mcq-3',
-            text: isOsDocument ? 'A hardware component responsible for memory paging.' : 'An arbitrary assumption with no mathematical basis.',
+            text: isOsDocument ? 'A hardware component responsible for memory paging.' : 'An arbitrary heuristic assumption with no empirical or mathematical basis.',
             isCorrect: false,
             explanation: 'Incorrect role and definition.'
           },
           {
             id: 'opt-mcq-4',
-            text: isOsDocument ? 'A thread that has completed its execution cycle.' : 'A legacy rule superseded in current literature.',
+            text: isOsDocument ? 'A thread that has completed its execution cycle.' : 'A deprecated parameter superseded in modern academic literature.',
             isCorrect: false,
-            explanation: 'A completed entity is terminated, not an active process.'
+            explanation: 'Incorrect classification.'
           }
         ],
         explanation: `Confirmed in Page ${citation.pageNumber} (${citation.sectionTitle}).`,
@@ -317,34 +322,34 @@ export class AssessmentService {
         topicTitle: scope.title || primarySec.title,
         questionText: isOsDocument
           ? 'Under CPU scheduling criteria, why does Shortest-Job-First (SJF) achieve optimal average waiting time?'
-          : `Why does the invariant formulation in ${primarySec.title} require strict boundary constraints?`,
+          : `Under the governing principles of "${primarySec.title}", why are the boundary constraints on Page ${citation.pageNumber} required?`,
         options: [
           {
             id: 'opt-mcq-int-1',
-            text: isOsDocument ? 'It minimizes cumulative waiting time by executing shorter CPU bursts first, preventing the convoy effect.' : 'It maintains mathematical invariance without introducing unsupported assumptions.',
+            text: isOsDocument ? 'It minimizes cumulative waiting time by executing shorter CPU bursts first, preventing the convoy effect.' : `It enforces verified ground truth without introducing unsupported extrapolations: ${firstSentence.slice(0, 120)}.`,
             isCorrect: true,
-            explanation: 'Provably minimal average waiting time by mathematical scheduling ordering.'
+            explanation: 'Provably verified against source ordering and specifications.'
           },
           {
             id: 'opt-mcq-int-2',
-            text: isOsDocument ? 'It allocates equal time quanta to all processes regardless of length.' : 'It allows unrestricted variance across all input ranges.',
+            text: isOsDocument ? 'It allocates equal time quanta to all processes regardless of length.' : 'It allows unrestricted variance across all input ranges without validation.',
             isCorrect: false,
             explanation: isOsDocument ? 'That describes Round Robin scheduling, not SJF.' : 'Violates boundary invariance.'
           },
           {
             id: 'opt-mcq-int-3',
-            text: isOsDocument ? 'It prioritizes I/O-bound tasks strictly after CPU-bound tasks.' : 'It eliminates the need for normalization.',
+            text: isOsDocument ? 'It prioritizes I/O-bound tasks strictly after CPU-bound tasks.' : `It eliminates the need for formal definitions established in ${defTerm}.`,
             isCorrect: false,
-            explanation: 'Does not reflect SJF algorithmic mechanics.'
+            explanation: 'Does not reflect verified academic mechanics.'
           },
           {
             id: 'opt-mcq-int-4',
-            text: isOsDocument ? 'It operates strictly on preemptive priority without aging.' : 'It guarantees zero computational overhead.',
+            text: isOsDocument ? 'It operates strictly on preemptive priority without aging.' : 'It guarantees zero computational or structural overhead under all conditions.',
             isCorrect: false,
-            explanation: 'Non-preemptive SJF also exists and requires predicted burst lengths.'
+            explanation: 'Incorrect assertion.'
           }
         ],
-        explanation: `SJF scheduling optimality is verified on Page ${citation.pageNumber}.`,
+        explanation: `Optimality verified on Page ${citation.pageNumber}.`,
         citation
       });
     }
@@ -359,7 +364,7 @@ export class AssessmentService {
       topicTitle: scope.title || primarySec.title,
       questionText: isOsDocument
         ? 'True or False: In First-Come, First-Served (FCFS) scheduling, short processes arriving after a long process experience the "convoy effect", significantly increasing average waiting time.'
-        : `True or False: According to ${primarySec.title}, governing formulations maintain strict consistency without omitting preconditions.`,
+        : `True or False: In "${primarySec.title}", the source material explicitly establishes: "${firstSentence.slice(0, 140)}"`,
       options: [
         {
           id: 'opt-tf-1',
@@ -367,13 +372,13 @@ export class AssessmentService {
           isCorrect: tfIsTrue,
           explanation: isOsDocument
             ? 'Correct: FCFS is non-preemptive, meaning short processes must wait behind prolonged CPU bursts, triggering convoy latency.'
-            : 'Correct: Source text enforces complete precondition preservation.'
+            : `Correct: Explicitly verified on Page ${citation.pageNumber}.`
         },
         {
           id: 'opt-tf-2',
           text: 'False',
           isCorrect: !tfIsTrue,
-          explanation: 'Incorrect: The convoy effect is a well-documented bottleneck of FCFS scheduling verified on original slides.'
+          explanation: 'Incorrect: The statement is directly confirmed in the original study text.'
         }
       ],
       explanation: `Verified against ${citation.sectionTitle} on Page ${citation.pageNumber}.`,
@@ -381,6 +386,10 @@ export class AssessmentService {
     });
 
     // 3. Fill in the Blanks Question
+    const maskedSentence = firstSentence.includes(defTerm)
+      ? firstSentence.replace(new RegExp(`\\b${defTerm}\\b`, 'i'), '_______')
+      : `${firstSentence.slice(0, 80)} represents the essential _______ of ${primarySec.title}`;
+
     questions.push({
       id: `q-fib-1`,
       type: 'fill_blank',
@@ -389,17 +398,17 @@ export class AssessmentService {
       topicTitle: scope.title || primarySec.title,
       questionText: isOsDocument
         ? 'A process control block (PCB) stores critical metadata, including the program counter, CPU registers, and the current process _______.'
-        : `In ${primarySec.title}, invariant definitions ensure all boundary conditions remain _______ without contradiction.`,
-      fillBlankAnswer: isOsDocument ? 'state' : 'preserved',
+        : `Fill in the blank for "${primarySec.title}": "${maskedSentence.slice(0, 150)}"`,
+      fillBlankAnswer: isOsDocument ? 'state' : defTerm,
       options: [
-        { id: 'fib-1', text: isOsDocument ? 'state' : 'preserved', isCorrect: true, explanation: 'Direct academic definition.' },
-        { id: 'fib-2', text: isOsDocument ? 'driver' : 'omitted', isCorrect: false, explanation: 'Incorrect term.' },
-        { id: 'fib-3', text: isOsDocument ? 'thread' : 'approximated', isCorrect: false, explanation: 'Incorrect term.' },
-        { id: 'fib-4', text: isOsDocument ? 'cache' : 'variable', isCorrect: false, explanation: 'Incorrect term.' }
+        { id: 'fib-1', text: isOsDocument ? 'state' : defTerm, isCorrect: true, explanation: 'Direct academic definition from text.' },
+        { id: 'fib-2', text: isOsDocument ? 'driver' : (otherTerms[0] || 'heuristic'), isCorrect: false, explanation: 'Incorrect term.' },
+        { id: 'fib-3', text: isOsDocument ? 'thread' : (otherTerms[1] || 'arbitrary parameter'), isCorrect: false, explanation: 'Incorrect term.' },
+        { id: 'fib-4', text: isOsDocument ? 'cache' : (otherTerms[2] || 'variable constraint'), isCorrect: false, explanation: 'Incorrect term.' }
       ],
       explanation: isOsDocument
         ? 'The PCB maintains the process state (New, Ready, Running, Waiting, Terminated) as verified on Page 1.'
-        : `Verified in ${citation.sectionTitle}.`,
+        : `Verified in ${citation.sectionTitle} on Page ${citation.pageNumber}.`,
       citation
     });
 
@@ -412,10 +421,10 @@ export class AssessmentService {
       topicTitle: scope.title || primarySec.title,
       questionText: isOsDocument
         ? 'Briefly differentiate between a Program and a Process in two concise sentences.'
-        : `Summarize the primary purpose and invariant rule of ${primarySec.title}:`,
+        : `Summarize the primary purpose and operational mechanism of "${primarySec.title}" based on Page ${citation.pageNumber}:`,
       modelAnswer: isOsDocument
         ? 'A program is a passive entity consisting of code stored on disk, whereas a process is an active entity representing that program currently in execution with memory and CPU state.'
-        : `${primarySec.title} provides a formal framework with verified ground-truth citations and strictly preserved mathematical constraints.`,
+        : `According to Page ${citation.pageNumber}, ${primarySec.title} establishes: ${firstSentence.slice(0, 180)}.`,
       explanation: `Model Answer verified against Page ${citation.pageNumber}: "${citation.exactQuote}"`,
       citation
     });
@@ -429,51 +438,51 @@ export class AssessmentService {
       topicTitle: scope.title || primarySec.title,
       questionText: isOsDocument
         ? 'Scenario: An interactive desktop operating system with multiple concurrent users requires quick response times for UI windows while running background backups. Which scheduling algorithm is best suited and how should the time quantum be configured?'
-        : `Practical Application Scenario: When applying ${primarySec.title} in real-world systems, how do engineers enforce boundary constraints under varying workloads?`,
+        : `Practical Application Scenario: When applying the principles of "${primarySec.title}" in real-world systems, how do practitioners satisfy the conditions established on Page ${citation.pageNumber}?`,
       options: [
         {
           id: 'opt-app-1',
           text: isOsDocument
             ? 'Round Robin (or Multilevel Feedback Queue) with an optimized time quantum (10–100 ms) so interactive UI processes get immediate response without excessive context-switch overhead.'
-            : 'Implement strict invariant validation checks before executing dynamic runtime allocations.',
+            : `Implement the verified framework: ${firstSentence.slice(0, 120)}.`,
           isCorrect: true,
-          explanation: 'Round Robin balances interactive latency and CPU throughput when the quantum is properly calibrated.'
+          explanation: 'Balances operational throughput and boundary invariants correctly.'
         },
         {
           id: 'opt-app-2',
           text: isOsDocument
             ? 'First-Come, First-Served (FCFS) because it has zero scheduling logic overhead.'
-            : 'Disable boundary checking to maximize processing speed.',
+            : 'Omit boundary checks and execute without input verification.',
           isCorrect: false,
           explanation: isOsDocument
             ? 'FCFS would freeze UI responsiveness whenever the backup process claims the CPU.'
-            : 'Omitting checks leads to catastrophic boundary failures.'
+            : 'Omitting validation leads to system failure.'
         },
         {
           id: 'opt-app-3',
           text: isOsDocument
             ? 'Non-preemptive Shortest Job First with infinite time quantum.'
-            : 'Rely solely on empirical guesswork.',
+            : 'Rely solely on arbitrary heuristic guesswork.',
           isCorrect: false,
-          explanation: 'Non-preemptive SJF cannot guarantee interactive response times for incoming UI clicks.'
+          explanation: 'Does not satisfy guaranteed boundary conditions.'
         },
         {
           id: 'opt-app-4',
           text: isOsDocument
             ? 'Random scheduling without priority queues.'
-            : 'Assume all inputs are strictly identical.',
+            : 'Assume all inputs are uniform without evaluation.',
           isCorrect: false,
-          explanation: 'Random scheduling provides no latency guarantees.'
+          explanation: 'Provides no performance or correctness guarantees.'
         }
       ],
       modelAnswer: isOsDocument
         ? 'Use Round Robin or Multilevel Feedback Queue. Configure a balanced time quantum (typically 10-100 ms) such that 80% of CPU bursts finish within one quantum, avoiding UI stuttering.'
-        : 'Engineers validate boundary invariants continuously against established specifications.',
-      explanation: `Application criteria verified against Page ${citation.pageNumber} scheduling principles.`,
+        : `Practitioners validate conditions continuously according to Page ${citation.pageNumber}.`,
+      explanation: `Application criteria verified against Page ${citation.pageNumber}.`,
       citation
     });
 
-    // 6. Numerical / Problem-Solving Question (with Given Values, Formula, Derivations, and Final Answer)
+    // 6. Numerical / Problem-Solving Question
     if (isOsDocument) {
       questions.push({
         id: `q-num-1`,
@@ -515,34 +524,46 @@ export class AssessmentService {
         }
       });
     } else {
+      // Find real equations or numerical problems in the document
+      const mathSec = relevantSections.find(s => (s.equations && s.equations.length > 0) || /(?:=|\\times|\\frac|\+|-|\*|\/)/.test(s.content)) || primarySec;
+      const eq = mathSec.equations?.[0];
+      const formulaText = eq?.latex || (mathSec.content.match(/([A-Z][A-Za-z0-9_\s]*=[^.\n]+)/)?.[0] || 'Y = A + B').trim();
+
       questions.push({
-        id: `q-num-generic-1`,
+        id: `q-num-calc-1`,
         type: 'numerical',
         difficulty: 'advanced',
         topicId: scope.id,
-        topicTitle: primarySec.title,
-        questionText: `Quantitative Analysis: Given baseline parameter value X = 10 units and scaling factor K = 2.5 under ${primarySec.title}, compute the resulting transformed value Y = K * X:`,
+        topicTitle: mathSec.title,
+        questionText: `Quantitative Analysis: Based on the relationship "${formulaText}" established on Page ${mathSec.pageNumber || 1}, evaluate the system output when verified inputs are applied:`,
         givenValues: {
-          'Baseline X': 10,
-          'Scaling Factor K': 2.5,
-          'Formulation': 'Y = K * X'
+          'Governing Formula': formulaText,
+          'Subject': mathSec.title,
+          'Page Reference': mathSec.pageNumber || 1
         },
-        formulaUsed: 'Y = K \\times X',
+        formulaUsed: formulaText,
         stepByStepSolution: [
-          'Step 1: Identify given baseline X = 10.',
-          'Step 2: Identify scaling factor K = 2.5.',
-          'Step 3: Compute Y = 2.5 * 10 = 25 units.',
+          `Step 1: Identify verified formula from Page ${mathSec.pageNumber || 1}: ${formulaText}.`,
+          'Step 2: Map inputs directly to the specified parameters.',
+          'Step 3: Perform direct algebraic substitution.',
           'Step 4: Verify dimensions match invariant requirements.'
         ],
-        finalAnswer: '25',
+        finalAnswer: formulaText,
         options: [
-          { id: 'num-opt-1', text: '25 units', isCorrect: true, explanation: 'Correct: 10 * 2.5 = 25.' },
-          { id: 'num-opt-2', text: '12.5 units', isCorrect: false, explanation: 'Incorrect calculation.' },
-          { id: 'num-opt-3', text: '250 units', isCorrect: false, explanation: 'Incorrect magnitude.' },
-          { id: 'num-opt-4', text: '4 units', isCorrect: false, explanation: 'Incorrect quotient calculation.' }
+          { id: 'num-opt-1', text: formulaText, isCorrect: true, explanation: `Correct: Matches verified formulation on Page ${mathSec.pageNumber || 1}.` },
+          { id: 'num-opt-2', text: `${formulaText} \\cdot 0`, isCorrect: false, explanation: 'Incorrect: Degenerate zero formulation.' },
+          { id: 'num-opt-3', text: `\\frac{1}{${formulaText}}`, isCorrect: false, explanation: 'Incorrect: Inverted quotient formulation.' },
+          { id: 'num-opt-4', text: `${formulaText} + \\infty`, isCorrect: false, explanation: 'Incorrect: Unbounded divergence.' }
         ],
-        explanation: `Formulation verified against ${citation.sectionTitle} on Page ${citation.pageNumber}.`,
-        citation
+        explanation: `Formulation verified against ${mathSec.title} on Page ${mathSec.pageNumber || 1}.`,
+        citation: {
+          id: `cite-math-${mathSec.id}`,
+          documentId: document.id,
+          pageNumber: mathSec.pageNumber || 1,
+          sectionTitle: mathSec.title,
+          exactQuote: mathSec.content ? mathSec.content.slice(0, 100) : formulaText,
+          contextSnippet: mathSec.content ? mathSec.content.slice(0, 140) : formulaText
+        }
       });
     }
 
@@ -570,15 +591,35 @@ export class AssessmentService {
         const given = userChoice.toLowerCase().trim();
         isCorrect = given === expected || (q.options?.some(o => o.isCorrect && o.text.toLowerCase().trim() === given) ?? false);
       } else if (q.type === 'numerical') {
-        const expected = (q.finalAnswer || '').toLowerCase().replace(/[^0-9.]/g, '');
-        const given = userChoice.toLowerCase().replace(/[^0-9.]/g, '');
-        const matchedOption = q.options?.find(o => o.id === userChoice);
-        isCorrect = (expected.length > 0 && given === expected) || (matchedOption?.isCorrect ?? false);
+        const expectedStr = (q.finalAnswer || '').toLowerCase().trim();
+        const givenStr = userChoice.toLowerCase().trim();
+        const matchedOption = q.options?.find(o => o.id === userChoice || o.text.toLowerCase().trim() === givenStr);
+        if (matchedOption) {
+          isCorrect = matchedOption.isCorrect;
+        } else {
+          // Mathematical validation: numeric tolerance, unit stripping, and percentage support
+          const expectedNum = parseFloat(expectedStr.replace(/[^0-9.-]/g, ''));
+          const givenNum = parseFloat(givenStr.replace(/[^0-9.-]/g, ''));
+          if (!isNaN(expectedNum) && !isNaN(givenNum)) {
+            const diff = Math.abs(expectedNum - givenNum);
+            const relativeDiff = expectedNum !== 0 ? diff / Math.abs(expectedNum) : diff;
+            isCorrect = diff < 0.05 || relativeDiff < 0.02;
+          } else {
+            isCorrect = expectedStr === givenStr || (expectedStr.length > 0 && givenStr.includes(expectedStr));
+          }
+        }
       } else if (q.type === 'short_answer') {
-        // Short answer gets verified if user provided non-empty response
-        isCorrect = userChoice.trim().length >= 10;
+        // Evaluate semantic key concept overlap from modelAnswer / explanation
+        const given = userChoice.toLowerCase().trim();
+        const modelWords = (q.modelAnswer || q.explanation || '')
+          .toLowerCase()
+          .replace(/[^a-z0-9\s]/g, ' ')
+          .split(/\s+/)
+          .filter(w => w.length > 3);
+        const matchCount = modelWords.filter(w => given.includes(w)).length;
+        isCorrect = given.length >= 10 && (modelWords.length === 0 || matchCount >= Math.min(2, modelWords.length));
       } else {
-        const matchedOption = q.options?.find(o => o.id === userChoice);
+        const matchedOption = q.options?.find(o => o.id === userChoice || o.text.toLowerCase().trim() === userChoice.toLowerCase().trim());
         isCorrect = matchedOption ? matchedOption.isCorrect : false;
       }
 

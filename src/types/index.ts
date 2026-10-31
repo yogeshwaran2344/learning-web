@@ -89,6 +89,11 @@ export interface DocumentSection {
   definitions?: { term: string; definition: string; conditions?: string }[];
   conditions?: string[];
   examples?: string[];
+  numericalProblems?: { problem: string; solutionSteps: string[]; finalAnswer: string; pageNumber: number }[];
+  algorithms?: { language?: string; codeOrPseudocode: string; description: string; pageNumber: number }[];
+  diagrams?: { title: string; description: string; pageNumber: number }[];
+  flowcharts?: { title: string; description: string; pageNumber: number }[];
+  graphs?: { title: string; description: string; pageNumber: number }[];
   uncertainSymbols?: string[];
 }
 
