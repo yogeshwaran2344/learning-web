@@ -23,11 +23,13 @@ import { DetailedNotesService } from '../../services/detailedNotesService';
 
 interface WorkedExamplesViewProps {
   document: AcademicDocument;
+  initialTopicId?: string;
   onNavigateToCitation: (citation: SourceCitation) => void;
 }
 
 export const WorkedExamplesView: React.FC<WorkedExamplesViewProps> = ({
   document,
+  initialTopicId,
   onNavigateToCitation
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -36,14 +38,33 @@ export const WorkedExamplesView: React.FC<WorkedExamplesViewProps> = ({
     return DetailedNotesService.generateWorkedExamplesSuite(document);
   }, [document]);
 
+  const activeTopicTitle = useMemo(() => {
+    if (!initialTopicId || !document.topicHierarchy) return null;
+    for (const c of document.topicHierarchy.chapters) {
+      const t = c.topics.find(top => top.id === initialTopicId);
+      if (t) return t.title.toLowerCase();
+    }
+    return null;
+  }, [initialTopicId, document.topicHierarchy]);
+
   const [selectedExampleId, setSelectedExampleId] = useState<string>('all');
 
   const visibleExamples = useMemo(() => {
-    if (selectedExampleId === 'all') {
-      return suite.examples;
+    let list = suite.examples;
+    if (activeTopicTitle) {
+      const topicMatches = list.filter(e =>
+        e.topicTitle.toLowerCase().includes(activeTopicTitle) ||
+        activeTopicTitle.includes(e.topicTitle.toLowerCase())
+      );
+      if (topicMatches.length > 0) {
+        list = topicMatches;
+      }
     }
-    return suite.examples.filter(e => e.id === selectedExampleId);
-  }, [suite, selectedExampleId]);
+    if (selectedExampleId === 'all') {
+      return list;
+    }
+    return list.filter(e => e.id === selectedExampleId);
+  }, [suite, selectedExampleId, activeTopicTitle]);
 
   const handleCopySolution = (ex: WorkedExampleItem) => {
     const text = [

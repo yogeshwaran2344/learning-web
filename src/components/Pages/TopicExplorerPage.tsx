@@ -30,7 +30,10 @@ import {
   ArrowLeftRight,
   FolderPlus,
   MoveRight,
-  Info
+  Info,
+  ExternalLink,
+  GitBranch,
+  FolderInput
 } from 'lucide-react';
 import {
   AcademicDocument,
@@ -38,7 +41,8 @@ import {
   DocumentTopic,
   DocumentSubtopic,
   DocumentChapter,
-  StudioTab
+  StudioTab,
+  SourceCitation
 } from '../../types';
 import { TopicHierarchyService } from '../../services/topicHierarchyService';
 import { StorageService } from '../../services/storageService';
@@ -49,13 +53,17 @@ interface TopicExplorerPageProps {
   onLearnTopic: (topic: DocumentTopic, preferredFormat?: StudioTab) => void;
   onNavigateToDocumentList: () => void;
   onDocumentUpdate?: (updatedDoc: AcademicDocument) => void;
+  onNavigateToPage?: (pageNumber: number) => void;
+  onNavigateToCitation?: (citation: SourceCitation) => void;
 }
 
 export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
   document,
   onLearnTopic,
   onNavigateToDocumentList,
-  onDocumentUpdate
+  onDocumentUpdate,
+  onNavigateToPage,
+  onNavigateToCitation
 }) => {
   // Ensure we always have an active topic hierarchy
   const [hierarchy, setHierarchy] = useState<DocumentTopicHierarchy>(() => {
@@ -103,6 +111,30 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
   // Merge Topics State
   const [mergeSourceTopicId, setMergeSourceTopicId] = useState<string | null>(null);
   const [mergeTargetTopicId, setMergeTargetTopicId] = useState<string>('');
+
+  // Move Topic to Chapter State
+  const [moveTopicData, setMoveTopicData] = useState<{
+    topicId: string;
+    topicTitle: string;
+    currentChapterTitle: string;
+  } | null>(null);
+  const [targetChapterIdForMoveTopic, setTargetChapterIdForMoveTopic] = useState<string>('');
+
+  // Split Topic State
+  const [splitTopicData, setSplitTopicData] = useState<{
+    topic: DocumentTopic;
+  } | null>(null);
+  const [selectedSubtopicIdsToSplit, setSelectedSubtopicIdsToSplit] = useState<Set<string>>(new Set());
+  const [newSplitTopicTitle, setNewSplitTopicTitle] = useState('');
+
+  // Add Topic to Chapter State
+  const [addTopicChapterId, setAddTopicChapterId] = useState<string | null>(null);
+  const [newTopicTitle, setNewTopicTitle] = useState('');
+  const [newTopicStartPage, setNewTopicStartPage] = useState(1);
+  const [newTopicEndPage, setNewTopicEndPage] = useState(1);
+
+  // Learn Selected Topics Format Selector Modal
+  const [isLearnSelectedModalOpen, setIsLearnSelectedModalOpen] = useState(false);
 
   const syncHierarchyUpdate = (newHierarchy: DocumentTopicHierarchy) => {
     setHierarchy(newHierarchy);
@@ -235,6 +267,62 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
       setMergeSourceTopicId(null);
       setMergeTargetTopicId('');
     }
+  };
+
+  // Section 2.5: Move Topic to Chapter Submit
+  const handleMoveTopicToChapterSubmit = () => {
+    if (moveTopicData && targetChapterIdForMoveTopic) {
+      const updated = TopicHierarchyService.moveTopicToChapter(
+        hierarchy,
+        moveTopicData.topicId,
+        targetChapterIdForMoveTopic
+      );
+      syncHierarchyUpdate(updated);
+      setMoveTopicData(null);
+      setTargetChapterIdForMoveTopic('');
+    }
+  };
+
+  // Section 2.5: Split Topic Submit
+  const handleSplitTopicSubmit = () => {
+    if (splitTopicData && selectedSubtopicIdsToSplit.size > 0 && newSplitTopicTitle.trim()) {
+      const updated = TopicHierarchyService.splitTopic(
+        hierarchy,
+        splitTopicData.topic.id,
+        Array.from(selectedSubtopicIdsToSplit),
+        newSplitTopicTitle
+      );
+      syncHierarchyUpdate(updated);
+      setSplitTopicData(null);
+      setSelectedSubtopicIdsToSplit(new Set());
+      setNewSplitTopicTitle('');
+    }
+  };
+
+  // Section 2.5: Add Topic to Chapter Submit
+  const handleAddTopicToChapterSubmit = (chapterId: string) => {
+    if (newTopicTitle.trim()) {
+      const updated = TopicHierarchyService.addTopicToChapter(
+        hierarchy,
+        chapterId,
+        newTopicTitle,
+        [newTopicStartPage, newTopicEndPage]
+      );
+      syncHierarchyUpdate(updated);
+      setNewTopicTitle('');
+      setAddTopicChapterId(null);
+    }
+  };
+
+  // Section 2.7: Learn Selected Topics Trigger
+  const handleLearnSelected = (preferredFormat?: StudioTab) => {
+    const firstSelected = hierarchy.chapters
+      .flatMap(c => c.topics)
+      .find(t => selectedTopicIds.has(t.id));
+    if (firstSelected) {
+      onLearnTopic(firstSelected, preferredFormat);
+    }
+    setIsLearnSelectedModalOpen(false);
   };
 
   // Filtering topics based on search
@@ -403,6 +491,19 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                   </div>
 
                   <div className="flex items-center gap-3 shrink-0 text-xs">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setAddTopicChapterId(chapter.id);
+                        setNewTopicStartPage(chapter.pageRange[0]);
+                        setNewTopicEndPage(chapter.pageRange[1]);
+                      }}
+                      className="px-2.5 py-1 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900/60 text-blue-700 dark:text-blue-300 font-bold text-xs flex items-center gap-1 hover:bg-blue-100 dark:hover:bg-blue-900/40 cursor-pointer transition-colors shadow-2xs"
+                      title="Add a new topic under this chapter"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Topic</span>
+                    </button>
                     <span className="px-2.5 py-1 rounded-lg bg-slate-200/60 dark:bg-slate-700/60 font-mono text-[11px] font-bold text-slate-600 dark:text-slate-300">
                       Pages {chapter.pageRange[0]}–{chapter.pageRange[1]}
                     </span>
@@ -541,8 +642,23 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                             </div>
 
                             {/* 3. Source Pages */}
-                            <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex flex-col">
-                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Source Pages</span>
+                            <div
+                              onClick={() => {
+                                if (onNavigateToPage) {
+                                  onNavigateToPage(topic.pageRange[0]);
+                                } else if (topic.sourceCitations?.[0] && onNavigateToCitation) {
+                                  onNavigateToCitation(topic.sourceCitations[0]);
+                                } else {
+                                  onLearnTopic(topic, 'original');
+                                }
+                              }}
+                              className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex flex-col cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-950/30 transition-all"
+                              title="Click to navigate to original document page"
+                            >
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                                <span>Source Pages</span>
+                                <ExternalLink className="w-2.5 h-2.5 text-blue-500" />
+                              </span>
                               <span className="font-mono font-semibold text-blue-600 dark:text-blue-400">
                                 Pages {topic.pageRange[0]}–{topic.pageRange[1]}
                               </span>
@@ -628,8 +744,19 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                                           <div className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
                                             {sub.title}
                                           </div>
-                                          <div className="text-[10px] text-slate-500 font-mono">
-                                            Source: Page {sub.pageRange[0]}
+                                          <div
+                                            onClick={() => {
+                                              if (onNavigateToPage) {
+                                                onNavigateToPage(sub.pageRange[0]);
+                                              } else {
+                                                onLearnTopic(topic, 'original');
+                                              }
+                                            }}
+                                            className="text-[10px] text-slate-500 font-mono hover:text-blue-600 cursor-pointer flex items-center gap-1"
+                                            title="Click to jump to original page"
+                                          >
+                                            <span>Source: Page {sub.pageRange[0]}</span>
+                                            <ExternalLink className="w-2.5 h-2.5 text-blue-500" />
                                           </div>
                                           {sub.importantConcepts.length > 0 && (
                                             <div className="flex flex-wrap gap-1 pt-0.5">
@@ -677,9 +804,77 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                                 )}
                               </div>
 
-                              {/* Topic Management Toolbar (Merge & Remove) */}
-                              <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/60 text-xs">
-                                <div className="flex items-center gap-2">
+                              {/* Source Citations to Original Document */}
+                              {topic.sourceCitations && topic.sourceCitations.length > 0 && (
+                                <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800/60">
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                    Source Citations (Original Document):
+                                  </span>
+                                  <div className="flex flex-wrap gap-2">
+                                    {topic.sourceCitations.map((cite, idx) => (
+                                      <button
+                                        key={cite.id || idx}
+                                        onClick={() => {
+                                          if (onNavigateToPage) onNavigateToPage(cite.pageNumber);
+                                          else if (onNavigateToCitation) onNavigateToCitation(cite);
+                                          else onLearnTopic(topic, 'original');
+                                        }}
+                                        className="px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 text-blue-700 dark:text-blue-300 text-xs flex items-center gap-1 font-medium hover:bg-blue-100 dark:hover:bg-blue-900/60 cursor-pointer transition-colors"
+                                        title={cite.exactQuote}
+                                      >
+                                        <span>Page {cite.pageNumber}: {cite.sectionTitle || 'Source anchor'}</span>
+                                        <ExternalLink className="w-3 h-3" />
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Uncertainty / Warning notice if unclassified */}
+                              {topic.isUncertain && (
+                                <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
+                                  <span>Unclassified / Uncertain section: {topic.uncertaintyReason || 'Heading detection confidence below threshold. You can rename or reorganize this topic.'}</span>
+                                </div>
+                              )}
+
+                              {/* Topic Management Toolbar (Reorganize, Move, Split, Merge & Remove) */}
+                              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800/60 text-xs">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {/* Move Topic to Another Chapter */}
+                                  <button
+                                    onClick={() => {
+                                      setMoveTopicData({
+                                        topicId: topic.id,
+                                        topicTitle: topic.title,
+                                        currentChapterTitle: topic.chapterTitle
+                                      });
+                                      setTargetChapterIdForMoveTopic('');
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 flex items-center gap-1 cursor-pointer transition-colors"
+                                    title="Move this topic into another chapter"
+                                  >
+                                    <FolderInput className="w-3 h-3 text-indigo-500" />
+                                    <span>Move to Chapter</span>
+                                  </button>
+
+                                  {/* Split Topic */}
+                                  {topic.subtopics.length > 1 && (
+                                    <button
+                                      onClick={() => {
+                                        setSplitTopicData({ topic });
+                                        setSelectedSubtopicIdsToSplit(new Set());
+                                        setNewSplitTopicTitle('');
+                                      }}
+                                      className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 flex items-center gap-1 cursor-pointer transition-colors"
+                                      title="Split this topic into two separate topics"
+                                    >
+                                      <GitBranch className="w-3 h-3 text-amber-500" />
+                                      <span>Split Topic</span>
+                                    </button>
+                                  )}
+
+                                  {/* Merge Duplicate Topics */}
                                   <button
                                     onClick={() => {
                                       setMergeSourceTopicId(topic.id);
@@ -688,7 +883,7 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                                     className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 flex items-center gap-1 cursor-pointer transition-colors"
                                     title="Merge duplicate topics"
                                   >
-                                    <ArrowLeftRight className="w-3 h-3" />
+                                    <ArrowLeftRight className="w-3 h-3 text-purple-500" />
                                     <span>Merge Duplicate</span>
                                   </button>
                                 </div>
@@ -875,6 +1070,258 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                 className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold shadow-sm disabled:opacity-40"
               >
                 Merge Topics
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 4: Move Topic to Chapter */}
+      {moveTopicData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <FolderInput className="w-5 h-5 text-indigo-500" />
+                <span>Move Topic to Chapter</span>
+              </h3>
+              <button onClick={() => setMoveTopicData(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">
+              Moving topic <strong className="text-blue-600">{moveTopicData.topicTitle}</strong> from current chapter ({moveTopicData.currentChapterTitle}) to another chapter.
+            </p>
+            <div>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Destination Chapter</label>
+              <select
+                value={targetChapterIdForMoveTopic}
+                onChange={(e) => setTargetChapterIdForMoveTopic(e.target.value)}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-white mt-1"
+              >
+                <option value="">-- Choose target chapter --</option>
+                {hierarchy.chapters.map(c => (
+                  <option key={c.id} value={c.id}>
+                    0{c.chapterNumber}. {c.title} (Pages {c.pageRange[0]}–{c.pageRange[1]})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setMoveTopicData(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleMoveTopicToChapterSubmit}
+                disabled={!targetChapterIdForMoveTopic}
+                className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold shadow-sm disabled:opacity-40"
+              >
+                Move Topic
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 5: Split Topic into Two Topics */}
+      {splitTopicData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <GitBranch className="w-5 h-5 text-amber-500" />
+                <span>Split Topic into Two</span>
+              </h3>
+              <button onClick={() => setSplitTopicData(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">
+              Splitting topic: <strong className="text-blue-600">{splitTopicData.topic.title}</strong>. Select which subtopics should branch off into the new topic.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">New Topic Title</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Advanced Scheduling Algorithms"
+                  value={newSplitTopicTitle}
+                  onChange={(e) => setNewSplitTopicTitle(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white mt-1"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                  Select Subtopics to Move into New Topic ({selectedSubtopicIdsToSplit.size} selected)
+                </label>
+                <div className="mt-1 max-h-48 overflow-y-auto space-y-1.5 p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
+                  {splitTopicData.topic.subtopics.map(sub => {
+                    const isSelected = selectedSubtopicIdsToSplit.has(sub.id);
+                    return (
+                      <label
+                        key={sub.id}
+                        className="flex items-center gap-2 p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 cursor-pointer text-xs"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {
+                            setSelectedSubtopicIdsToSplit(prev => {
+                              const next = new Set(prev);
+                              if (next.has(sub.id)) next.delete(sub.id);
+                              else next.add(sub.id);
+                              return next;
+                            });
+                          }}
+                          className="rounded text-blue-600"
+                        />
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">{sub.title}</span>
+                        <span className="text-[10px] text-slate-400 ml-auto font-mono">Page {sub.pageRange[0]}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setSplitTopicData(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSplitTopicSubmit}
+                disabled={!newSplitTopicTitle.trim() || selectedSubtopicIdsToSplit.size === 0}
+                className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold shadow-sm disabled:opacity-40"
+              >
+                Split Topic
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 6: Add Missing Topic to Chapter */}
+      {addTopicChapterId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Plus className="w-5 h-5 text-blue-600" />
+                <span>Add Missing Topic</span>
+              </h3>
+              <button onClick={() => setAddTopicChapterId(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Topic Title</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Multilevel Feedback Queue Scheduling"
+                  value={newTopicTitle}
+                  onChange={(e) => setNewTopicTitle(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white mt-1"
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Start Page</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={newTopicStartPage}
+                    onChange={(e) => setNewTopicStartPage(parseInt(e.target.value, 10) || 1)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white mt-1"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">End Page</label>
+                  <input
+                    type="number"
+                    min={newTopicStartPage}
+                    value={newTopicEndPage}
+                    onChange={(e) => setNewTopicEndPage(parseInt(e.target.value, 10) || newTopicStartPage)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white mt-1"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setAddTopicChapterId(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleAddTopicToChapterSubmit(addTopicChapterId)}
+                disabled={!newTopicTitle.trim()}
+                className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold shadow-sm disabled:opacity-40"
+              >
+                Add Topic
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 7: Choose Learning Format for Selected Topics */}
+      {isLearnSelectedModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-blue-500" />
+                  <span>Learn Selected Topics ({selectedTopicIds.size})</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Choose a format to begin learning with your {selectedTopicIds.size} selected topic{selectedTopicIds.size > 1 ? 's' : ''}.
+                </p>
+              </div>
+              <button onClick={() => setIsLearnSelectedModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5 pt-1">
+              {[
+                { id: 'map', label: 'Concept Map', icon: '🗺️', desc: 'Visual knowledge hierarchy' },
+                { id: 'notes', label: 'Detailed Notes', icon: '📖', desc: 'Definitions, formulas, key points' },
+                { id: 'flashcards', label: 'Flashcards', icon: '🗂️', desc: 'Active recall & mastery tracking' },
+                { id: 'quiz', label: 'Practice Quiz', icon: '📝', desc: 'Self-assessment with rationale' },
+                { id: 'audio', label: 'Audio Lesson', icon: '🎧', desc: 'Spoken lecture with chapter jumps' },
+                { id: 'worked', label: 'Worked Examples', icon: '🔢', desc: 'Step-by-step math derivations' },
+                { id: 'simplified', label: 'Simplified Story', icon: '💡', desc: 'Everyday analogies & intuition' },
+                { id: 'original', label: 'Original Source', icon: '📄', desc: 'Verified pages with highlights' }
+              ].map(item => (
+                <button
+                  key={item.id}
+                  onClick={() => handleLearnSelected(item.id as StudioTab)}
+                  className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 hover:bg-blue-50 dark:hover:bg-blue-950/50 border border-slate-200 dark:border-slate-700 hover:border-blue-500 text-left transition-all cursor-pointer group"
+                >
+                  <div className="text-lg mb-1">{item.icon}</div>
+                  <div className="text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-blue-600">
+                    {item.label}
+                  </div>
+                  <div className="text-[10px] text-slate-400">{item.desc}</div>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setIsLearnSelectedModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+              >
+                Cancel
               </button>
             </div>
           </div>

@@ -409,6 +409,34 @@ export function App() {
                   setActiveDocument(updatedDoc);
                   setDocuments(prev => prev.map(d => d.id === updatedDoc.id ? updatedDoc : d));
                 }}
+                onNavigateToCitation={(citation) => {
+                  setActiveCitation(citation);
+                  setStudioTab('original');
+                  setCurrentPage('studio');
+                }}
+                onNavigateToPage={(pageNumber) => {
+                  const matchingSection = activeDocument.sections?.find(s => s.pageNumber === pageNumber);
+                  const citation: SourceCitation = matchingSection
+                    ? {
+                        id: `cite-page-${pageNumber}`,
+                        documentId: activeDocument.id,
+                        pageNumber,
+                        sectionTitle: matchingSection.title || `Page ${pageNumber}`,
+                        exactQuote: matchingSection.content.slice(0, 120),
+                        contextSnippet: `Navigated from Topic Explorer`
+                      }
+                    : {
+                        id: `cite-page-${pageNumber}`,
+                        documentId: activeDocument.id,
+                        pageNumber,
+                        sectionTitle: `Page ${pageNumber}`,
+                        exactQuote: `Navigated to Page ${pageNumber}`,
+                        contextSnippet: `Navigated from Topic Explorer`
+                      };
+                  setActiveCitation(citation);
+                  setStudioTab('original');
+                  setCurrentPage('studio');
+                }}
               />
             ) : (
               <div className="flex flex-col items-center justify-center p-12 text-center h-[70vh] space-y-4">

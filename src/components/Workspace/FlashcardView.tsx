@@ -28,6 +28,7 @@ interface FlashcardViewProps {
   documentId: string;
   flashcards: Flashcard[];
   document?: AcademicDocument;
+  initialTopicId?: string;
   onUpdateMastery: (docId: string, cardId: string, newLevel: number) => void;
   onNavigateToCitation: (citation: SourceCitation) => void;
 }
@@ -36,6 +37,7 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
   documentId,
   flashcards: initialFlashcards,
   document,
+  initialTopicId,
   onUpdateMastery,
   onNavigateToCitation
 }) => {
@@ -58,7 +60,7 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
     return { topicDecks: decks, topicTitles: titles, overallDeck: overall };
   }, [document, initialFlashcards]);
 
-  const [selectedTopicId, setSelectedTopicId] = useState<string>('overall');
+  const [selectedTopicId, setSelectedTopicId] = useState<string>(initialTopicId || 'overall');
   const [deck, setDeck] = useState<Flashcard[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -67,6 +69,12 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
   const [showDifficultOnly, setShowDifficultOnly] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'study' | 'quiz'>('study');
   const [quizSelection, setQuizSelection] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (initialTopicId) {
+      setSelectedTopicId(initialTopicId);
+    }
+  }, [initialTopicId]);
 
   // Sync deck when selected topic changes
   useEffect(() => {

@@ -127,6 +127,10 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
   useEffect(() => {
     setCurrentHierarchy(document.topicHierarchy || TopicHierarchyService.buildHierarchy(document));
   }, [document]);
+
+  const activeTopic = activeTopicId
+    ? currentHierarchy.chapters.flatMap(c => c.topics).find(t => t.id === activeTopicId)
+    : null;
   const mainContainerRef = useRef<HTMLDivElement>(null);
   const tabsScrollRef = useRef<HTMLDivElement>(null);
 
@@ -826,6 +830,30 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto bg-white dark:bg-slate-900 transition-all duration-75">
+                {/* Active Topic Scoped Banner */}
+                {activeTopic && (
+                  <div className="px-5 py-2.5 bg-blue-50/80 dark:bg-blue-950/40 border-b border-blue-200 dark:border-blue-900/60 flex items-center justify-between text-xs animate-fadeIn">
+                    <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 min-w-0">
+                      <GraduationCap className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                      <span className="font-bold text-blue-900 dark:text-blue-200">Topic Learning Workspace:</span>
+                      <span className="font-semibold text-slate-900 dark:text-white truncate">{activeTopic.title}</span>
+                      <span className="text-slate-400">•</span>
+                      <span className="font-mono text-[11px] text-blue-600 dark:text-blue-400 shrink-0">
+                        Pages {activeTopic.pageRange[0]}–{activeTopic.pageRange[1]}
+                      </span>
+                    </div>
+                    {onOpenTopicExplorer && (
+                      <button
+                        onClick={onOpenTopicExplorer}
+                        className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors shadow-2xs shrink-0"
+                      >
+                        <FolderTree className="w-3.5 h-3.5" />
+                        <span>Explore All Topics</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+
                 {/* 02 Concept Map */}
                 {activeTab === 'map' && (
                   <ConceptMapView
@@ -1052,6 +1080,7 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
             {activeTab === 'notes' && (
               <DetailedNotesView
                 document={document}
+                initialTopicId={activeTopicId}
                 onNavigateToCitation={handleCitationClick}
                 onSaveNotes={(updatedSuite) => {
                   (document as any).notes = updatedSuite;
@@ -1063,6 +1092,7 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
             {activeTab === 'worked' && (
               <WorkedExamplesView
                 document={document}
+                initialTopicId={activeTopicId}
                 onNavigateToCitation={handleCitationClick}
               />
             )}
@@ -1073,6 +1103,7 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
                 documentId={document.id}
                 flashcards={currentFlashcards}
                 document={document}
+                initialTopicId={activeTopicId}
                 onUpdateMastery={onUpdateFlashcardMastery}
                 onNavigateToCitation={handleCitationClick}
               />
@@ -1083,6 +1114,7 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
               <AudioLessonView
                 audioLesson={currentAudioLesson}
                 documentId={document.id}
+                initialTopicId={activeTopicId}
                 onNavigateToCitation={handleCitationClick}
                 voiceGender={voiceGender}
                 onVoiceGenderChange={onVoiceGenderChange}
@@ -1093,6 +1125,7 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
                 {activeTab === 'quiz' && (
                   <PracticeQuizView
                     document={document}
+                    initialTopicId={activeTopicId}
                     onNavigateToCitation={handleCitationClick}
                     onSaveItem={onSaveItem}
                   />

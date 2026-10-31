@@ -38,21 +38,32 @@ import { ApiClient } from '../../services/apiClient';
 
 interface PracticeQuizViewProps {
   document: AcademicDocument;
+  initialTopicId?: string;
   onNavigateToCitation: (citation: SourceCitation) => void;
   onSaveItem?: (item: SavedItem) => void;
 }
 
 export const PracticeQuizView: React.FC<PracticeQuizViewProps> = ({
   document,
+  initialTopicId,
   onNavigateToCitation,
   onSaveItem
 }) => {
   // Quiz Configuration State
-  const [selectedScopeType, setSelectedScopeType] = useState<'document' | 'chapter' | 'topic'>('document');
-  const [selectedScopeId, setSelectedScopeId] = useState<string>('all');
+  const [selectedScopeType, setSelectedScopeType] = useState<'document' | 'chapter' | 'topic'>(
+    initialTopicId ? 'topic' : 'document'
+  );
+  const [selectedScopeId, setSelectedScopeId] = useState<string>(initialTopicId || 'all');
   const [difficulty, setDifficulty] = useState<'beginner' | 'intermediate' | 'advanced'>('intermediate');
   const [isQuizStarted, setIsQuizStarted] = useState<boolean>(true);
   const [retryQuestionsOnly, setRetryQuestionsOnly] = useState<QuizQuestion[] | null>(null);
+
+  React.useEffect(() => {
+    if (initialTopicId) {
+      setSelectedScopeType('topic');
+      setSelectedScopeId(initialTopicId);
+    }
+  }, [initialTopicId]);
 
   // Available scopes from topic hierarchy
   const availableChapters = useMemo(() => {

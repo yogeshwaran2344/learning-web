@@ -1557,6 +1557,199 @@ export class TopicHierarchyService {
   }
 
   /**
+   * Requirement 4: Move a topic from its current chapter into another chapter.
+   */
+  static moveTopicToChapter(
+    hierarchy: DocumentTopicHierarchy,
+    topicId: string,
+    targetChapterId: string
+  ): DocumentTopicHierarchy {
+    let topicToMove: DocumentTopic | null = null;
+    let sourceChapterId: string | null = null;
+
+    // Locate the topic and source chapter
+    for (const chap of hierarchy.chapters) {
+      const found = chap.topics.find(t => t.id === topicId);
+      if (found) {
+        topicToMove = found;
+        sourceChapterId = chap.id;
+        break;
+      }
+    }
+
+    if (!topicToMove || !sourceChapterId || sourceChapterId === targetChapterId) {
+      return hierarchy;
+    }
+
+    const targetChapter = hierarchy.chapters.find(c => c.id === targetChapterId);
+    if (!targetChapter) return hierarchy;
+
+    // Create relocated topic with updated chapter title and number
+    const updatedTopic: DocumentTopic = {
+      ...topicToMove,
+      chapterTitle: targetChapter.title,
+      chapterNumber: targetChapter.chapterNumber,
+      topicNumber: `${targetChapter.chapterNumber}.${targetChapter.topics.length + 1}`
+    };
+
+    const updatedChapters = hierarchy.chapters.map(chap => {
+      if (chap.id === sourceChapterId) {
+        const remainingTopics = chap.topics.filter(t => t.id !== topicId);
+        // Recalculate page range if remaining topics exist
+        const newPageRange: [number, number] = remainingTopics.length > 0
+          ? [
+              Math.min(...remainingTopics.map(t => t.pageRange[0])),
+              Math.max(...remainingTopics.map(t => t.pageRange[1]))
+            ]
+          : chap.pageRange;
+
+        return {
+          ...chap,
+          pageRange: newPageRange,
+          topics: remainingTopics.map((t, idx) => ({
+            ...t,
+            topicNumber: `${chap.chapterNumber}.${idx + 1}`
+          }))
+        };
+      }
+
+      if (chap.id === targetChapterId) {
+        const newTopics = [...chap.topics, updatedTopic];
+        const newPageRange: [number, number] = [
+          Math.min(chap.pageRange[0], updatedTopic.pageRange[0]),
+          Math.max(chap.pageRange[1], updatedTopic.pageRange[1])
+        ];
+
+        return {
+          ...chap,
+          pageRange: newPageRange,
+          topics: newTopics.map((t, idx) => ({
+            ...t,
+            topicNumber: `${chap.chapterNumber}.${idx + 1}`
+          }))
+        };
+      }
+
+      return chap;
+    });
+
+    return {
+      ...hierarchy,
+      chapters: updatedChapters,
+      isUserVerified: true,
+      userAdjustmentsCount: (hierarchy.userAdjustmentsCount || 0) + 1
+    };
+  }
+
+  /**
+   * Requirement 4: Split a topic into two separate topics by branching off selected subtopics.
+   */
+  static splitTopic(
+    hierarchy: DocumentTopicHierarchy,
+    topicId: string,
+    splitSubtopicIds: string[],
+    newTopicTitle: string
+  ): DocumentTopicHierarchy {
+    const trimmedTitle = newTopicTitle.trim();
+    if (!trimmedTitle || !splitSubtopicIds || splitSubtopicIds.length === 0) {
+      return hierarchy;
+    }
+
+    let targetTopic: DocumentTopic | null = null;
+    let parentChapter: DocumentChapter | null = null;
+
+    for (const chap of hierarchy.chapters) {
+      const found = chap.topics.find(t => t.id === topicId);
+      if (found) {
+        targetTopic = found;
+        parentChapter = chap;
+        break;
+      }
+    }
+
+    if (!targetTopic || !parentChapter) return hierarchy;
+
+    const subtopicsToSplit = targetTopic.subtopics.filter(s => splitSubtopicIds.includes(s.id));
+    const subtopicsToKeep = targetTopic.subtopics.filter(s => !splitSubtopicIds.includes(s.id));
+
+    if (subtopicsToSplit.length === 0) return hierarchy;
+
+    // Compute page ranges for new and retained topics
+    const splitPages = subtopicsToSplit.map(s => s.pageRange);
+    const newTopicPageRange: [number, number] = [
+      Math.min(...splitPages.map(p => p[0])),
+      Math.max(...splitPages.map(p => p[1]))
+    ];
+
+    const newTopicId = `top-split-${Date.now()}`;
+    const newTopic: DocumentTopic = {
+      id: newTopicId,
+      topicNumber: `${parentChapter.chapterNumber}.${parentChapter.topics.length + 1}`,
+      title: trimmedTitle,
+      chapterTitle: parentChapter.title,
+      chapterNumber: parentChapter.chapterNumber,
+      pageRange: newTopicPageRange,
+      isMultiPage: newTopicPageRange[1] > newTopicPageRange[0],
+      subtopics: subtopicsToSplit,
+      importantConcepts: Array.from(new Set(subtopicsToSplit.flatMap(s => s.importantConcepts))),
+      associatedEquations: [],
+      associatedDiagrams: [],
+      associatedTables: [],
+      associatedNumericalExamples: [],
+      sourceCitations: targetTopic.sourceCitations.filter(
+        c => c.pageNumber >= newTopicPageRange[0] && c.pageNumber <= newTopicPageRange[1]
+      )
+    };
+
+    const remainingPages = subtopicsToKeep.map(s => s.pageRange);
+    const updatedKeptRange: [number, number] = remainingPages.length > 0
+      ? [
+          Math.min(...remainingPages.map(p => p[0])),
+          Math.max(...remainingPages.map(p => p[1]))
+        ]
+      : targetTopic.pageRange;
+
+    const updatedKeptTopic: DocumentTopic = {
+      ...targetTopic,
+      pageRange: updatedKeptRange,
+      isMultiPage: updatedKeptRange[1] > updatedKeptRange[0],
+      subtopics: subtopicsToKeep
+    };
+
+    const updatedChapters = hierarchy.chapters.map(chap => {
+      if (chap.id === parentChapter!.id) {
+        const nextTopics: DocumentTopic[] = [];
+        for (const t of chap.topics) {
+          if (t.id === topicId) {
+            nextTopics.push(updatedKeptTopic);
+            nextTopics.push(newTopic);
+          } else {
+            nextTopics.push(t);
+          }
+        }
+        return {
+          ...chap,
+          topics: nextTopics.map((t, idx) => ({
+            ...t,
+            topicNumber: `${chap.chapterNumber}.${idx + 1}`
+          }))
+        };
+      }
+      return chap;
+    });
+
+    const totalTopicsCount = updatedChapters.reduce((acc, c) => acc + c.topics.length, 0);
+
+    return {
+      ...hierarchy,
+      chapters: updatedChapters,
+      totalTopicsCount,
+      isUserVerified: true,
+      userAdjustmentsCount: (hierarchy.userAdjustmentsCount || 0) + 1
+    };
+  }
+
+  /**
    * Mark hierarchy as confirmed by student before generation.
    */
   static markVerified(hierarchy: DocumentTopicHierarchy): DocumentTopicHierarchy {

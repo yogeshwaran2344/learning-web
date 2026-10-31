@@ -31,20 +31,28 @@ import { DetailedNotesService } from '../../services/detailedNotesService';
 
 interface DetailedNotesViewProps {
   document: AcademicDocument;
+  initialTopicId?: string;
   onNavigateToCitation: (citation: SourceCitation) => void;
   onSaveNotes?: (updatedSuite: DetailedNotesSuite) => void;
 }
 
 export const DetailedNotesView: React.FC<DetailedNotesViewProps> = ({
   document,
+  initialTopicId,
   onNavigateToCitation,
   onSaveNotes
 }) => {
   const [mode, setMode] = useState<'short' | 'detailed'>('detailed');
-  const [selectedTopicId, setSelectedTopicId] = useState<string>('all');
+  const [selectedTopicId, setSelectedTopicId] = useState<string>(initialTopicId || 'all');
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editText, setEditText] = useState<string>('');
   const [saveSuccessNotice, setSaveSuccessNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialTopicId) {
+      setSelectedTopicId(initialTopicId);
+    }
+  }, [initialTopicId]);
 
   // Generate or retrieve notes suite
   const initialSuite = useMemo(() => {

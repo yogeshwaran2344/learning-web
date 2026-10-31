@@ -23,6 +23,7 @@ import { ApiClient } from '../../services/apiClient';
 interface AudioLessonViewProps {
   audioLesson: AudioLesson;
   documentId?: string;
+  initialTopicId?: string;
   onNavigateToCitation: (citation: SourceCitation) => void;
   voiceGender?: 'female' | 'male';
   onVoiceGenderChange?: (gender: 'female' | 'male') => void;
@@ -31,12 +32,25 @@ interface AudioLessonViewProps {
 export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
   audioLesson,
   documentId,
+  initialTopicId,
   onNavigateToCitation,
   voiceGender,
   onVoiceGenderChange
 }) => {
   const sections = Array.isArray(audioLesson?.sections) ? audioLesson.sections : [];
   const [selectedSectionIdx, setSelectedSectionIdx] = useState(0);
+
+  useEffect(() => {
+    if (initialTopicId && sections.length > 0) {
+      const idx = sections.findIndex(s =>
+        s.id === initialTopicId ||
+        s.sectionTitle.toLowerCase().includes(initialTopicId.toLowerCase())
+      );
+      if (idx !== -1) {
+        setSelectedSectionIdx(idx);
+      }
+    }
+  }, [initialTopicId, sections]);
   const [playbackState, setPlaybackState] = useState<AudioState>('idle');
   const [speed, setSpeed] = useState<number>(1.0);
   const [progressChar, setProgressChar] = useState<number>(0);
