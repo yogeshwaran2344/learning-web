@@ -7,6 +7,23 @@ import {
 } from '../types';
 
 export class PageTeacherService {
+  static cleanTopicTitle(rawTitle: string): string {
+    if (!rawTitle) return 'Academic Topic';
+    let cleaned = rawTitle.trim();
+    if (cleaned.includes('•')) {
+      const parts = cleaned.split('•');
+      const after = parts[parts.length - 1].trim();
+      if (after.length > 2) cleaned = after;
+    }
+    cleaned = cleaned.replace(/^(?:Section|Slide|Topic|Part|Unit|Module)\s*\d+[:.]?\s*/gi, '');
+    cleaned = cleaned.replace(/^\d+[\s.:-]+/, '');
+    cleaned = cleaned.replace(/\b\d{2}[A-Z]{2,6}\d{2,4}\b/gi, '');
+    cleaned = cleaned.replace(/(?:Department|Dept\.?|School|College)\s+of\s+[^,•\n]+/gi, '');
+    cleaned = cleaned.replace(/\b(?:NHCE|VTU|AICTE|NBA|NAAC|UGC)\b/gi, '');
+    cleaned = cleaned.replace(/^[\s.:•–—\-]+|[\s.:•–—\-]+$/g, '').trim();
+    return cleaned.length > 2 ? cleaned : rawTitle;
+  }
+
   /**
    * Remove unnecessary college, department, institutional headers, footers,
    * course codes, and administrative boilerplates from extracted content.
@@ -449,31 +466,32 @@ export class PageTeacherService {
     }
 
     // --- CASE F: Generic Theory Page (Default Adaptive Fallback) ---
+    const cleanTopic = this.cleanTopicTitle(topicTitle);
     const cleanSentences = cleanText
       .split(/(?<=[.?!])\s+/)
       .map(s => s.trim())
       .filter(s => s.length > 15 && !s.toLowerCase().includes('college'));
 
-    const definitionSentence = cleanSentences[0] || `${topicTitle} is a core theoretical concept formalized in Page ${pageNumber}.`;
-    const explanationSentences = cleanSentences.slice(1, 4).join(' ') || `${topicTitle} establishes fundamental invariant conditions and operational rules for reliable academic evaluation.`;
+    const definitionSentence = cleanSentences[0] || `${cleanTopic} is a core academic topic formalized in Page ${pageNumber}.`;
+    const explanationSentences = cleanSentences.slice(1, 4).join(' ') || `${cleanTopic} specifies essential mechanisms, operational rules, and verified criteria in this subject.`;
 
     return {
       pageNumber,
-      topicTitle,
+      topicTitle: cleanTopic,
       contentType,
       shortExplanation: `${definitionSentence} ${explanationSentences}`.slice(0, 320),
-      detailedExplanation: `${cleanText.slice(0, 600) || `${topicTitle} provides in-depth academic foundation.`}\n\nKey Focus: Every mathematical parameter and boundary condition is verified against the original source document without altered expressions.`,
+      detailedExplanation: `${cleanText.slice(0, 600) || `${cleanTopic} provides comprehensive theoretical and practical foundations.`}\n\nKey Focus: Every concept, boundary condition, and definition is verified against the original source document.`,
       whatIsIt: definitionSentence,
-      thinkOfItThisWay: `Think of ${topicTitle} as an essential building block: each component functions in harmony to maintain systemic balance and correctness.`,
+      thinkOfItThisWay: `To picture ${cleanTopic} easily, think of it like an essential coordinate in a structured system: it defines the exact states, rules, and boundaries so that operations proceed reliably without conflict or loss of state.`,
       importantThingsToUnderstand: cleanSentences.slice(0, 4).map(s => s.replace(/^[•\d.-]+/, '').trim()).filter(Boolean).length >= 2
         ? cleanSentences.slice(0, 4).map(s => s.replace(/^[•\d.-]+/, '').trim())
         : [
-            `Core concept: ${topicTitle} is grounded in Page ${pageNumber}.`,
-            'Preserves verified definitions and principles from the source text.',
+            `Core concept: ${cleanTopic} is grounded in Page ${pageNumber}.`,
+            'Preserves verified definitions and principles from the source material.',
             'Directly verified against original page citations.'
           ],
       rememberThis: {
-        rule: `Core Principle: Concepts in ${topicTitle} are directly traceable to Page ${pageNumber}.`
+        rule: `Core Principle: Concepts in ${cleanTopic} are directly traceable to Page ${pageNumber}.`
       },
       sourceCitation: citation
     };

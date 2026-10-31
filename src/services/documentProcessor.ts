@@ -30,7 +30,10 @@ export class DocumentProcessor {
     const rawParagraphs = rawText.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
     const sections: DocumentSection[] = [];
     
-    let currentTitle = '1. Introduction & Overview';
+    const firstLineCandidate = rawParagraphs[0]?.split('\n')[0]?.trim()?.replace(/^#+\s*/, '') || '';
+    let currentTitle = (firstLineCandidate && firstLineCandidate.length < 75 && !firstLineCandidate.endsWith('.'))
+      ? firstLineCandidate
+      : (title || 'Initial Section');
     let currentContent: string[] = [];
     let pageNum = 1;
 

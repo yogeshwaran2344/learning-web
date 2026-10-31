@@ -350,46 +350,46 @@ export const TopicHierarchyReviewModal: React.FC<TopicHierarchyReviewModalProps>
 
                             {/* Associated Detected Assets Strip */}
                             <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px]">
-                              {topic.associatedEquations.length > 0 && (
+                              {(topic.associatedEquations || []).length > 0 && (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800/80 text-amber-700 dark:text-amber-300">
                                   <Calculator className="w-3 h-3" />
-                                  <span>{topic.associatedEquations.length} Equation{topic.associatedEquations.length > 1 ? 's' : ''}</span>
+                                  <span>{(topic.associatedEquations || []).length} Equation{(topic.associatedEquations || []).length > 1 ? 's' : ''}</span>
                                 </span>
                               )}
 
-                              {topic.associatedDiagrams.length > 0 && (
+                              {(topic.associatedDiagrams || []).length > 0 && (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/80 text-indigo-700 dark:text-indigo-300">
                                   <Network className="w-3 h-3" />
-                                  <span>{topic.associatedDiagrams.length} Diagram{topic.associatedDiagrams.length > 1 ? 's' : ''}</span>
+                                  <span>{(topic.associatedDiagrams || []).length} Diagram{(topic.associatedDiagrams || []).length > 1 ? 's' : ''}</span>
                                 </span>
                               )}
 
-                              {topic.associatedTables.length > 0 && (
+                              {(topic.associatedTables || []).length > 0 && (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/80 text-emerald-700 dark:text-emerald-300">
                                   <TableIcon className="w-3 h-3" />
-                                  <span>{topic.associatedTables.length} Table{topic.associatedTables.length > 1 ? 's' : ''}</span>
+                                  <span>{(topic.associatedTables || []).length} Table{(topic.associatedTables || []).length > 1 ? 's' : ''}</span>
                                 </span>
                               )}
 
-                              {topic.associatedNumericalExamples.length > 0 && (
+                              {(topic.associatedNumericalExamples || []).length > 0 && (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/80 text-blue-700 dark:text-blue-300">
                                   <Hash className="w-3 h-3" />
-                                  <span>{topic.associatedNumericalExamples.length} Worked Problem{topic.associatedNumericalExamples.length > 1 ? 's' : ''}</span>
+                                  <span>{(topic.associatedNumericalExamples || []).length} Worked Problem{(topic.associatedNumericalExamples || []).length > 1 ? 's' : ''}</span>
                                 </span>
                               )}
 
-                              {topic.subtopics.length > 0 && (
+                              {(topic.subtopics || []).length > 0 && (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
                                   <Layers className="w-3 h-3" />
-                                  <span>{topic.subtopics.length} Subtopic{topic.subtopics.length > 1 ? 's' : ''}</span>
+                                  <span>{(topic.subtopics || []).length} Subtopic{(topic.subtopics || []).length > 1 ? 's' : ''}</span>
                                 </span>
                               )}
                             </div>
 
                             {/* Subtopics Checklist / Bullets */}
-                            {topic.subtopics.length > 0 && (
+                            {(topic.subtopics || []).length > 0 && (
                               <div className="pl-3 border-l-2 border-slate-200 dark:border-slate-800 space-y-1 text-xs text-slate-600 dark:text-slate-400">
-                                {topic.subtopics.map((sub) => (
+                                {(topic.subtopics || []).map((sub) => (
                                   <div key={sub.id} className="flex items-center justify-between text-[11px]">
                                     <div className="flex items-center gap-1.5 truncate">
                                       <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />

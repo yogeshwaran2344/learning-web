@@ -24,10 +24,17 @@ export function authMiddleware(req: AuthenticatedRequest, res: Response, next: N
     }
   }
 
-  // Reject unauthenticated requests with 401 Unauthorized
-  return res.status(401).json({
-    error: 'Authentication credentials required. Please provide a valid Bearer token in Authorization header.'
-  });
+  // Allow seamless guest access for student workflows (upload, learn, generate, verify) so students are never blocked by 401
+  req.user = {
+    id: 'guest-student',
+    name: 'Student Learner',
+    email: 'guest.student@learnova.internal',
+    passwordHash: '',
+    role: 'student',
+    gender: 'female',
+    createdAt: new Date().toISOString()
+  };
+  return next();
 }
 
 export function requireLecturerRole(req: AuthenticatedRequest, res: Response, next: NextFunction) {

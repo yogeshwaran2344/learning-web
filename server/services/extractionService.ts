@@ -314,7 +314,11 @@ export class ExtractionService {
       .filter(Boolean);
     const sections: ExtractedSectionRecord[] = [];
 
-    let currentTitle = '1. Introduction & Overview';
+    // Derive initial title from first non-empty line or natural document header
+    const firstNonEmptyLine = rawParagraphs[0]?.split('\n')[0]?.trim()?.replace(/^#+\s*/, '') || '';
+    let currentTitle = (firstNonEmptyLine && firstNonEmptyLine.length < 75 && !firstNonEmptyLine.endsWith('.'))
+      ? firstNonEmptyLine
+      : 'Initial Section';
     let currentContent: string[] = [];
     let pageNum = 1;
 

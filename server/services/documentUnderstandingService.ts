@@ -731,23 +731,13 @@ export class DocumentUnderstandingService {
         currentTopic.isMultiPage = currentTopic.pageRange[1] > currentTopic.pageRange[0];
         secTypes.forEach(t => { if (!currentTopic!.contentTypesFound.includes(t)) currentTopic!.contentTypesFound.push(t); });
 
-        // Add continuation subtopic
-        currentTopic.subtopics.push({
-          id: `sub-${sec.id}`,
-          title: `${cleanTopicTitle} (Page ${page})`,
-          level: 3,
-          pageRange: [page, page],
-          summary: sec.content.slice(0, 150),
-          importantConcepts: sec.definitions?.map(d => d.term) || [],
-          equationsCount: sec.equations?.length || 0,
-          diagramsCount: sec.diagrams?.length || 0,
-          tablesCount: sec.tables?.length || 0,
-          numericalExamplesCount: sec.numericalProblems?.length || 0,
-          algorithmsCount: sec.algorithms?.length || 0,
-          flowchartsCount: sec.flowcharts?.length || 0,
-          graphsCount: sec.graphs?.length || 0,
-          isUncertain: unreadablePages.includes(page)
-        });
+        // Add continuation subtopics from actual section content
+        const extractedSubs = this.extractEvidenceSubtopics(sec, cleanTopicTitle, page, unreadablePages.includes(page));
+        for (const sub of extractedSubs) {
+          if (!currentTopic.subtopics.some(s => s.title.toLowerCase() === sub.title.toLowerCase())) {
+            currentTopic.subtopics.push(sub);
+          }
+        }
 
         if (sec.equations) currentTopic.associatedEquations.push(...sec.equations.map(e => ({ ...e, pageNumber: page })));
         if (sec.tables) currentTopic.associatedTables.push(...sec.tables.map(t => ({ ...t, pageNumber: page })));
@@ -758,6 +748,8 @@ export class DocumentUnderstandingService {
         const chapIndex = fullChapters.length + 1;
         const topicIndex = (currentFullChapter?.topics.length || 0) + 1;
         const topicNum = `${chapIndex}.${topicIndex}`;
+
+        const extractedSubs = this.extractEvidenceSubtopics(sec, cleanTopicTitle, page, unreadablePages.includes(page));
 
         currentTopic = {
           id: `top-${chapIndex}-${topicIndex}-${documentId}`,
@@ -770,24 +762,7 @@ export class DocumentUnderstandingService {
           contentType: primaryType,
           contentTypesFound: Array.from(new Set(secTypes)),
           description: sec.content.slice(0, 160) + (sec.content.length > 160 ? '...' : ''),
-          subtopics: [
-            {
-              id: `sub-${sec.id}-1`,
-              title: `${cleanTopicTitle} Principles`,
-              level: 2,
-              pageRange: [page, page],
-              summary: sec.content.slice(0, 150),
-              importantConcepts: sec.definitions?.map(d => d.term) || [cleanTopicTitle],
-              equationsCount: sec.equations?.length || 0,
-              diagramsCount: sec.diagrams?.length || 0,
-              tablesCount: sec.tables?.length || 0,
-              numericalExamplesCount: sec.numericalProblems?.length || 0,
-              algorithmsCount: sec.algorithms?.length || 0,
-              flowchartsCount: sec.flowcharts?.length || 0,
-              graphsCount: sec.graphs?.length || 0,
-              isUncertain: unreadablePages.includes(page)
-            }
-          ],
+          subtopics: extractedSubs,
           importantConcepts: sec.definitions?.map(d => d.term) || [cleanTopicTitle],
           associatedEquations: (sec.equations || []).map(e => ({ ...e, pageNumber: page })),
           associatedDiagrams: (sec.diagrams || []).map(d => ({ ...d, pageNumber: page })),
@@ -864,5 +839,131 @@ export class DocumentUnderstandingService {
       uncertainExtractions,
       extractionConfidence: baseConfidence
     };
+  }
+
+  private static extractEvidenceSubtopics(
+    sec: ExtractedSectionRecord,
+    cleanTopicTitle: string,
+    page: number,
+    isUncertain: boolean
+  ): {
+    id: string;
+    title: string;
+    level: number;
+    pageRange: [number, number];
+    summary: string;
+    importantConcepts: string[];
+    equationsCount: number;
+    diagramsCount: number;
+    tablesCount: number;
+    numericalExamplesCount: number;
+    algorithmsCount: number;
+    flowchartsCount: number;
+    graphsCount: number;
+    isUncertain: boolean;
+  }[] {
+    const subtopics: any[] = [];
+    const seenTitles = new Set<string>();
+
+    const addSub = (title: string, summary?: string, concepts: string[] = []) => {
+      let cleaned = title
+        .replace(/^[•\-*▪▫–—\+o\d.)\s]+/, '')
+        .replace(/\b\d{2}[A-Z]{2,6}\d{2,4}\b/gi, '')
+        .replace(/(?:Department|Dept\.?)\s+of\s+[^,•\n]+/gi, '')
+        .trim();
+      if (!cleaned || cleaned.length < 3 || cleaned.length > 90) return;
+      if (/^(?:page|slide|module|chapter|unit)\s*\d+$/i.test(cleaned)) return;
+      if (seenTitles.has(cleaned.toLowerCase())) return;
+      seenTitles.add(cleaned.toLowerCase());
+
+      subtopics.push({
+        id: `sub-${sec.id}-${subtopics.length + 1}`,
+        title: cleaned,
+        level: 3,
+        pageRange: [page, page],
+        summary: summary || sec.content.slice(0, 150),
+        importantConcepts: concepts.length > 0 ? concepts : [cleaned],
+        equationsCount: sec.equations?.length || 0,
+        diagramsCount: sec.diagrams?.length || 0,
+        tablesCount: sec.tables?.length || 0,
+        numericalExamplesCount: sec.numericalProblems?.length || 0,
+        algorithmsCount: sec.algorithms?.length || 0,
+        flowchartsCount: sec.flowcharts?.length || 0,
+        graphsCount: sec.graphs?.length || 0,
+        isUncertain
+      });
+    };
+
+    // 1. Definition terms (e.g. Accounting Information, Process State)
+    if (sec.definitions && sec.definitions.length > 0) {
+      for (const d of sec.definitions) {
+        if (d.term && d.term.trim().length > 2) {
+          addSub(d.term, d.definition, [d.term]);
+        }
+      }
+    }
+
+    // 2. Scan content lines for bullet points, numbered items, and subheadings
+    const lines = (sec.content || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    for (const line of lines) {
+      // Bullets (e.g., "- Process state", "• Accounting information")
+      const bulletMatch = line.match(/^[•\-*▪▫–—\+o]\s+([^:•\n]{3,80})/);
+      if (bulletMatch) {
+        addSub(bulletMatch[1]);
+        continue;
+      }
+
+      // Numbered/lettered items (e.g., "1. Process Concept", "a) New")
+      const numMatch = line.match(/^(?:\d+|[a-zA-Z])[\.)]\s+([^:•\n.]{3,70})/);
+      if (numMatch && !line.includes('Arrival =') && !line.includes('Burst =')) {
+        addSub(numMatch[1]);
+        continue;
+      }
+
+      // Colon-separated definition terms (e.g., "Accounting information: This information includes...")
+      const colonMatch = line.match(/^([A-Z][a-zA-Z0-9\s/()–—\-]{2,55})\s*:\s*(.{10,})/);
+      if (colonMatch) {
+        addSub(colonMatch[1], colonMatch[2].slice(0, 150));
+        continue;
+      }
+
+      // Markdown subheadings (e.g., "### Subtopic", "**Subtopic**")
+      const mdMatch = line.match(/^(?:###?\s+|\*\*([^*]{3,65})\*\*)/);
+      if (mdMatch) {
+        addSub(mdMatch[1] || line.replace(/^###?\s+/, ''));
+        continue;
+      }
+    }
+
+    // 3. Mathematical formulations or numerical examples
+    if (sec.numericalProblems && sec.numericalProblems.length > 0) {
+      for (let i = 0; i < sec.numericalProblems.length; i++) {
+        addSub(`Worked Example ${i + 1}: ${cleanTopicTitle}`);
+      }
+    }
+
+    // 4. Algorithms / pseudocode
+    if (sec.algorithms && sec.algorithms.length > 0) {
+      for (let i = 0; i < sec.algorithms.length; i++) {
+        addSub(`Algorithm Procedure: ${cleanTopicTitle}`);
+      }
+    }
+
+    // 5. If no structured subtopics found, extract natural semantic segments
+    if (subtopics.length === 0) {
+      const sentences = (sec.content || '')
+        .split(/(?<=[.?!])\s+/)
+        .map(s => s.trim())
+        .filter(s => s.length > 15 && !s.toLowerCase().includes('college'));
+
+      if (sentences.length >= 2) {
+        addSub(`${cleanTopicTitle}: Definition & Core Concept`);
+        addSub(`${cleanTopicTitle}: Mechanism & Application`);
+      } else {
+        addSub(`${cleanTopicTitle}: Core Concept & Formulation`);
+      }
+    }
+
+    return subtopics;
   }
 }

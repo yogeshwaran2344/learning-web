@@ -1093,19 +1093,13 @@ export class TopicHierarchyService {
           currentTopic.isMultiPage = currentTopic.pageRange[1] > currentTopic.pageRange[0];
           typesFound.forEach(t => { if (!currentTopic!.contentTypesFound?.includes(t)) currentTopic!.contentTypesFound?.push(t); });
 
-          // Add subtopic
-          currentTopic.subtopics.push({
-            id: `sub-${sec.id}`,
-            title: `${cleanTopicTitle} (Page ${page})`,
-            level: 3,
-            pageRange: [page, page],
-            importantConcepts: sec.definitions?.map(d => d.term) || [],
-            equationsCount: sec.equations?.length || 0,
-            diagramsCount: diagrams.length,
-            tablesCount: sec.tables?.length || 0,
-            numericalExamplesCount: sec.examples?.length || 0,
-            algorithmsCount: algorithms.length
-          });
+          // Add all evidence subtopics from continuation section
+          const continuationSubs = this.extractEvidenceSubtopics(sec, cleanTopicTitle, page);
+          for (const sub of continuationSubs) {
+            if (!currentTopic.subtopics.some(s => s.title.toLowerCase() === sub.title.toLowerCase())) {
+              currentTopic.subtopics.push(sub);
+            }
+          }
 
           // Accumulate assets
           if (sec.equations && sec.equations.length > 0) {
@@ -1132,8 +1126,9 @@ export class TopicHierarchyService {
             );
           }
         } else {
-          // Start a new topic
+          // Start a new topic with all evidence subtopics from file
           const topicNum = `${cIdx + 1}.${topics.length + 1}`;
+          const extractedSubs = this.extractEvidenceSubtopics(sec, cleanTopicTitle, page);
           currentTopic = {
             id: `top-${cIdx + 1}-${topics.length + 1}-${docId}`,
             topicNumber: topicNum,
@@ -1144,20 +1139,7 @@ export class TopicHierarchyService {
             isMultiPage: false,
             contentType: primaryContentType,
             contentTypesFound: typesFound,
-            subtopics: [
-              {
-                id: `sub-${sec.id}-initial`,
-                title: `${cleanTopicTitle} Principles`,
-                level: 3,
-                pageRange: [page, page],
-                importantConcepts: sec.definitions?.map(d => d.term) || ['Core formulation'],
-                equationsCount: sec.equations?.length || 0,
-                diagramsCount: diagrams.length,
-                tablesCount: sec.tables?.length || 0,
-                numericalExamplesCount: sec.examples?.length || 0,
-                algorithmsCount: algorithms.length
-              }
-            ],
+            subtopics: extractedSubs,
             importantConcepts: sec.definitions?.map(d => d.term) || [cleanTopicTitle],
             associatedEquations: sec.equations?.map(eq => ({ ...eq, pageNumber: page })) || [],
             associatedDiagrams: diagrams,
@@ -1799,5 +1781,109 @@ export class TopicHierarchyService {
       ...hierarchy,
       isUserVerified: true
     };
+  }
+
+  static extractEvidenceSubtopics(
+    sec: DocumentSection,
+    cleanTopicTitle: string,
+    page: number
+  ): DocumentSubtopic[] {
+    const subtopics: DocumentSubtopic[] = [];
+    const seenTitles = new Set<string>();
+
+    const addSub = (title: string, concepts: string[] = []) => {
+      let cleaned = this.cleanAcademicTitle(title)
+        .replace(/^[•\-*▪▫–—\+o\d.)\s]+/, '')
+        .trim();
+      if (!cleaned || cleaned.length < 3 || cleaned.length > 90) return;
+      if (/^(?:page|slide|module|chapter|unit)\s*\d+$/i.test(cleaned)) return;
+      if (seenTitles.has(cleaned.toLowerCase())) return;
+      seenTitles.add(cleaned.toLowerCase());
+
+      subtopics.push({
+        id: `sub-${sec.id}-${subtopics.length + 1}`,
+        title: cleaned,
+        level: 3,
+        pageRange: [page, page],
+        importantConcepts: concepts.length > 0 ? concepts : [cleaned],
+        equationsCount: sec.equations?.length || 0,
+        diagramsCount: 0,
+        tablesCount: sec.tables?.length || 0,
+        numericalExamplesCount: 0,
+        algorithmsCount: 0
+      });
+    };
+
+    // 1. Definition terms (e.g. Accounting Information, Process State)
+    if (sec.definitions && sec.definitions.length > 0) {
+      for (const d of sec.definitions) {
+        if (d.term && d.term.trim().length > 2) {
+          addSub(d.term, [d.term]);
+        }
+      }
+    }
+
+    // 2. Scan content lines for bullet points, numbered items, and subheadings
+    const lines = (sec.content || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    for (const line of lines) {
+      // Bullets (e.g., "- Process state", "• Accounting information")
+      const bulletMatch = line.match(/^[•\-*▪▫–—\+o]\s+([^:•\n]{3,80})/);
+      if (bulletMatch) {
+        addSub(bulletMatch[1]);
+        continue;
+      }
+
+      // Numbered/lettered items (e.g., "1. Process Concept", "a) New")
+      const numMatch = line.match(/^(?:\d+|[a-zA-Z])[\.)]\s+([^:•\n.]{3,70})/);
+      if (numMatch && !line.includes('Arrival =') && !line.includes('Burst =')) {
+        addSub(numMatch[1]);
+        continue;
+      }
+
+      // Colon-separated definition terms (e.g., "Accounting information: This information includes...")
+      const colonMatch = line.match(/^([A-Z][a-zA-Z0-9\s/()–—\-]{2,55})\s*:\s*(.{10,})/);
+      if (colonMatch) {
+        addSub(colonMatch[1]);
+        continue;
+      }
+
+      // Markdown subheadings (e.g., "### Subtopic", "**Subtopic**")
+      const mdMatch = line.match(/^(?:###?\s+|\*\*([^*]{3,65})\*\*)/);
+      if (mdMatch) {
+        addSub(mdMatch[1] || line.replace(/^###?\s+/, ''));
+        continue;
+      }
+    }
+
+    // 3. Mathematical formulations or numerical examples
+    if (sec.examples && sec.examples.length > 0) {
+      for (let i = 0; i < sec.examples.length; i++) {
+        addSub(`Worked Example ${i + 1}: ${cleanTopicTitle}`);
+      }
+    }
+
+    // 4. Algorithms / pseudocode
+    if ((sec as any).algorithms && (sec as any).algorithms.length > 0) {
+      for (let i = 0; i < (sec as any).algorithms.length; i++) {
+        addSub(`Algorithm: ${cleanTopicTitle}`);
+      }
+    }
+
+    // 5. If no structured subtopics found, extract natural semantic segments
+    if (subtopics.length === 0) {
+      const sentences = (sec.content || '')
+        .split(/(?<=[.?!])\s+/)
+        .map(s => s.trim())
+        .filter(s => s.length > 15 && !s.toLowerCase().includes('college'));
+
+      if (sentences.length >= 2) {
+        addSub(`${cleanTopicTitle}: Definition & Core Concept`);
+        addSub(`${cleanTopicTitle}: Mechanism & Application`);
+      } else {
+        addSub(`${cleanTopicTitle}: Core Concept & Formulation`);
+      }
+    }
+
+    return subtopics;
   }
 }
