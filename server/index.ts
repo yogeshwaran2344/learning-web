@@ -73,7 +73,15 @@ app.use('/api', standardRateLimiter);
 app.use('/api', apiRouter);
 
 // Serve frontend static assets from 'dist'
-app.use(express.static(distPath));
+app.use(express.static(distPath, {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+  }
+}));
 
 // Fallback to index.html for Single-Page Application (SPA) client routing
 app.get('*', (req, res, next) => {
@@ -82,6 +90,9 @@ app.get('*', (req, res, next) => {
   }
   const indexPath = path.join(distPath, 'index.html');
   if (fs.existsSync(indexPath)) {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.sendFile(indexPath);
   } else {
     res.status(200).send(`

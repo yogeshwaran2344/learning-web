@@ -242,13 +242,13 @@ export const TopicHierarchyReviewModal: React.FC<TopicHierarchyReviewModalProps>
 
                   <div className="flex items-center gap-3 shrink-0 text-xs">
                     <span className="px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-mono text-[11px]">
-                      Pages {chapter.pageRange[0]} – {chapter.pageRange[1]}
+                      Pages {chapter.pageRange ? `${chapter.pageRange[0]} – ${chapter.pageRange[1]}` : '1 – 1'}
                     </span>
                     <button
                       onClick={() => {
                         setShowAddModal(chapter.id);
-                        setNewTopicStartPage(chapter.pageRange[0]);
-                        setNewTopicEndPage(chapter.pageRange[1]);
+                        setNewTopicStartPage(chapter.pageRange?.[0] || 1);
+                        setNewTopicEndPage(chapter.pageRange?.[1] || 1);
                       }}
                       className="px-2 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-blue-600 text-[11px] font-semibold flex items-center gap-1 cursor-pointer transition-colors"
                     >
@@ -333,9 +333,11 @@ export const TopicHierarchyReviewModal: React.FC<TopicHierarchyReviewModalProps>
                                       : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                                   }`}
                                 >
-                                  {topic.isMultiPage
-                                    ? `Pages ${topic.pageRange[0]}–${topic.pageRange[1]} (Multi-page)`
-                                    : `Page ${topic.pageRange[0]}`}
+                                  {topic.pageRange
+                                    ? (topic.pageRange[1] > topic.pageRange[0]
+                                        ? `Pages ${topic.pageRange[0]}–${topic.pageRange[1]} (Multi-page)`
+                                        : `Page ${topic.pageRange[0]}`)
+                                    : 'Page 1'}
                                 </span>
 
                                 <button
@@ -396,7 +398,7 @@ export const TopicHierarchyReviewModal: React.FC<TopicHierarchyReviewModalProps>
                                       <span className="truncate">{sub.title}</span>
                                     </div>
                                     <span className="text-slate-400 shrink-0 text-[10px]">
-                                      p. {sub.pageRange[0]}
+                                      p. {sub.pageRange?.[0] || 1}
                                     </span>
                                   </div>
                                 ))}

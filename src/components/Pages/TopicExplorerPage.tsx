@@ -770,15 +770,16 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                             <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex flex-col">
                               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Subtopics</span>
                               <span className="font-semibold text-slate-800 dark:text-slate-200">
-                                {topic.subtopics.length} subtopic{topic.subtopics.length > 1 ? 's' : ''}
+                                {(topic.subtopics || []).length} subtopic{(topic.subtopics || []).length !== 1 ? 's' : ''}
                               </span>
                             </div>
 
                             {/* 3. Source Pages */}
                             <div
                               onClick={() => {
+                                const pStart = topic.pageRange?.[0] || 1;
                                 if (onNavigateToPage) {
-                                  onNavigateToPage(topic.pageRange[0]);
+                                  onNavigateToPage(pStart);
                                 } else if (topic.sourceCitations?.[0] && onNavigateToCitation) {
                                   onNavigateToCitation(topic.sourceCitations[0]);
                                 } else {
@@ -793,7 +794,7 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                                 <ExternalLink className="w-2.5 h-2.5 text-blue-500" />
                               </span>
                               <span className="font-mono font-semibold text-blue-600 dark:text-blue-400">
-                                Pages {topic.pageRange[0]}–{topic.pageRange[1]}
+                                Pages {topic.pageRange ? `${topic.pageRange[0]}–${topic.pageRange[1]}` : '1–1'}
                               </span>
                             </div>
 
@@ -819,7 +820,7 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                               {/* Short Topic Description / Purpose */}
                               <div className="text-xs text-slate-600 dark:text-slate-300 bg-blue-50/30 dark:bg-blue-950/20 p-3 rounded-xl border border-blue-100 dark:border-blue-900/40">
                                 <strong className="text-slate-800 dark:text-slate-200">Core Purpose: </strong>
-                                Formalizes {topic.title.toLowerCase()} across Pages {topic.pageRange[0]}–{topic.pageRange[1]}. All definitions, equations, and invariant boundary conditions are preserved for student study.
+                                Formalizes {topic.title.toLowerCase()} across Pages {topic.pageRange ? `${topic.pageRange[0]}–${topic.pageRange[1]}` : '1–1'}. All definitions, equations, and invariant boundary conditions are preserved for student study.
                               </div>
 
                               {/* Available Learning Formats Count */}
@@ -854,8 +855,8 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                                   <button
                                     onClick={() => {
                                       setAddSubtopicTopicId(topic.id);
-                                      setNewSubtopicStartPage(topic.pageRange[0]);
-                                      setNewSubtopicEndPage(topic.pageRange[1]);
+                                      setNewSubtopicStartPage(topic.pageRange?.[0] || 1);
+                                      setNewSubtopicEndPage(topic.pageRange?.[1] || 1);
                                     }}
                                     className="text-[11px] text-blue-600 hover:text-blue-700 font-bold flex items-center gap-1 cursor-pointer"
                                   >
@@ -879,8 +880,9 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                                           </div>
                                           <div
                                             onClick={() => {
+                                              const subP = sub.pageRange?.[0] || topic.pageRange?.[0] || 1;
                                               if (onNavigateToPage) {
-                                                onNavigateToPage(sub.pageRange[0]);
+                                                onNavigateToPage(subP);
                                               } else {
                                                 onLearnTopic(topic, 'original');
                                               }
@@ -888,7 +890,7 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                                             className="text-[10px] text-slate-500 font-mono hover:text-blue-600 cursor-pointer flex items-center gap-1"
                                             title="Click to jump to original page"
                                           >
-                                            <span>Source: Page {sub.pageRange[0]}</span>
+                                            <span>Source: Page {sub.pageRange?.[0] || topic.pageRange?.[0] || 1}</span>
                                             <ExternalLink className="w-2.5 h-2.5 text-blue-500" />
                                           </div>
                                           {(sub.importantConcepts || []).length > 0 && (
@@ -1318,7 +1320,7 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                           className="rounded text-blue-600"
                         />
                         <span className="font-semibold text-slate-800 dark:text-slate-200">{sub.title}</span>
-                        <span className="text-[10px] text-slate-400 ml-auto font-mono">Page {sub.pageRange[0]}</span>
+                        <span className="text-[10px] text-slate-400 ml-auto font-mono">Page {sub.pageRange?.[0] || 1}</span>
                       </label>
                     );
                   })}

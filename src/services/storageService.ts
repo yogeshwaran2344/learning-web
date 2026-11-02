@@ -35,6 +35,28 @@ const DEFAULT_PREFERENCES: UserPreferences = {
 };
 
 export class StorageService {
+  static cleanTitle(raw: string): string {
+    if (!raw) return 'Topic';
+    let cleaned = raw.trim();
+    if (cleaned.includes('•')) {
+      const parts = cleaned.split('•');
+      const after = parts[parts.length - 1].trim();
+      if (after.length > 2) cleaned = after;
+    } else if (cleaned.includes(' - ') && /department|dept|course|[0-9]{2}[A-Z]{2,5}[0-9]{2}/i.test(cleaned)) {
+      const parts = cleaned.split(' - ');
+      const after = parts[parts.length - 1].trim();
+      if (after.length > 2) cleaned = after;
+    }
+    cleaned = cleaned.replace(/^(?:Section|Slide|Topic|Part|Unit|Module)\s*\d+[:.]?\s*/gi, '');
+    cleaned = cleaned.replace(/^\d+[\s.:-]+/, '');
+    cleaned = cleaned.replace(/\b\d{2}[A-Z]{2,6}\d{2,4}\b/gi, '');
+    cleaned = cleaned.replace(/\b[A-Z]{2,6}\d{2,4}\b/gi, '');
+    cleaned = cleaned.replace(/(?:Department|Dept\.?|School|College|Faculty)\s+of\s+[^,•\n]+(?:,\s*[A-Z]{2,10})?/gi, '');
+    cleaned = cleaned.replace(/\b(?:NHCE|VTU|AICTE|NBA|NAAC|UGC|Autonomous|Affiliated)\b/gi, '');
+    cleaned = cleaned.replace(/^[\s.:•–—\-]+|[\s.:•–—\-]+$/g, '').trim();
+    return cleaned.length > 2 ? cleaned : raw;
+  }
+
   static sanitizeDocument(doc: any): AcademicDocument {
     if (!doc) return SAMPLE_DOCUMENTS[0];
     return {
@@ -91,21 +113,61 @@ export class StorageService {
         ...doc.topicHierarchy,
         chapters: Array.isArray(doc.topicHierarchy.chapters) ? doc.topicHierarchy.chapters.map((c: any) => ({
           ...c,
-          topics: Array.isArray(c?.topics) ? c.topics.map((t: any) => ({
-            ...t,
-            subtopics: Array.isArray(t?.subtopics) ? t.subtopics : [],
-            importantConcepts: Array.isArray(t?.importantConcepts) ? t.importantConcepts : [],
-            associatedEquations: Array.isArray(t?.associatedEquations) ? t.associatedEquations : [],
-            associatedDiagrams: Array.isArray(t?.associatedDiagrams) ? t.associatedDiagrams : [],
-            associatedTables: Array.isArray(t?.associatedTables) ? t.associatedTables : [],
-            associatedNumericalExamples: Array.isArray(t?.associatedNumericalExamples) ? t.associatedNumericalExamples : [],
-            associatedAlgorithms: Array.isArray(t?.associatedAlgorithms) ? t.associatedAlgorithms : [],
-            sourceCitations: Array.isArray(t?.sourceCitations) ? t.sourceCitations : []
-          })) : []
+          pageRange: Array.isArray(c?.pageRange) && c.pageRange.length >= 2 ? c.pageRange : [1, 1],
+          topics: (Array.isArray(c?.topics) ? c.topics : [])
+            .filter((t: any) => t && t.title && !t.title.includes('Prerequisite Dependencies') && !t.title.includes('Foundational Architecture'))
+            .map((t: any) => {
+              const cleanTitle = (t.title || 'Topic')
+                .replace(/^Chapter \d+:\s*/i, '')
+                .replace(/^(?:Section|Topic|Part|Unit|Module)\s*\d+[:.]?\s*/gi, '')
+                .replace(/^\d+[\s.:-]+/, '')
+                .replace(/\b\d{2}[A-Z]{2,6}\d{2,4}\b/gi, '')
+                .replace(/(?:Department|Dept\.?|School|College)\s+of\s+[^,•\n]+/gi, '')
+                .replace(/\b(?:NHCE|VTU|AICTE|NBA|NAAC|UGC)\b/gi, '')
+                .replace(/^[\s.:•–—\-]+|[\s.:•–—\-]+$/g, '')
+                .trim() || t.title;
+
+              return {
+                ...t,
+                title: cleanTitle,
+                pageRange: Array.isArray(t?.pageRange) && t.pageRange.length >= 2 ? t.pageRange : [1, 1],
+                subtopics: (Array.isArray(t?.subtopics) ? t.subtopics : [])
+                  .filter((s: any) => s && s.title && !s.title.includes('Prerequisite Dependencies'))
+                  .map((s: any) => ({
+                    ...s,
+                    title: (s.title || 'Subtopic').replace(/\s+Principles$/i, '').trim(),
+                    pageRange: Array.isArray(s?.pageRange) && s.pageRange.length >= 2 ? s.pageRange : [1, 1],
+                    importantConcepts: Array.isArray(s?.importantConcepts) ? s.importantConcepts : []
+                  })),
+                importantConcepts: Array.isArray(t?.importantConcepts) ? t.importantConcepts : [],
+                associatedEquations: Array.isArray(t?.associatedEquations) ? t.associatedEquations : [],
+                associatedDiagrams: Array.isArray(t?.associatedDiagrams) ? t.associatedDiagrams : [],
+                associatedTables: Array.isArray(t?.associatedTables) ? t.associatedTables : [],
+                associatedNumericalExamples: Array.isArray(t?.associatedNumericalExamples) ? t.associatedNumericalExamples : [],
+                associatedAlgorithms: Array.isArray(t?.associatedAlgorithms) ? t.associatedAlgorithms : [],
+                sourceCitations: Array.isArray(t?.sourceCitations) ? t.sourceCitations : []
+              };
+            })
         })) : []
       } : undefined,
       audioLesson: (doc.audioLesson && Array.isArray(doc.audioLesson.sections) && doc.audioLesson.sections.length > 0)
-        ? doc.audioLesson
+        ? {
+            ...doc.audioLesson,
+            sections: doc.audioLesson.sections.map((sec: any, sIdx: number) => {
+              const cleanScript = (sec.scriptText || '')
+                .replace(/\b(?:Teacher|Student|Instructor):\s*/gi, '')
+                .replace(/\b(?:Good question!|Welcome!|Let's make this simple and practical\.)\s*/gi, '')
+                .replace(/\b\d{2}[A-Z]{2,6}\d{2,4}\b/gi, '')
+                .replace(/(?:Department|Dept\.?|School|College)\s+of\s+[^,•\n]+/gi, '')
+                .replace(/\b(?:NHCE|VTU|AICTE|NBA|NAAC|UGC)\b/gi, '')
+                .trim();
+              return {
+                ...sec,
+                sectionTitle: StorageService.cleanTitle(sec.sectionTitle || `Section ${sIdx + 1}`),
+                scriptText: cleanScript || sec.scriptText
+              };
+            })
+          }
         : {
             id: doc.audioLesson?.id || `audio-${doc.id || 'doc'}`,
             title: doc.audioLesson?.title || `${doc.title || 'Academic'} (Audio Overview)`,

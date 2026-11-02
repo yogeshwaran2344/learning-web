@@ -236,7 +236,7 @@ export const StructuredTableRenderer: React.FC<{ table: ParsedTable }> = ({ tabl
             <TableIcon className="w-4 h-4 text-blue-600 dark:text-blue-400" />
             <span>{table.title}</span>
           </div>
-          <span className="text-[10px] text-slate-400 font-medium">Data Table ({table.rows.length} rows)</span>
+          <span className="text-[10px] text-slate-400 font-medium">Data Table ({(table.rows || []).length} rows)</span>
         </div>
       )}
 
@@ -418,7 +418,7 @@ export const StructuredContentRenderer: React.FC<StructuredContentRendererProps>
   highlightRef,
   pageNumber
 }) => {
-  if (!content && tables.length === 0 && equations.length === 0) return null;
+  if (!content && (tables || []).length === 0 && (equations || []).length === 0) return null;
 
   // Clean unneeded PDF line breaks while keeping paragraph separation
   const cleanedText = cleanPdfLineBreaks(content);

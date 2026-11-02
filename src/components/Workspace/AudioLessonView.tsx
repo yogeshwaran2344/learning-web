@@ -75,13 +75,10 @@ export function cleanSpokenBody(rawText: string): string {
   if (!rawText) return '';
   let cleaned = rawText;
 
-  // 1. Remove robotic teacher/student dialogue tags
+  // 1. Remove robotic teacher/student dialogue tags and conversational turns
   cleaned = cleaned.replace(/\b(?:Teacher|Student|Instructor|Learner)\s*:\s*/gi, '');
-  cleaned = cleaned.replace(/Good question!\s*/gi, '');
-  cleaned = cleaned.replace(/Welcome!\s*Today we are exploring[^.]*\./gi, '');
-  cleaned = cleaned.replace(/That clarifies the idea!\s*How should I remember this for the exam\?/gi, '');
-  cleaned = cleaned.replace(/Remember, everything is grounded in[^.]*\./gi, '');
-  cleaned = cleaned.replace(/Keep up the great work!/gi, '');
+  cleaned = cleaned.replace(/\b(?:Good question!|Welcome!\s*Today we are exploring[^.]*\.|That clarifies the idea!\s*How should I remember this for the exam\?|Remember, everything is grounded in[^.]*\.|Keep up the great work!|Let's make this simple and practical\.)\s*/gi, '');
+  cleaned = cleaned.replace(/\b(?:Student|Teacher)\s*:[^.?!]*[.?!]\s*/gi, '');
 
   // 2. Remove Part tags and sound markers
   cleaned = cleaned.replace(/\[Part \d+:[^\]]+\]/gi, '');
@@ -96,6 +93,38 @@ export function cleanSpokenBody(rawText: string): string {
   cleaned = cleaned.replace(/[•▪▫]/g, '');
 
   return cleaned.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Subject-adaptive intuitive analogy generator for multi-disciplinary topics.
+ */
+function getSubjectAnalogy(topicTitle: string, content: string): string {
+  const text = (topicTitle + ' ' + content).toLowerCase();
+  if (text.includes('schedul') || text.includes('fcfs') || text.includes('sjf') || text.includes('round robin')) {
+    return 'Think of a supermarket checkout counter: the scheduling algorithm decides which customer gets billed next to minimize everyone\'s waiting time.';
+  }
+  if (text.includes('process') || text.includes('pcb') || text.includes('thread')) {
+    return 'Think of a recipe in a cookbook as the static program, while the chef actively cooking in the kitchen is the live running process.';
+  }
+  if (text.includes('memory') || text.includes('paging') || text.includes('virtual memory') || text.includes('cache')) {
+    return 'Think of RAM like your study desk where you keep books currently being read, while storage is the large library bookshelf where all books are stored.';
+  }
+  if (text.includes('deadlock') || text.includes('mutex') || text.includes('semaphore') || text.includes('synchronization')) {
+    return 'Think of two cars meeting on a narrow single-lane bridge: neither can proceed forward until one backs up and gives way.';
+  }
+  if (text.includes('network') || text.includes('tcp') || text.includes('ip') || text.includes('packet') || text.includes('routing')) {
+    return 'Think of postal mail stamped with sender and receiver addresses: routers act like sorting stations forwarding packets along the fastest path.';
+  }
+  if (text.includes('database') || text.includes('sql') || text.includes('acid') || text.includes('transaction')) {
+    return 'Think of a bank ATM transfer: either the entire transaction succeeds safely, or it rolls back completely, keeping account balances consistent.';
+  }
+  if (text.includes('tree') || text.includes('graph') || text.includes('stack') || text.includes('queue') || text.includes('search')) {
+    return 'Think of an organized filing cabinet: each item points directly to related nodes, allowing quick searches and updates with minimum steps.';
+  }
+  if (text.includes('neural') || text.includes('weight') || text.includes('gradient') || text.includes('loss') || text.includes('model')) {
+    return 'Think of tuning an instrument: each training cycle nudges parameters in the exact direction that reduces prediction error.';
+  }
+  return `To picture ${topicTitle} easily: think of it like an essential coordinate in a system that establishes the exact rules, states, and operations so operations proceed reliably without error.`;
 }
 
 interface AudioLessonViewProps {
@@ -276,12 +305,13 @@ export const AudioLessonView: React.FC<AudioLessonViewProps> = ({
     }
 
     if (teachingStyle === 'simplified') {
-      // Natural, direct, simplified subtopic explanation without teacher/student dialogue
+      // Direct, master tutor explanation strictly on topic - zero teacher/student dialogue
       const sentences = cleanBody.split(/(?<=[.?!])\s+/).filter(s => s.trim().length > 15);
       const coreIdea = sentences[0] || cleanBody;
-      const details = sentences.slice(1, 3).join(' ') || 'This mechanism ensures reliable execution and systematic management.';
+      const analogy = getSubjectAnalogy(cleanTitle, cleanBody);
+      const details = sentences.slice(1, 3).join(' ') || 'This mechanism ensures reliable execution, correct state transitions, and systematic management.';
 
-      return `${cleanTitle}. In simple terms, ${coreIdea} Think of this like a real-time monitor: it tracks how system resources are utilized so that tasks remain orderly, time limits are respected, and no program causes a bottleneck. ${details} For exams, remember that ${cleanTitle} is essential for accurate resource tracking, fair scheduling, and system security.`;
+      return `${cleanTitle}. In simple terms: ${coreIdea} ${analogy} How it operates: ${details} For your exam: write down the formal definition, draw the architectural diagram, and highlight the key conditions to score full marks on ${cleanTitle}.`;
     }
 
     // In-depth Lecture mode: direct, clean academic presentation without roleplay tags

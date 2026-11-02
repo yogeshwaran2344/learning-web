@@ -49,30 +49,37 @@ export class ConceptMapService {
     const branches: IntelligentConceptBranch[] = [];
 
     // Form 4-7 primary branches from detected chapters or main topics
-    hierarchy.chapters.forEach((chapter, cIdx) => {
+    (hierarchy.chapters || []).forEach((chapter, cIdx) => {
+      const pageStart = chapter.pageRange?.[0] || 1;
+      const pageEnd = chapter.pageRange?.[1] || pageStart;
       const chapterCitation: SourceCitation = {
         id: `cite-map-chap-${chapter.id}`,
         documentId: document.id,
-        pageNumber: chapter.pageRange[0],
+        pageNumber: pageStart,
         sectionTitle: chapter.title,
-        exactQuote: `Core curriculum chapter: ${chapter.title} (Pages ${chapter.pageRange[0]}–${chapter.pageRange[1]})`,
+        exactQuote: `Core curriculum chapter: ${chapter.title} (Pages ${pageStart}–${pageEnd})`,
         contextSnippet: `Overall document architecture overview for ${chapter.title}`
       };
 
-      const children: IntelligentConceptChild[] = chapter.topics.map((topic) => ({
-        id: `child-${topic.id}`,
-        label: topic.title.length > 28 ? topic.title.slice(0, 26) + '...' : topic.title,
-        explanation: topic.description || `Core topic covering pages ${topic.pageRange[0]}–${topic.pageRange[1]} with ${topic.subtopics.length} verified subtopics.`,
-        category: (topic.associatedEquations?.length || 0) > 0 ? 'equation' : (topic.associatedDiagrams?.length || 0) > 0 ? 'mechanism' : 'core',
-        sourceCitation: topic.sourceCitations?.[0] || chapterCitation,
-        isImportant: true
-      }));
+      const children: IntelligentConceptChild[] = (chapter.topics || []).map((topic) => {
+        const tPageStart = topic.pageRange?.[0] || pageStart;
+        const tPageEnd = topic.pageRange?.[1] || tPageStart;
+        const subCount = topic.subtopics?.length || 0;
+        return {
+          id: `child-${topic.id}`,
+          label: topic.title.length > 28 ? topic.title.slice(0, 26) + '...' : topic.title,
+          explanation: topic.description || `Core topic covering pages ${tPageStart}–${tPageEnd} with ${subCount} verified subtopics.`,
+          category: (topic.associatedEquations?.length || 0) > 0 ? 'equation' : (topic.associatedDiagrams?.length || 0) > 0 ? 'mechanism' : 'core',
+          sourceCitation: topic.sourceCitations?.[0] || chapterCitation,
+          isImportant: true
+        };
+      });
 
       branches.push({
         id: `branch-${chapter.id}`,
         label: chapter.title.replace(/^Chapter \d+:\s*/i, ''),
         category: cIdx === 0 ? 'core' : cIdx % 2 === 1 ? 'mechanism' : 'application',
-        summary: `Chapter ${chapter.chapterNumber} covers pages ${chapter.pageRange[0]} to ${chapter.pageRange[1]} containing ${chapter.topics.length} main topics.`,
+        summary: `Chapter ${chapter.chapterNumber || cIdx + 1} covers pages ${pageStart} to ${pageEnd} containing ${(chapter.topics || []).length} main topics.`,
         sourceCitation: chapterCitation,
         isExpanded: true,
         children
@@ -135,13 +142,15 @@ export class ConceptMapService {
     const titleLower = topic.title.toLowerCase();
     const chapterLower = (chapter.title || '').toLowerCase();
     const centralConcept = topic.title.toUpperCase();
+    const pageStart = topic.pageRange?.[0] || chapter.pageRange?.[0] || 1;
+    const pageEnd = topic.pageRange?.[1] || pageStart;
     const primaryCitation = topic.sourceCitations?.[0] || {
       id: `cite-${topic.id}`,
       documentId: document.id,
-      pageNumber: topic.pageRange[0],
+      pageNumber: pageStart,
       sectionTitle: topic.title,
       exactQuote: `Core concepts of ${topic.title}`,
-      contextSnippet: `Extracted from pages ${topic.pageRange[0]}–${topic.pageRange[1]}`
+      contextSnippet: `Extracted from pages ${pageStart}–${pageEnd}`
     };
 
     let branches: IntelligentConceptBranch[] = [];
@@ -174,7 +183,7 @@ export class ConceptMapService {
       centralConcept,
       branches,
       document.id,
-      topic.pageRange[0]
+      pageStart
     );
 
     return {
@@ -182,7 +191,7 @@ export class ConceptMapService {
       topicId: topic.id,
       topicTitle: topic.title,
       chapterTitle: chapter.title,
-      pageRange: topic.pageRange,
+      pageRange: topic.pageRange || [pageStart, pageEnd],
       centralConcept,
       branches,
       nodes,
@@ -204,7 +213,7 @@ export class ConceptMapService {
     topic: DocumentTopic,
     baseCite: SourceCitation
   ): IntelligentConceptBranch[] {
-    const page = topic.pageRange[0];
+    const page = topic.pageRange?.[0] || 1;
 
     return [
       {
@@ -360,7 +369,7 @@ export class ConceptMapService {
     topic: DocumentTopic,
     baseCite: SourceCitation
   ): IntelligentConceptBranch[] {
-    const page = topic.pageRange[0];
+    const page = topic.pageRange?.[0] || 1;
 
     return [
       {
@@ -479,7 +488,7 @@ export class ConceptMapService {
     topic: DocumentTopic,
     baseCite: SourceCitation
   ): IntelligentConceptBranch[] {
-    const page = topic.pageRange[0];
+    const page = topic.pageRange?.[0] || 1;
 
     return [
       {
@@ -624,21 +633,24 @@ export class ConceptMapService {
 
     // Branch 2: Subtopics & Architecture
     if (topic.subtopics && topic.subtopics.length > 0) {
-      const subtopicChildren: IntelligentConceptChild[] = topic.subtopics.map((sub, sIdx) => ({
-        id: `ch-sub-${sub.id || sIdx}-${topic.id}`,
-        label: sub.title.replace(/^Chapter \d+:\s*/i, '').slice(0, 26),
-        explanation: `Subtopic on Page ${sub.pageRange[0]}: ${sub.title}. Preserves prerequisite relationships.`,
-        category: 'mechanism',
-        sourceCitation: {
-          id: `cite-sub-${sub.id}`,
-          documentId: docId,
-          pageNumber: sub.pageRange[0],
-          sectionTitle: sub.title,
-          exactQuote: `Subtopic formulation for ${sub.title}`,
-          contextSnippet: `Extracted from Page ${sub.pageRange[0]}`
-        },
-        isImportant: true
-      }));
+      const subtopicChildren: IntelligentConceptChild[] = topic.subtopics.map((sub, sIdx) => {
+        const subPage = sub.pageRange?.[0] || topic.pageRange?.[0] || 1;
+        return {
+          id: `ch-sub-${sub.id || sIdx}-${topic.id}`,
+          label: sub.title.replace(/^Chapter \d+:\s*/i, '').slice(0, 26),
+          explanation: `Subtopic on Page ${subPage}: ${sub.title}. Preserves prerequisite relationships.`,
+          category: 'mechanism',
+          sourceCitation: {
+            id: `cite-sub-${sub.id}`,
+            documentId: docId,
+            pageNumber: subPage,
+            sectionTitle: sub.title,
+            exactQuote: `Subtopic formulation for ${sub.title}`,
+            contextSnippet: `Extracted from Page ${subPage}`
+          },
+          isImportant: true
+        };
+      });
 
       branches.push({
         id: `br-arch-${topic.id}`,
@@ -682,6 +694,8 @@ export class ConceptMapService {
     }
 
     // Branch 4: Verification & Boundary Invariants
+    const tPageStart = topic.pageRange?.[0] || 1;
+    const tPageEnd = topic.pageRange?.[1] || tPageStart;
     branches.push({
       id: `br-invariants-${topic.id}`,
       label: 'Boundary Invariants',
@@ -700,8 +714,8 @@ export class ConceptMapService {
         },
         {
           id: `ch-inv-pages-${topic.id}`,
-          label: `Source Bound (Pages ${topic.pageRange[0]}–${topic.pageRange[1]})`,
-          explanation: `All concepts are strictly grounded in original lecture material across Pages ${topic.pageRange[0]}–${topic.pageRange[1]}.`,
+          label: `Source Bound (Pages ${tPageStart}–${tPageEnd})`,
+          explanation: `All concepts are strictly grounded in original lecture material across Pages ${tPageStart}–${tPageEnd}.`,
           category: 'condition',
           sourceCitation: baseCite,
           isImportant: false
