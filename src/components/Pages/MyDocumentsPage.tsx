@@ -15,7 +15,8 @@ import {
   ExternalLink,
   UploadCloud,
   Check,
-  X
+  X,
+  GitCompare
 } from 'lucide-react';
 import { AcademicDocument, DocumentFileType } from '../../types';
 
@@ -23,6 +24,7 @@ interface MyDocumentsPageProps {
   documents: AcademicDocument[];
   onSelectDocument: (doc: AcademicDocument) => void;
   onNavigateToTopicExplorer?: (doc: AcademicDocument) => void;
+  onNavigateToCompare?: () => void;
   onOpenUpload: () => void;
   onDeleteDocument: (id: string) => void;
   onRenameDocument: (id: string, newTitle: string) => void;
@@ -33,6 +35,7 @@ export const MyDocumentsPage: React.FC<MyDocumentsPageProps> = ({
   documents,
   onSelectDocument,
   onNavigateToTopicExplorer,
+  onNavigateToCompare,
   onOpenUpload,
   onDeleteDocument,
   onRenameDocument,
@@ -86,7 +89,18 @@ export const MyDocumentsPage: React.FC<MyDocumentsPageProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+          {documents.length >= 2 && onNavigateToCompare && (
+            <button
+              onClick={onNavigateToCompare}
+              className="py-2.5 px-4 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-md shadow-purple-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
+              title="Compare 2 or more files, unify syllabus, explain every topic, and omit common duplicates"
+            >
+              <GitCompare className="w-4 h-4" />
+              <span>Compare 2+ Files (Unified Syllabus)</span>
+            </button>
+          )}
+
           {documents.length > 0 && onClearAll && (
             <button
               onClick={onClearAll}
@@ -100,7 +114,7 @@ export const MyDocumentsPage: React.FC<MyDocumentsPageProps> = ({
 
           <button
             onClick={onOpenUpload}
-            className="py-2.5 px-5 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shadow-md shadow-brand-500/20 flex items-center justify-center gap-2 transition-all"
+            className="py-2.5 px-5 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shadow-md shadow-brand-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
           >
             <UploadCloud className="w-4 h-4" />
             <span>Upload Document</span>

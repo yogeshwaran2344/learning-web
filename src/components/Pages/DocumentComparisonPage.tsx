@@ -40,6 +40,11 @@ export const DocumentComparisonPage: React.FC<DocumentComparisonPageProps> = ({
 
   const [topicFilter, setTopicFilter] = useState<'all' | 'shared' | string>('all');
   const [topicSearchQuery, setTopicSearchQuery] = useState('');
+  const [expandedTopicIds, setExpandedTopicIds] = useState<Record<string, boolean>>({});
+
+  const toggleTopicExpand = (id: string) => {
+    setExpandedTopicIds(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
   const selectedDocs = useMemo(() => {
     return documents.filter(d => selectedDocIds.includes(d.id));
@@ -327,6 +332,70 @@ export const DocumentComparisonPage: React.FC<DocumentComparisonPageProps> = ({
                       Formulation:
                     </span>
                     <span className="truncate">{topic.keyFormulas.join('  •  ')}</span>
+                  </div>
+                )}
+
+                {/* Explain Every Topic Action */}
+                <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
+                  <button
+                    onClick={() => toggleTopicExpand(topic.id)}
+                    className="text-xs font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                    <span>{expandedTopicIds[topic.id] ? 'Hide Explanation' : 'Explain This Topic Simply'}</span>
+                  </button>
+
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    {topic.isShared ? `Unified across ${topic.sourceDocuments.length} files (Duplicates omitted)` : 'Material-specific topic'}
+                  </span>
+                </div>
+
+                {/* Expandable Simplified Explanation & Analogy Panel */}
+                {expandedTopicIds[topic.id] && (
+                  <div className="mt-3 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-3 animate-fadeIn text-xs">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-blue-100 dark:border-blue-900/60 space-y-1">
+                        <span className="font-bold text-blue-600 dark:text-blue-400 uppercase text-[10px] tracking-wider flex items-center gap-1">
+                          <BookOpen className="w-3 h-3" />
+                          <span>Core Concept in Plain Words:</span>
+                        </span>
+                        <p className="text-slate-700 dark:text-slate-300 leading-relaxed">
+                          {topic.mergedSummary.split('.')[0]}. It establishes verified rules and boundaries so execution proceeds without conflict or state corruption.
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-amber-100 dark:border-amber-900/60 space-y-1">
+                        <span className="font-bold text-amber-600 dark:text-amber-400 uppercase text-[10px] tracking-wider flex items-center gap-1">
+                          <Sparkles className="w-3 h-3" />
+                          <span>Everyday Analogy:</span>
+                        </span>
+                        <p className="text-slate-700 dark:text-slate-300 leading-relaxed italic">
+                          "Picture this like a central traffic coordinator: it manages flow, sets strict priorities, and ensures multiple components run smoothly without blocking each other."
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-emerald-100 dark:border-emerald-900/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="space-y-0.5">
+                        <span className="font-bold text-emerald-700 dark:text-emerald-300 uppercase text-[10px] tracking-wider">
+                          Exam Revision Takeaway:
+                        </span>
+                        <p className="text-slate-600 dark:text-slate-400">
+                          State the formal definition, draw the block/flow schematic, and cite the governing conditions to secure full marks.
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          const firstSrc = topic.sourceDocuments[0];
+                          if (firstSrc) onNavigateToStudio(firstSrc.docId, firstSrc.pageNumber);
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shrink-0 flex items-center gap-1 transition-colors cursor-pointer"
+                      >
+                        <span>Learn Full Topic in Studio</span>
+                        <ArrowRight className="w-3 h-3" />
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

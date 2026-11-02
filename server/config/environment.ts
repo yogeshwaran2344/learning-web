@@ -99,8 +99,8 @@ export const config: AppConfig = {
   port: Number(process.env.PORT) || 5001,
   corsOrigins,
   jwtSecret: getOrGeneratePersistentSecret('JWT_SECRET', '.jwt_secret', 32),
-  maxUploadSizeMb: 25,
-  maxUploadSizeBytes: 25 * 1024 * 1024, // 25 MB limit
+  maxUploadSizeMb: 150,
+  maxUploadSizeBytes: 150 * 1024 * 1024, // 150 MB limit for large lecture slides, PDFs & multi-page textbooks
   rateLimitWindowMs: 15 * 60 * 1000,     // 15 minutes
   maxRequestsPerWindow: 300,             // 300 req per 15 min per IP
   aiRateLimitWindowMs: 60 * 1000,        // 1 minute

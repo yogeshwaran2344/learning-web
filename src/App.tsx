@@ -376,6 +376,7 @@ export function App() {
               documents={documents}
               onSelectDocument={handleSelectDocument}
               onNavigateToTopicExplorer={handleNavigateToTopicExplorer}
+              onNavigateToCompare={() => setCurrentPage('compare')}
               onOpenUpload={() => setCurrentPage('upload')}
               onDeleteDocument={handleDeleteDocument}
               onRenameDocument={handleRenameDocument}

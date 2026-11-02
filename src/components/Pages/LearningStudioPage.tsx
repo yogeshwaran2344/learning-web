@@ -227,11 +227,11 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
     { id: 'worked', number: '05', label: 'Worked Examples', tooltip: 'Step-by-step mathematical calculations and derivations', icon: <FlaskConical className="w-4 h-4" />, color: 'text-emerald-500' },
     { id: 'flashcards', number: '06', label: 'Flashcards', tooltip: 'Spaced repetition flashcards with mastery tracking', icon: <Layers className="w-4 h-4" />, color: 'text-purple-500' },
     { id: 'quiz', number: '07', label: 'Practice Quiz', tooltip: 'Diagnostic quiz with explanations and source citations', icon: <Award className="w-4 h-4" />, color: 'text-amber-500' },
-    { id: 'audio', number: '08', label: 'Audio Lessons', tooltip: 'Narrated spoken lesson with chapter navigation', icon: <Headphones className="w-4 h-4" />, color: 'text-emerald-500' },
-    { id: 'whiteboard', number: '09', label: 'AI Whiteboard', tooltip: 'Interactive whiteboard explaining concepts visually with diagrams, equations, and flowcharts', icon: <PenTool className="w-4 h-4" />, color: 'text-purple-500' },
-    { id: 'podcast', number: '10', label: 'Study Podcast', tooltip: 'Two-speaker conversational audio lessons between Dr. Maya & Leo', icon: <Radio className="w-4 h-4" />, color: 'text-emerald-500' },
-    { id: 'search', number: '11', label: 'Semantic Search', tooltip: 'Search by meaning and conceptual intent with source citations', icon: <Search className="w-4 h-4" />, color: 'text-blue-500' },
-    { id: 'exam', number: '12', label: 'Exam Questions (5M-10M)', tooltip: 'Predicted 5-marker, 7-marker, 8-marker, and 10-marker exam questions with complete model answers & marking schemes', icon: <FileQuestion className="w-4 h-4" />, color: 'text-amber-500' }
+    { id: 'exam', number: '08', label: '🎯 Exam Qs (5M-10M)', tooltip: 'Predicted 5-marker, 7-marker, 8-marker, and 10-marker exam questions with complete model answers & marking schemes', icon: <FileQuestion className="w-4 h-4" />, color: 'text-amber-500' },
+    { id: 'audio', number: '09', label: 'Audio Lessons', tooltip: 'Narrated spoken lesson with chapter navigation', icon: <Headphones className="w-4 h-4" />, color: 'text-emerald-500' },
+    { id: 'whiteboard', number: '10', label: 'AI Whiteboard', tooltip: 'Interactive whiteboard explaining concepts visually with diagrams, equations, and flowcharts', icon: <PenTool className="w-4 h-4" />, color: 'text-purple-500' },
+    { id: 'podcast', number: '11', label: 'Study Podcast', tooltip: 'Two-speaker conversational audio lessons between Dr. Maya & Leo', icon: <Radio className="w-4 h-4" />, color: 'text-emerald-500' },
+    { id: 'search', number: '12', label: 'Semantic Search', tooltip: 'Search by meaning and conceptual intent with source citations', icon: <Search className="w-4 h-4" />, color: 'text-blue-500' }
   ];
 
   const handleTabKeyDown = (e: React.KeyboardEvent, index: number) => {
@@ -430,13 +430,18 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
 
     // Check if document already has substantial content for this tab
     const hasData =
-      (activeTab === 'map' && document.conceptMap?.nodes?.length > 1) ||
-      (activeTab === 'flashcards' && document.flashcards?.length > 0) ||
-      (activeTab === 'audio' && document.audioLesson?.sections?.length > 0) ||
-      (activeTab === 'quiz' && (document as any).quiz?.length > 0) ||
-      (activeTab === 'notes' && ((document as any).notes?.sections?.length > 0 || (document as any).notes?.rigorousBreakdown)) ||
-      (activeTab === 'worked' && ((document as any).worked?.solutionSteps?.length > 2 || (document as any).worked?.problemStatement)) ||
-      (activeTab === 'simplified' && (document.explanations?.[0]?.sections?.length > 0 || document.explanations?.[0]?.intuitiveAnalogy?.length > 40));
+      activeTab === 'exam' ||
+      activeTab === 'topics' ||
+      activeTab === 'whiteboard' ||
+      activeTab === 'podcast' ||
+      activeTab === 'search' ||
+      (activeTab === 'map' && (document.conceptMap?.nodes?.length || 0) > 1) ||
+      (activeTab === 'flashcards' && (document.flashcards?.length || 0) > 0) ||
+      (activeTab === 'audio' && (document.audioLesson?.sections?.length || 0) > 0) ||
+      (activeTab === 'quiz' && ((document as any).quiz?.length || 0) > 0) ||
+      (activeTab === 'notes' && (((document as any).notes?.sections?.length || 0) > 0 || (document as any).notes?.rigorousBreakdown)) ||
+      (activeTab === 'worked' && (((document as any).worked?.solutionSteps?.length || 0) > 2 || (document as any).worked?.problemStatement)) ||
+      (activeTab === 'simplified' && ((document.explanations?.[0]?.sections?.length || 0) > 0 || ((document.explanations?.[0]?.intuitiveAnalogy?.length || 0) > 40)));
 
     if (!hasData) {
       handleRegenerate(currentLanguage, difficulty);

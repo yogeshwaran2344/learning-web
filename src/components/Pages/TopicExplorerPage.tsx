@@ -748,6 +748,15 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                               </button>
 
                               <button
+                                onClick={() => onLearnTopic(topic, 'exam')}
+                                className="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                                title="View predicted 5M, 7M, 8M, and 10M exam questions with complete model answers"
+                              >
+                                <Award className="w-3.5 h-3.5" />
+                                <span>5M–10M Exam Qs</span>
+                              </button>
+
+                              <button
                                 onClick={() => onLearnTopic(topic)}
                                 className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
                                 title="Open this topic's dedicated learning workspace"
@@ -826,25 +835,50 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                               {/* Available Learning Formats Count */}
                               <div className="flex flex-wrap items-center gap-2 text-[11px]">
                                 <span className="font-bold text-slate-500">Available Formats:</span>
-                                <span className="px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 font-semibold">
+                                <button
+                                  onClick={() => onLearnTopic(topic, 'exam')}
+                                  className="px-2 py-0.5 rounded-md bg-amber-500 text-slate-950 font-bold hover:bg-amber-400 cursor-pointer transition-all shadow-xs"
+                                  title="Predicted 5, 7, 8, and 10 mark exam questions with answers"
+                                >
+                                  🎯 5M–10M Exam Qs
+                                </button>
+                                <button
+                                  onClick={() => onLearnTopic(topic, 'simplified')}
+                                  className="px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 font-semibold hover:bg-amber-100 cursor-pointer transition-colors"
+                                >
                                   💡 Short Explanation
-                                </span>
-                                <span className="px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-semibold">
+                                </button>
+                                <button
+                                  onClick={() => onLearnTopic(topic, 'map')}
+                                  className="px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-semibold hover:bg-blue-100 cursor-pointer transition-colors"
+                                >
                                   🗺️ Concept Map
-                                </span>
-                                <span className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-semibold">
+                                </button>
+                                <button
+                                  onClick={() => onLearnTopic(topic, 'audio')}
+                                  className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-semibold hover:bg-emerald-100 cursor-pointer transition-colors"
+                                >
                                   🎧 Audio Lesson
-                                </span>
-                                <span className="px-2 py-0.5 rounded-md bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 font-semibold">
+                                </button>
+                                <button
+                                  onClick={() => onLearnTopic(topic, 'flashcards')}
+                                  className="px-2 py-0.5 rounded-md bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 font-semibold hover:bg-purple-100 cursor-pointer transition-colors"
+                                >
                                   🗂️ Flashcards
-                                </span>
-                                <span className="px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-semibold">
+                                </button>
+                                <button
+                                  onClick={() => onLearnTopic(topic, 'quiz')}
+                                  className="px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-semibold hover:bg-indigo-100 cursor-pointer transition-colors"
+                                >
                                   📝 Practice Quiz
-                                </span>
+                                </button>
                                 {(topic.associatedNumericalExamples || []).length > 0 && (
-                                  <span className="px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 font-semibold">
+                                  <button
+                                    onClick={() => onLearnTopic(topic, 'worked')}
+                                    className="px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 font-semibold hover:bg-rose-100 cursor-pointer transition-colors"
+                                  >
                                     🔢 Worked Examples
-                                  </span>
+                                  </button>
                                 )}
                               </div>
 

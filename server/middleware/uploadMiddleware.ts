@@ -20,7 +20,7 @@ const storage = multer.diskStorage({
 const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   const ext = path.extname(file.originalname).toLowerCase();
 
-  const allowedExtensions = ['.pdf', '.pptx', '.ppt', '.png', '.jpg', '.jpeg', '.txt', '.md', '.tex'];
+  const allowedExtensions = ['.pdf', '.pptx', '.ppt', '.docx', '.doc', '.png', '.jpg', '.jpeg', '.txt', '.md', '.tex'];
 
   // 1. Verify extension
   if (!allowedExtensions.includes(ext)) {
@@ -39,6 +39,6 @@ export const uploadMiddleware = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 50 * 1024 * 1024 // 50 Megabytes safeguard limit
+    fileSize: 150 * 1024 * 1024 // 150 Megabytes safeguard limit for large documents
   }
 });
