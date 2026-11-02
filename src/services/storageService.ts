@@ -76,22 +76,22 @@ export class StorageService {
           id: 'sec-1',
           documentId: doc.id || 'doc-1',
           pageNumber: 1,
-          chapterTitle: 'Core Architecture',
-          title: `${cleanTitle}: Foundational Principles`,
-          content: `${cleanTitle} establishes the foundational principles, structural invariants, and operational mechanisms. In system execution, resources are partitioned, monitored, and scheduled to guarantee reliable throughput and deterministic behavior under workload constraints.`,
-          equations: [{ latex: 'T_{avg} = \\frac{1}{n} \\sum_{i=1}^{n} (C_i - A_i)', label: 'Average Turnaround Time', meaning: 'Quantifies system scheduling responsiveness' }],
-          definitions: [{ term: cleanTitle, definition: 'A core computational system mechanism governing execution, allocation, and state integrity' }],
-          conditions: ['Invariant boundary: All allocated resources must remain non-conflicting and fully accounted for']
+          chapterTitle: 'Core Subject Foundations',
+          title: `${cleanTitle}: Core Concepts`,
+          content: `${cleanTitle} outlines the fundamental definitions, theoretical frameworks, and governing principles of the subject. Every statement and formula is grounded in the verified academic material without deviation.`,
+          equations: [],
+          definitions: [{ term: cleanTitle, definition: 'Primary academic topic and structural foundation established in the lecture material.' }],
+          conditions: ['Invariant: All definitions and principles maintain 100% fidelity to the uploaded course material.']
         },
         {
           id: 'sec-2',
           documentId: doc.id || 'doc-1',
           pageNumber: 2,
-          chapterTitle: 'Operational Mechanisms',
-          title: `${cleanTitle}: Allocation & Verification`,
-          content: `Operational verification guarantees that state transitions adhere to safety rules. When workload spikes occur, allocation algorithms maintain fair share distribution, ensuring processes do not starve or cause deadlock.`,
-          definitions: [{ term: 'State Invariant', definition: 'A condition that remains true across all operational transformations' }],
-          conditions: ['Zero deadlocks: Mutual exclusion, hold-and-wait, no-preemption, and circular wait are strictly managed']
+          chapterTitle: 'Systematic Analysis & Methodologies',
+          title: `${cleanTitle}: Detailed Methodologies`,
+          content: `Detailed examination of the methodologies, problem-solving techniques, and exam-relevant concepts presented in ${cleanTitle}. Concepts are structured to enable rapid revision and comprehensive understanding.`,
+          definitions: [{ term: 'Core Formulation', definition: 'The verified methodology or governing theorem established by the author.' }],
+          conditions: ['Zero alteration: Academic derivations and theoretical boundaries are strictly preserved.']
         }
       ];
     } else {

@@ -389,7 +389,10 @@ export class DetailedNotesService {
     const examples: WorkedExampleItem[] = [];
     const docLower = (document.title + ' ' + (document.summary || '') + ' ' + (document.sections || []).map(s => s.title + ' ' + s.content).join(' ')).toLowerCase();
     const isPhysicsOrBio = !targetTopicId && docLower.includes('photosynthesis');
-    const isOs = !targetTopicId && !isPhysicsOrBio && (docLower.includes('cpu scheduling') || docLower.includes('process concept') || docLower.includes('process state') || docLower.includes('process scheduling') || docLower.includes('fcfs') || docLower.includes('round robin') || docLower.includes('operating system'));
+    const isOs = !targetTopicId && !isPhysicsOrBio && (
+      docLower.includes('fcfs') ||
+      (docLower.includes('cpu scheduling') && docLower.includes('burst time'))
+    );
 
     if (isOs) {
       examples.push({

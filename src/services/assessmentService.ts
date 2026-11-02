@@ -239,7 +239,11 @@ export class AssessmentService {
     const sections = document.sections || [];
     const docLower = (document.title + ' ' + (document.summary || '') + ' ' + sections.map(s => s.title + ' ' + s.content).join(' ')).toLowerCase();
     const isPhysicsOrBio = docLower.includes('photosynthesis') || docLower.includes('quantum') || docLower.includes('wave') || docLower.includes('elasticity');
-    const isOsDocument = !isPhysicsOrBio && (docLower.includes('cpu scheduling') || docLower.includes('process scheduling') || docLower.includes('process concept') || docLower.includes('process state') || docLower.includes('fcfs') || docLower.includes('round robin') || docLower.includes('operating system'));
+    // Strictly ground topic-specific questions: only use scheduling templates if the active section explicitly discusses scheduling burst times
+    const isOsDocument = !isPhysicsOrBio && (
+      (scope.title || '').toLowerCase().includes('scheduling') ||
+      (sections[0]?.title || '').toLowerCase().includes('scheduling')
+    ) && docLower.includes('burst');
 
     // Filter relevant sections/topics based on scope
     let relevantSections = sections;

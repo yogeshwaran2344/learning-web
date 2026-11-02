@@ -141,79 +141,31 @@ export class PageTeacherService {
     }
 
     // Look for heading line in clean text
-    const firstLine = cleanText.split('\n')[0]?.trim();
-    if (firstLine && firstLine.length > 4 && firstLine.length < 60 && !firstLine.includes('.')) {
-      return firstLine.replace(/^[#\d.\s-]+/, '').trim();
+    const lines = cleanText.split('\n').map(l => l.trim()).filter(Boolean);
+    for (const line of lines.slice(0, 5)) {
+      const cleanLine = line
+        .replace(/^[#\d.\s•–—-]+/, '')
+        .replace(/^(?:chapter|unit|module|section|topic)\s*\d+[:\s-]*/i, '')
+        .trim();
+      if (
+        cleanLine.length > 3 &&
+        cleanLine.length < 80 &&
+        !cleanLine.toLowerCase().includes('college') &&
+        !cleanLine.toLowerCase().includes('department') &&
+        !/\b\d{2}[A-Z]{2,6}\d{2,4}\b/.test(cleanLine)
+      ) {
+        return cleanLine;
+      }
     }
 
-    // Fallbacks based on standard curriculum
-    const docLower = documentTitle.toLowerCase();
-    if (docLower.includes('operat') || docLower.includes('os') || docLower.includes('scheduling')) {
-      const osTopics: Record<number, string> = {
-        1: 'Process Concept',
-        2: 'Process States & State Transitions',
-        3: 'Process Control Block (PCB)',
-        4: 'Process Scheduling Queues',
-        5: 'CPU Scheduling & Performance Metrics',
-        6: 'First-Come First-Served (FCFS) Scheduling',
-        7: 'Shortest Job First (SJF) Scheduling',
-        8: 'Round Robin (RR) Scheduling & Time Quantum',
-        9: 'Priority Scheduling & Starvation Prevention',
-        10: 'Multilevel Queue Scheduling',
-        11: 'Thread Architecture & Multithreading Models',
-        12: 'Process Synchronization & Race Conditions',
-        13: 'Critical Section Problem & Peterson Solution',
-        14: 'Hardware Synchronization & TestAndSet',
-        15: 'Mutex Locks & Binary Semaphores',
-        16: 'Counting Semaphores & Deadlock Avoidance',
-        17: 'Classic Synchronization: Producer-Consumer',
-        18: 'Classic Synchronization: Readers-Writers',
-        19: 'Classic Synchronization: Dining Philosophers',
-        20: 'Deadlock Characterization & 4 Necessary Conditions',
-        21: 'Resource Allocation Graph (RAG)',
-        22: 'Deadlock Prevention Strategies',
-        23: 'Banker Algorithm for Deadlock Avoidance',
-        24: 'Deadlock Detection & Recovery Mechanisms',
-        25: 'Main Memory Management & Address Binding',
-        26: 'Logical vs Physical Address Spaces',
-        27: 'Contiguous Memory Allocation & Fragmentation',
-        28: 'Paging Architecture & Page Tables',
-        29: 'Translation Lookaside Buffer (TLB)',
-        30: 'Hierarchical & Inverted Page Tables',
-        31: 'Segmentation Architecture & Segment Tables',
-        32: 'Virtual Memory Fundamentals & Demand Paging',
-        33: 'Page Fault Handling Workflow',
-        34: 'Page Replacement: FIFO Algorithm',
-        35: 'Optimal (OPT) Page Replacement',
-        36: 'Least Recently Used (LRU) Algorithm',
-        37: 'Clock & Second-Chance Page Replacement',
-        38: 'Allocation of Frames & Thrashing Phenomenon',
-        39: 'Working-Set Model & Page-Fault Frequency',
-        40: 'File Concept & Directory Structures',
-        41: 'File Access Methods (Sequential vs Direct)',
-        42: 'File System Mounting & Directory Implementation',
-        43: 'File Allocation: Contiguous Allocation',
-        44: 'File Allocation: Linked-List Allocation',
-        45: 'File Allocation: Indexed Allocation & Inodes',
-        46: 'Free Space Management (Bitmaps & Linked Lists)',
-        47: 'Disk Structure & Physical Drive Geometry',
-        48: 'Disk Scheduling: FCFS & SSTF Algorithms',
-        49: 'Disk Scheduling: SCAN (Elevator) Algorithm',
-        50: 'Disk Scheduling: C-SCAN & LOOK Algorithms',
-        51: 'RAID Architecture: Striping (RAID 0)',
-        52: 'RAID Architecture: Mirroring (RAID 1)',
-        53: 'RAID Architecture: Block-Interleaved Parity (RAID 5)',
-        54: 'I/O Hardware: Polling vs Interrupt-Driven I/O',
-        55: 'Direct Memory Access (DMA) Controllers',
-        56: 'Kernel I/O Subsystem & Device Drivers',
-        57: 'Operating System Security & Access Matrices',
-        58: 'User Authentication & Role-Based Access (RBAC)',
-        59: 'System Performance Tuning & Review Summary'
-      };
-      if (osTopics[pageNumber]) return osTopics[pageNumber];
+    if (cleanText.length > 20) {
+      const firstSentence = cleanText.split(/[.?!]\s+/)[0]?.trim();
+      if (firstSentence && firstSentence.length > 5 && firstSentence.length < 70) {
+        return firstSentence.replace(/^[#\d.\s•–—-]+/, '').trim();
+      }
     }
 
-    return `Page ${pageNumber} Academic Concept`;
+    return `${documentTitle ? documentTitle.replace(/\.[^/.]+$/, '') : 'Study Material'} – Page ${pageNumber}`;
   }
 
   /**
@@ -277,20 +229,20 @@ export class PageTeacherService {
       };
     }
 
-    // 3. Domain-Aware Pedagogical Generators
+    // 3. Domain-Aware Pedagogical Generators: Strictly match ACTUAL extracted text on this page
     const titleLower = topicTitle.toLowerCase();
-    const docLower = doc.title.toLowerCase();
+    const cleanLower = cleanText.toLowerCase();
 
-    // --- CASE A: Operating Systems - Process Concept (Exact User Example) ---
-    if (titleLower.includes('process concept') || (pageNumber === 1 && docLower.includes('operat'))) {
+    // --- CASE A: Process Concept (ONLY if this page actually discusses the Process Concept) ---
+    if ((titleLower.includes('process concept') || cleanLower.includes('process concept') || cleanLower.includes('what is a process')) && cleanLower.includes('program in execution')) {
       return {
         pageNumber,
         topicTitle: 'Process Concept',
         contentType: 'theory',
-        shortExplanation: 'A process is simply a program that is currently running on a computer. While a program is passive code stored on disk, a process is actively executing in memory with its own program counter and resources. When you open an application like Chrome, the operating system creates a dedicated process to run it.',
-        detailedExplanation: 'In modern operating systems, a program by itself is just a passive collection of instructions stored on disk (an executable file). It only becomes an active process when loaded into main memory and assigned execution resources. Each process has its own memory space—including the text section (code), data section (global variables), heap (dynamically allocated memory), and stack (function parameters and local variables). The CPU tracks execution via a program counter and CPU registers.',
+        shortExplanation: 'A process is simply a program that is currently running on a computer. While a program is passive code stored on disk, a process is actively executing in memory with its own program counter and resources.',
+        detailedExplanation: 'In modern operating systems, a program by itself is just a passive collection of instructions stored on disk. It only becomes an active process when loaded into main memory and assigned execution resources. Each process has its own memory space—including the text section (code), data section (global variables), heap, and stack.',
         whatIsIt: 'A process is simply a program that is currently running on a computer.',
-        thinkOfItThisWay: 'When you open Chrome, your computer creates a process to run it. When you open another application, that application also runs as a process.',
+        thinkOfItThisWay: 'When you open an application, your computer creates a dedicated process to run it.',
         importantThingsToUnderstand: [
           'A process is a program in execution.',
           'Each process has its own current state.',
@@ -304,16 +256,16 @@ export class PageTeacherService {
       };
     }
 
-    // --- CASE B: Operating Systems - Process States (Diagram / State Transitions) ---
-    if (titleLower.includes('process state') || (pageNumber === 2 && docLower.includes('operat'))) {
+    // --- CASE B: Process States (ONLY if this page actually contains Process State Transitions) ---
+    if (titleLower.includes('process state') || (cleanLower.includes('ready queue') && cleanLower.includes('waiting') && cleanLower.includes('running') && cleanLower.includes('terminated'))) {
       return {
         pageNumber,
         topicTitle: 'Process States & State Transitions',
         contentType: 'diagram',
-        shortExplanation: 'As a process executes, it changes its state based on what it is doing. The five primary states are New, Ready, Running, Waiting, and Terminated. At any given moment, only one process can be executing on a single CPU core, while others wait in the Ready or Waiting queues.',
-        detailedExplanation: 'When created, a process enters the New state before being admitted to the Ready queue. When the CPU scheduler dispatches it, it transitions to Running. If it requests I/O or waits for an event, it moves to the Waiting (Blocked) state. Once I/O completes, it returns to the Ready queue. Upon finishing execution, it transitions to Terminated and frees allocated memory.',
+        shortExplanation: 'As a process executes, it changes its state based on what it is doing. The five primary states are New, Ready, Running, Waiting, and Terminated.',
+        detailedExplanation: 'When created, a process enters the New state before being admitted to the Ready queue. When the CPU scheduler dispatches it, it transitions to Running. If it requests I/O or waits for an event, it moves to Waiting. Once I/O completes, it returns to Ready. Upon finishing execution, it transitions to Terminated.',
         whatIsIt: 'Process states describe the current execution phase of a process in the operating system.',
-        thinkOfItThisWay: 'Think of a patient visiting a doctor: New = checking in at reception; Ready = sitting in the waiting room; Running = consulting with the doctor; Waiting = waiting for lab test results; Terminated = leaving with the prescription.',
+        thinkOfItThisWay: 'Think of stages in an airport: New = checking in; Ready = in the departure lounge; Running = boarding and flying; Waiting = delayed at gate; Terminated = reached final destination.',
         importantThingsToUnderstand: [
           'New: The process is being created.',
           'Ready: The process is in memory, waiting to be assigned to a CPU.',
@@ -346,16 +298,16 @@ export class PageTeacherService {
       };
     }
 
-    // --- CASE C: Operating Systems - Process Control Block (Diagram / Components) ---
-    if (titleLower.includes('control block') || titleLower.includes('pcb') || (pageNumber === 3 && docLower.includes('operat'))) {
+    // --- CASE C: Process Control Block (ONLY if this page actually covers PCB) ---
+    if (titleLower.includes('control block') || titleLower.includes('pcb') || (cleanLower.includes('process control block') && cleanLower.includes('program counter'))) {
       return {
         pageNumber,
         topicTitle: 'Process Control Block (PCB)',
         contentType: 'diagram',
-        shortExplanation: 'The Process Control Block (PCB) is a dedicated data structure created by the operating system for every running process. It serves as the official ID card of the process, storing its Process ID (PID), current state, program counter, CPU registers, and open files. Without the PCB, the OS could not pause and resume processes.',
-        detailedExplanation: 'In multitasking environments, the CPU switches rapidly between processes (context switching). When pausing Process A to run Process B, the operating system saves Process A\'s exact CPU registers and program counter into its PCB. When Process A runs again later, the OS restores this exact snapshot from the PCB so Process A resumes seamlessly without knowing it was ever interrupted.',
+        shortExplanation: 'The Process Control Block (PCB) is a dedicated data structure created by the operating system for every running process. It serves as the official ID card of the process, storing its PID, state, program counter, and registers.',
+        detailedExplanation: 'In multitasking environments, the CPU switches rapidly between processes (context switching). When pausing Process A to run Process B, the OS saves Process A\'s exact CPU registers and program counter into its PCB. When Process A runs again later, the OS restores this snapshot from the PCB.',
         whatIsIt: 'The PCB is an OS data structure that stores all administrative and execution data for a specific process.',
-        thinkOfItThisWay: 'Think of a bookmark in a book: when you stop reading, the bookmark saves your exact page and line so you can pick up precisely where you left off tomorrow.',
+        thinkOfItThisWay: 'Think of a bookmark in a book: when you stop reading, the bookmark saves your exact page and line so you can pick up precisely where you left off.',
         importantThingsToUnderstand: [
           'Process ID (PID): Unique integer identifying the process.',
           'Program Counter: Address of the next machine instruction to execute.',
@@ -388,78 +340,44 @@ export class PageTeacherService {
       };
     }
 
-    // --- CASE D: Operating Systems - Program vs Process (Comparison Page) ---
-    if (titleLower.includes('program vs') || titleLower.includes('comparison') || (pageNumber === 4 && docLower.includes('operat'))) {
+    // --- CASE D: Program vs Process (ONLY if this page actually compares Program vs Process) ---
+    if ((titleLower.includes('program vs') || cleanLower.includes('program vs process')) && cleanLower.includes('passive entity')) {
       return {
         pageNumber,
         topicTitle: 'Program vs Process Comparison',
         contentType: 'comparison',
-        shortExplanation: 'A program and a process are fundamentally different concepts in computing. A program is a passive set of code stored on storage, while a process is an active entity loaded into RAM with allocated CPU execution time. Multiple processes can execute from the same single program simultaneously.',
-        detailedExplanation: 'A program has a static lifetime—it exists permanently on storage (HDD/SSD) until deleted. A process has a dynamic, finite lifetime that begins when launched and ends when execution completes. Furthermore, opening three separate Chrome windows creates three distinct processes in memory, all originating from one single chrome.exe program on disk.',
+        shortExplanation: 'A program and a process are fundamentally different concepts in computing. A program is a passive set of code stored on storage, while a process is an active entity loaded into RAM with allocated CPU execution time.',
+        detailedExplanation: 'A program has a static lifetime—it exists permanently on storage until deleted. A process has a dynamic, finite lifetime that begins when launched and ends when execution completes.',
         whatIsIt: 'The fundamental architectural distinction between passive stored instructions (program) and active runtime execution (process).',
         thinkOfItThisWay: 'A recipe written in a cookbook is a program; a chef actively in the kitchen baking the cake is a process.',
         importantThingsToUnderstand: [
           'Programs reside on secondary storage; processes reside in main memory (RAM).',
           'Programs are passive; processes are active.',
-          'A program does not consume CPU cycles; a process actively uses CPU and memory.',
-          'One program can spawn multiple independent processes.'
+          'A program does not consume CPU cycles; a process actively uses CPU and memory.'
         ],
         rememberThis: {
           rule: 'Program = Static Recipe on Paper | Process = Active Cooking in the Kitchen'
-        },
-        comparisonDetails: {
-          comparisonTitle: 'Key Architectural Differences: Program vs Process',
-          headers: ['Feature', 'Program', 'Process'],
-          rows: [
-            ['Nature', 'Passive entity stored on disk', 'Active entity executing in memory'],
-            ['Location', 'Secondary storage (SSD / HDD)', 'Main memory (RAM) & CPU'],
-            ['Resource Usage', 'Consumes disk space only', 'Consumes CPU cycles, memory, and I/O'],
-            ['Lifetime', 'Permanent until deleted', 'Temporary; terminated after execution'],
-            ['Multiplicity', 'Single file on storage', 'Multiple processes can run from one program']
-          ],
-          contrastSummary: 'Never confuse code stored on disk with code executing in RAM. Program is passive code; Process is active execution.'
         },
         sourceCitation: citation
       };
     }
 
-    // --- CASE E: Operating Systems - CPU Scheduling & Average Waiting Time (Numerical Page) ---
-    if (contentType === 'numerical' || titleLower.includes('cpu scheduling') || (pageNumber === 5 && docLower.includes('operat'))) {
+    // --- CASE E: Numerical Problem on Scheduling (ONLY if this page actually contains burst times and calculations) ---
+    if (contentType === 'numerical' && cleanLower.includes('burst time') && cleanLower.includes('waiting time') && cleanLower.includes('turnaround')) {
       return {
         pageNumber,
-        topicTitle: 'CPU Scheduling & Average Waiting Time Calculation',
+        topicTitle: topicTitle || 'CPU Scheduling & Waiting Time Calculation',
         contentType: 'numerical',
-        shortExplanation: 'CPU Scheduling determines which process in the ready queue is allocated processor time. Two vital performance metrics are Turnaround Time (completion time minus arrival time) and Waiting Time (turnaround time minus burst time). Step-by-step evaluation of the ready queue gives an average waiting time of 5.2 ms.',
-        detailedExplanation: 'When multiple processes compete for CPU execution, the scheduler must optimize throughput and minimize waiting time. For processes P1 through P5 arriving at times 0 to 4 with burst times 5, 3, 1, 5, and 2 ms respectively, the completion times are 5, 8, 9, 14, and 16 ms. Calculating individual waiting times and dividing by 5 yields an average waiting time of 5.2 ms.',
+        shortExplanation: 'CPU Scheduling determines which process in the ready queue is allocated processor time. Two vital performance metrics are Turnaround Time and Waiting Time.',
+        detailedExplanation: 'When multiple processes compete for CPU execution, the scheduler must optimize throughput and minimize waiting time based on the numerical burst parameters.',
         whatIsIt: 'CPU scheduling algorithms allocate processor execution bursts to ready processes while minimizing waiting time.',
-        thinkOfItThisWay: 'Think of a supermarket checkout counter with 5 customers: scheduling order determines how long each customer stands in line waiting for their turn.',
+        thinkOfItThisWay: 'Think of customers at a service desk: the scheduling rule determines how long each customer waits.',
         importantThingsToUnderstand: [
           'Turnaround Time (TAT) = Completion Time (CT) - Arrival Time (AT).',
-          'Waiting Time (WT) = Turnaround Time (TAT) - Burst Time (BT).',
-          'Average Waiting Time = Sum of all waiting times divided by total process count.',
-          'Shorter average waiting time indicates higher scheduling efficiency.'
+          'Waiting Time (WT) = Turnaround Time (TAT) - Burst Time (BT).'
         ],
         rememberThis: {
           rule: 'TAT = CT - AT  |  WT = TAT - BT  |  Average = (Σ WT) / N'
-        },
-        numericalDetails: {
-          problemStatement: 'Evaluate average Turnaround Time and Waiting Time for 5 processes: P1(AT=0, BT=5), P2(AT=1, BT=3), P3(AT=2, BT=1), P4(AT=3, BT=5), P5(AT=4, BT=2).',
-          givenValues: [
-            { parameter: 'P1', value: 'Arrival = 0 ms, Burst = 5 ms' },
-            { parameter: 'P2', value: 'Arrival = 1 ms, Burst = 3 ms' },
-            { parameter: 'P3', value: 'Arrival = 2 ms, Burst = 1 ms' },
-            { parameter: 'P4', value: 'Arrival = 3 ms, Burst = 5 ms' },
-            { parameter: 'P5', value: 'Arrival = 4 ms, Burst = 2 ms' }
-          ],
-          formulaUsed: 'Turnaround Time (TAT) = CT - AT  |  Waiting Time (WT) = TAT - BT',
-          calculationSteps: [
-            { stepNumber: 1, description: 'Evaluate Completion Times (CT): P1=5, P2=8, P3=9, P4=14, P5=16 ms.' },
-            { stepNumber: 2, description: 'Calculate Turnaround Times: P1=5, P2=7, P3=7, P4=11, P5=12 ms.' },
-            { stepNumber: 3, description: 'Calculate Waiting Times: P1=0, P2=4, P3=6, P4=6, P5=10 ms.' },
-            { stepNumber: 4, description: 'Sum waiting times: 0 + 4 + 6 + 6 + 10 = 26 ms.' },
-            { stepNumber: 5, description: 'Divide sum by 5 processes: 26 / 5 = 5.2 ms.', mathExpr: '\\text{Average WT} = \\frac{0+4+6+6+10}{5} = 5.2\\text{ ms}' }
-          ],
-          finalAnswer: 'Average Waiting Time = 5.2 ms  (Average Turnaround Time = 8.4 ms)'
         },
         sourceCitation: citation
       };

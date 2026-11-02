@@ -76,13 +76,19 @@ export function App() {
     window.addEventListener('learnova_auth_required', handleAuthRequired);
 
     async function loadInitialData() {
-      const isBackendLive = await ApiClient.checkHealth();
+      // Purge legacy demo student accounts from local browser storage
       const token = ApiClient.getToken();
+      if (token && (token.includes('demo_student') || token.includes('demo_pooja'))) {
+        ApiClient.logout();
+      }
 
-      if (isBackendLive && token) {
+      const isBackendLive = await ApiClient.checkHealth();
+      const validToken = ApiClient.getToken();
+
+      if (isBackendLive && validToken) {
         try {
           const user = await ApiClient.getMe();
-          if (user) {
+          if (user && user.id !== 'usr-student-1' && user.id !== 'usr-student-pooja') {
             setCurrentUser(user);
             setIsAuthOpen(false);
             if (user.role && user.role !== preferences.role) {

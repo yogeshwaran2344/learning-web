@@ -1,13 +1,6 @@
 {
   "users": [
     {
-      "id": "usr-student-1",
-      "email": "alex.rivera@university.edu",
-      "name": "Alex Rivera",
-      "role": "student",
-      "createdAt": "2026-10-01T10:00:00Z"
-    },
-    {
       "id": "usr-lecturer-1",
       "email": "prof.ramesh@iisc.ac.in",
       "name": "Prof. Ramesh K.",
@@ -18,7 +11,7 @@
   "documents": [
     {
       "id": "doc-scanned-calculus-notes",
-      "ownerId": "usr-student-1",
+      "ownerId": "guest-student",
       "title": "Lecture 04: Vector Fields & Multivariable Calculus (Handwritten)",
       "author": "Prof. Ramesh K. (IISc Bangalore)",
       "fileType": "scanned_notes",
@@ -35,7 +28,7 @@
     },
     {
       "id": "doc-quantum-schrodinger",
-      "ownerId": "usr-student-1",
+      "ownerId": "guest-student",
       "title": "Wave Mechanics and Schrödinger Formulation",
       "author": "Erwin Schrödinger",
       "fileType": "pptx",
@@ -50,7 +43,7 @@
     },
     {
       "id": "doc-transformer-attention",
-      "ownerId": "usr-student-1",
+      "ownerId": "guest-student",
       "title": "Attention Is All You Need",
       "author": "Ashish Vaswani et al. (Google Brain)",
       "fileType": "pdf",
@@ -140,7 +133,7 @@
   "savedItems": [
     {
       "id": "saved-item-1",
-      "userId": "usr-student-1",
+      "userId": "guest-student",
       "documentId": "doc-transformer-attention",
       "documentTitle": "Attention Is All You Need",
       "type": "flashcard",

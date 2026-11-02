@@ -158,7 +158,6 @@ export class SqliteDatabase {
   private static seedDefaultUsers(): void {
     if (!this.db) return;
     const stmt = this.db.prepare('INSERT OR IGNORE INTO users (id, email, name, role, createdAt) VALUES (?, ?, ?, ?, ?)');
-    stmt.run('usr-student-1', 'alex.rivera@university.edu', 'Alex Rivera', 'student', '2026-10-01T10:00:00Z');
     stmt.run('usr-lecturer-1', 'prof.ramesh@iisc.ac.in', 'Prof. Ramesh K.', 'lecturer', '2026-09-15T09:00:00Z');
   }
 

@@ -24,37 +24,26 @@ export const CortexCompanionChat: React.FC<CortexCompanionChatProps> = ({
   fullContextEnabled,
   onToggleFullContext
 }) => {
-  const [messages, setMessages] = useState<ChatMessage[]>([
+  const [messages, setMessages] = useState<ChatMessage[]>(() => [
     {
-      id: 'msg-init-1',
-      sender: 'user',
-      content: 'Can you explain the pathophysiology of multiple sclerosis (MS)?',
-      timestamp: 'Just now'
-    },
-    {
-      id: 'msg-init-2',
+      id: 'msg-init-welcome',
       sender: 'assistant',
-      content: `Multiple sclerosis (MS) is a chronic autoimmune disease characterized by the immune system attacking the central nervous system (CNS), which includes the brain and spinal cord. This attack primarily targets myelin, the protective sheath surrounding nerve fibers, leading to demyelination and subsequent neurological dysfunction.
-
-Key Aspects of MS Pathophysiology:
-1. Autoimmune Response: In MS, the immune system mistakenly identifies components of the CNS as foreign, initiating an inflammatory response. This involves the activation of T-cells and B-cells crossing the blood-brain barrier.
-2. Demyelination: T-cells release pro-inflammatory cytokines that recruit macrophages. These attack myelin sheaths and destroy oligodendrocytes (the myelin-producing cells of the CNS).
-3. Saltatory Conduction Failure: In healthy myelinated neurons, impulses jump rapidly between nodes of Ranvier. Loss of myelin dissipates electrical charges, causing conduction delays or complete conduction block.
-4. Axonal Sclerosis: Chronic inflammation leads to irreversible axonal degeneration and glial scar formation (sclerotic plaques).
-5. Clinical Symptoms: Visual disturbances (optic neuritis), muscle weakness, spasticity, ataxia, and neuropathic pain.`,
-      timestamp: 'Just now',
-      citations: [
-        {
-          id: 'cite-ms-patho',
-          documentId: document.id,
-          pageNumber: 2,
-          sectionTitle: 'Elements of Neurophysiology & Pathophysiology of Multiple Sclerosis',
-          exactQuote: 'Multiple sclerosis (MS) is a chronic autoimmune disease characterized by the immune system attacking the central nervous system (CNS)...',
-          contextSnippet: 'Key Aspects of MS Pathophysiology: Autoimmune response, demyelination, and axonal degeneration.'
-        }
-      ]
+      content: `Hello! I am your LEARNOVA AI Tutor strictly grounded in "${document.title}".\n\nI have analyzed your material across all ${document.pageCount || document.sections?.length || 1} pages. Ask me anything about your document, or pick one of the study prompts below to get started.`,
+      timestamp: 'Just now'
     }
   ]);
+
+  // When active document changes, re-anchor chat to the current document's ground truth
+  useEffect(() => {
+    setMessages([
+      {
+        id: 'msg-init-' + (document.id || Date.now()),
+        sender: 'assistant',
+        content: `Hello! I am your LEARNOVA AI Tutor strictly grounded in "${document.title}".\n\nI have analyzed your material across all ${document.pageCount || document.sections?.length || 1} pages. Ask me anything about your document, or pick one of the study prompts below to get started.`,
+        timestamp: 'Just now'
+      }
+    ]);
+  }, [document.id, document.title]);
 
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);

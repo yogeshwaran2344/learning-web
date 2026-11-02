@@ -14,27 +14,23 @@ export function cleanupDatabase() {
   console.log('[Cleanup] Connecting to SQLite database at:', DB_PATH);
   const db = new DatabaseConstructor(DB_PATH);
 
-  // 1. Clean test users (Keep only canonical students and lecturer)
-  const delUsers = db.prepare(`DELETE FROM users WHERE id NOT IN ('usr-student-1', 'usr-student-pooja', 'usr-lecturer-1')`).run();
-  console.log(`[Cleanup] Removed ${delUsers.changes} temporary/test users.`);
+  // 1. Clean test users (Keep only lecturer and guest)
+  const delUsers = db.prepare(`DELETE FROM users WHERE id IN ('usr-student-1', 'usr-student-pooja') OR email IN ('alex.rivera@university.edu', 'pooja@university.edu')`).run();
+  console.log(`[Cleanup] Removed demo student accounts.`);
 
-  // Ensure canonical users are present
+  // Ensure faculty user is present
   const insertUser = db.prepare(`
     INSERT OR REPLACE INTO users (id, email, name, passwordHash, role, createdAt)
     VALUES (?, ?, ?, ?, ?, ?)
   `);
-  insertUser.run('usr-student-1', 'alex.rivera@university.edu', 'Alex Rivera', 'sha256:student123', 'student', '2026-10-01T10:00:00Z');
-  insertUser.run('usr-student-pooja', 'pooja@university.edu', 'Pooja', 'sha256:student123', 'student', '2026-10-01T10:00:00Z');
   insertUser.run('usr-lecturer-1', 'prof.ramesh@iisc.ac.in', 'Prof. Ramesh K.', 'sha256:lecturer123', 'lecturer', '2026-09-15T09:00:00Z');
 
-  // Ensure canonical demo sessions are active and persistent
+  // Ensure canonical faculty session is active
   const insertSession = db.prepare(`
     INSERT OR REPLACE INTO sessions (id, userId, token, expiresAt, createdAt)
     VALUES (?, ?, ?, ?, ?)
   `);
   const farFuture = Date.now() + 1000 * 60 * 60 * 24 * 365;
-  insertSession.run('sess-demo-alex', 'usr-student-1', 'token_demo_student_active_session', farFuture, new Date().toISOString());
-  insertSession.run('sess-demo-pooja', 'usr-student-pooja', 'token_demo_pooja_session', farFuture, new Date().toISOString());
   insertSession.run('sess-demo-lecturer', 'usr-lecturer-1', 'token_demo_lecturer_active_session', farFuture, new Date().toISOString());
 
   // 2. Remove all test / duplicate documents
@@ -45,7 +41,7 @@ export function cleanupDatabase() {
        OR id LIKE 'doc-grace%'
        OR id LIKE 'doc-test%'
        OR id LIKE 'doc-%-%'
-       OR ownerId NOT IN ('usr-student-1', 'usr-lecturer-1')
+       OR ownerId NOT IN ('guest-student', 'usr-lecturer-1')
   `).run();
   console.log(`[Cleanup] Removed ${delDocs.changes} test/duplicate documents.`);
 
@@ -55,7 +51,7 @@ export function cleanupDatabase() {
   db.prepare(`DELETE FROM verifications WHERE documentId NOT IN (SELECT id FROM documents)`).run();
   db.prepare(`DELETE FROM quiz_attempts WHERE documentId NOT IN (SELECT id FROM documents)`).run();
   db.prepare(`DELETE FROM feedback_reports WHERE documentId NOT IN (SELECT id FROM documents)`).run();
-  db.prepare(`DELETE FROM saved_items WHERE userId NOT IN ('usr-student-1', 'usr-student-pooja', 'usr-lecturer-1')`).run();
+  db.prepare(`DELETE FROM saved_items WHERE userId NOT IN ('guest-student', 'usr-lecturer-1')`).run();
 
   // 4. Seed Canonical Academic Documents
   const insertDoc = db.prepare(`
@@ -68,7 +64,7 @@ export function cleanupDatabase() {
 
   insertDoc.run(
     'doc-transformer-attention',
-    'usr-student-1',
+    'guest-student',
     'Attention Is All You Need: Transformer Architecture',
     'Ashish Vaswani, Noam Shazeer, Niki Parmar, et al.',
     'Google Research / NeurIPS 2017',
@@ -89,7 +85,7 @@ export function cleanupDatabase() {
 
   insertDoc.run(
     'doc-quantum-teleportation',
-    'usr-student-1',
+    'guest-student',
     'Quantum Teleportation & Entangled Channels',
     'Charles H. Bennett, Gilles Brassard, Claude Crépeau, et al.',
     'IBM Research / Physical Review Letters',
