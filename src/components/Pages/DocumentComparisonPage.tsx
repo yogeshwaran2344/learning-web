@@ -326,12 +326,12 @@ export const DocumentComparisonPage: React.FC<DocumentComparisonPageProps> = ({
                 </p>
 
                 {/* Extracted Formulas if present */}
-                {topic.keyFormulas.length > 0 && (
+                {(topic.keyFormulas || []).length > 0 && (
                   <div className="mt-2.5 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-xs font-mono text-slate-800 dark:text-slate-200 flex items-center gap-2 overflow-x-auto">
                     <span className="text-[10px] font-bold uppercase text-brand-600 dark:text-brand-400 shrink-0">
                       Formulation:
                     </span>
-                    <span className="truncate">{topic.keyFormulas.join('  •  ')}</span>
+                    <span className="truncate">{(topic.keyFormulas || []).join('  •  ')}</span>
                   </div>
                 )}
 
@@ -346,7 +346,7 @@ export const DocumentComparisonPage: React.FC<DocumentComparisonPageProps> = ({
                   </button>
 
                   <span className="text-[10px] text-slate-400 font-mono">
-                    {topic.isShared ? `Unified across ${topic.sourceDocuments.length} files (Duplicates omitted)` : 'Material-specific topic'}
+                    {topic.isShared ? `Unified across ${(topic.sourceDocuments || []).length} files (Duplicates omitted)` : 'Material-specific topic'}
                   </span>
                 </div>
 
@@ -464,7 +464,7 @@ export const DocumentComparisonPage: React.FC<DocumentComparisonPageProps> = ({
       </div>
 
       {/* Divergences & Synthesis Recommendations */}
-      {multiComparison.divergencesAndGaps.length > 0 && (
+      {(multiComparison.divergencesAndGaps || []).length > 0 && (
         <div className="space-y-3 pt-2">
           <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
             <AlertTriangle className="w-4 h-4 text-amber-500" />

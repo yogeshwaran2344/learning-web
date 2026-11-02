@@ -936,8 +936,8 @@ export class TopicHierarchyService {
       }
     ];
 
-    const totalTopicsCount = chapters.reduce((acc, c) => acc + c.topics.length, 0);
-    const totalSubtopicsCount = chapters.reduce((acc, c) => acc + c.topics.reduce((subAcc, t) => subAcc + t.subtopics.length, 0), 0);
+    const totalTopicsCount = chapters.reduce((acc, c) => acc + (c.topics || []).length, 0);
+    const totalSubtopicsCount = chapters.reduce((acc, c) => acc + (c.topics || []).reduce((subAcc, t) => subAcc + (t.subtopics || []).length, 0), 0);
 
     return {
       documentId: docId,
@@ -1176,8 +1176,8 @@ export class TopicHierarchyService {
       });
     }
 
-    const totalTopicsCount = chapters.reduce((acc, c) => acc + c.topics.length, 0);
-    const totalSubtopicsCount = chapters.reduce((acc, c) => acc + c.topics.reduce((subAcc, t) => subAcc + t.subtopics.length, 0), 0);
+    const totalTopicsCount = chapters.reduce((acc, c) => acc + (c.topics || []).length, 0);
+    const totalSubtopicsCount = chapters.reduce((acc, c) => acc + (c.topics || []).reduce((subAcc, t) => subAcc + (t.subtopics || []).length, 0), 0);
 
     return {
       documentId: docId,
@@ -1300,7 +1300,7 @@ export class TopicHierarchyService {
       return chap;
     });
 
-    const totalTopicsCount = updatedChapters.reduce((acc, c) => acc + c.topics.length, 0);
+    const totalTopicsCount = updatedChapters.reduce((acc, c) => acc + (c.topics || []).length, 0);
 
     return {
       ...hierarchy,
@@ -1323,7 +1323,7 @@ export class TopicHierarchyService {
       topics: chap.topics.filter(t => t.id !== topicId)
     }));
 
-    const totalTopicsCount = updatedChapters.reduce((acc, c) => acc + c.topics.length, 0);
+    const totalTopicsCount = updatedChapters.reduce((acc, c) => acc + (c.topics || []).length, 0);
 
     return {
       ...hierarchy,
@@ -1372,7 +1372,7 @@ export class TopicHierarchyService {
     }));
 
     const totalSubtopicsCount = updatedChapters.reduce(
-      (acc, c) => acc + c.topics.reduce((subAcc, t) => subAcc + t.subtopics.length, 0),
+      (acc, c) => acc + (c.topics || []).reduce((subAcc, t) => subAcc + (t.subtopics || []).length, 0),
       0
     );
 
@@ -1407,7 +1407,7 @@ export class TopicHierarchyService {
     }));
 
     const totalSubtopicsCount = updatedChapters.reduce(
-      (acc, c) => acc + c.topics.reduce((subAcc, t) => subAcc + t.subtopics.length, 0),
+      (acc, c) => acc + (c.topics || []).reduce((subAcc, t) => subAcc + (t.subtopics || []).length, 0),
       0
     );
 
@@ -1564,9 +1564,9 @@ export class TopicHierarchyService {
         })
     }));
 
-    const totalTopicsCount = updatedChapters.reduce((acc, c) => acc + c.topics.length, 0);
+    const totalTopicsCount = updatedChapters.reduce((acc, c) => acc + (c.topics || []).length, 0);
     const totalSubtopicsCount = updatedChapters.reduce(
-      (acc, c) => acc + c.topics.reduce((subAcc, t) => subAcc + t.subtopics.length, 0),
+      (acc, c) => acc + (c.topics || []).reduce((subAcc, t) => subAcc + (t.subtopics || []).length, 0),
       0
     );
 
@@ -1762,7 +1762,7 @@ export class TopicHierarchyService {
       return chap;
     });
 
-    const totalTopicsCount = updatedChapters.reduce((acc, c) => acc + c.topics.length, 0);
+    const totalTopicsCount = updatedChapters.reduce((acc, c) => acc + (c.topics || []).length, 0);
 
     return {
       ...hierarchy,

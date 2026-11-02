@@ -152,14 +152,14 @@ export const TopicHierarchyReviewModal: React.FC<TopicHierarchyReviewModalProps>
         <div className="px-6 py-3 bg-blue-50/40 dark:bg-blue-950/20 border-b border-slate-200 dark:border-slate-800/80 flex flex-wrap items-center justify-between text-xs text-slate-600 dark:text-slate-300 gap-3">
           <div className="flex items-center gap-4">
             <span className="font-semibold text-slate-800 dark:text-slate-200">
-              Document: <strong className="text-blue-600 dark:text-blue-400">{documentTitle || hierarchy.documentTitle}</strong>
+              Document: <strong className="text-blue-600 dark:text-blue-400">{documentTitle || hierarchy?.documentTitle || 'Academic Document'}</strong>
             </span>
             <span>•</span>
-            <span><strong>{hierarchy.chapters.length}</strong> Chapters</span>
+            <span><strong>{(hierarchy?.chapters || []).length}</strong> Chapters</span>
             <span>•</span>
-            <span><strong>{hierarchy.totalTopicsCount}</strong> Topics</span>
+            <span><strong>{hierarchy?.totalTopicsCount || 0}</strong> Topics</span>
             <span>•</span>
-            <span><strong>{hierarchy.totalSubtopicsCount}</strong> Subtopics</span>
+            <span><strong>{hierarchy?.totalSubtopicsCount || 0}</strong> Subtopics</span>
             {pageCount && (
               <>
                 <span>•</span>
@@ -174,7 +174,7 @@ export const TopicHierarchyReviewModal: React.FC<TopicHierarchyReviewModalProps>
 
         {/* Main Hierarchy Tree Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {hierarchy.chapters.map((chapter) => {
+          {(hierarchy?.chapters || []).map((chapter) => {
             const isExpanded = expandedChapters[chapter.id] !== false;
             const isEditingChapter = editingChapterId === chapter.id;
 
@@ -261,12 +261,12 @@ export const TopicHierarchyReviewModal: React.FC<TopicHierarchyReviewModalProps>
                 {/* Topics List within Chapter */}
                 {isExpanded && (
                   <div className="p-3 space-y-3">
-                    {chapter.topics.length === 0 ? (
+                    {(chapter.topics || []).length === 0 ? (
                       <div className="p-4 text-center text-xs text-slate-400 italic">
                         No topics detected in this chapter. Click "Add Topic" above to specify one.
                       </div>
                     ) : (
-                      chapter.topics.map((topic) => {
+                      (chapter.topics || []).map((topic) => {
                         const isEditingTopic = editingTopicId === topic.id;
 
                         return (

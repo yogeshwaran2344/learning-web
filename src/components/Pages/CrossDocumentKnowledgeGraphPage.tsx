@@ -120,7 +120,7 @@ export const CrossDocumentKnowledgeGraphPage: React.FC<CrossDocumentKnowledgeGra
               if (srcIdx === -1 || tgtIdx === -1) return null;
 
               // Calculate radial layout coordinates
-              const total = Math.max(1, graphData.nodes.length);
+              const total = Math.max(1, (graphData.nodes || []).length);
               const angleSrc = (srcIdx / total) * 2 * Math.PI;
               const angleTgt = (tgtIdx / total) * 2 * Math.PI;
               const r = 180;

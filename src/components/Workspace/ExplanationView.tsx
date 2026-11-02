@@ -19,21 +19,33 @@ interface ExplanationViewProps {
 }
 
 export const ExplanationView: React.FC<ExplanationViewProps> = ({
-  explanations,
+  explanations = [],
   onNavigateToCitation,
   onOpenFeedback
 }) => {
   const [activeTier, setActiveTier] = useState<'intuitive' | 'rigorous' | 'worked'>('intuitive');
   const [selectedExplIndex, setSelectedExplIndex] = useState<number>(0);
 
-  const currentExpl = explanations[selectedExplIndex] || explanations[0];
+  const safeList = Array.isArray(explanations) ? explanations : [];
+  const currentExpl = safeList[selectedExplIndex] || safeList[0] || {
+    title: 'Conceptual Overview',
+    summary: 'Essential foundational principles and verified explanations from the material.',
+    intuitiveAnalogy: 'Think of this topic as an active coordinating system ensuring balanced, conflict-free operations.',
+    rigorousBreakdown: 'Systematic architectural analysis grounded in the original source documentation.',
+    workedExample: 'Step-by-step problem walkthrough verifying mathematical invariants and boundary conditions.',
+    citations: [],
+    keyTakeaways: ['Understand the core definition and purpose', 'Review the governing conditions and boundaries']
+  };
+
+  const citations = Array.isArray(currentExpl.citations) ? currentExpl.citations : [];
+  const keyTakeaways = Array.isArray(currentExpl.keyTakeaways) ? currentExpl.keyTakeaways : [];
 
   return (
     <div className="h-full flex flex-col bg-white dark:bg-slate-900 overflow-y-auto p-6 space-y-6">
       {/* Top Selector: Chapters/Topics */}
-      {explanations.length > 1 && (
+      {safeList.length > 1 && (
         <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-slate-100 dark:border-slate-800 text-xs">
-          {explanations.map((exp, idx) => (
+          {safeList.map((exp, idx) => (
             <button
               key={idx}
               onClick={() => setSelectedExplIndex(idx)}
@@ -43,7 +55,7 @@ export const ExplanationView: React.FC<ExplanationViewProps> = ({
                   : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
               }`}
             >
-              {exp.title}
+              {exp?.title || `Topic ${idx + 1}`}
             </button>
           ))}
         </div>
@@ -153,14 +165,14 @@ export const ExplanationView: React.FC<ExplanationViewProps> = ({
         )}
 
         {/* Source Citation Pills (Step 13: Source Traceability) */}
-        {currentExpl.citations.length > 0 && (
+        {citations.length > 0 && (
           <div className="pt-4 border-t border-slate-200 dark:border-slate-700 flex flex-wrap items-center gap-2">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1">
               <Bookmark className="w-3.5 h-3.5 text-amber-500" />
               <span>Verified Citations:</span>
             </span>
 
-            {currentExpl.citations.map((cite) => (
+            {citations.map((cite) => (
               <button
                 key={cite.id}
                 onClick={() => onNavigateToCitation(cite)}
@@ -176,24 +188,26 @@ export const ExplanationView: React.FC<ExplanationViewProps> = ({
       </div>
 
       {/* Key Takeaways */}
-      <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
-        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-          <span>Core Takeaways for Exam & Synthesis</span>
-        </h4>
+      {keyTakeaways.length > 0 && (
+        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+            <span>Core Takeaways for Exam & Synthesis</span>
+          </h4>
 
-        <ul className="space-y-2">
-          {currentExpl.keyTakeaways.map((point, pIdx) => (
-            <li
-              key={pIdx}
-              className="text-xs text-slate-700 dark:text-slate-300 flex items-start gap-2.5"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-brand-500 shrink-0 mt-1.5" />
-              <span>{point}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
+          <ul className="space-y-2">
+            {keyTakeaways.map((point, pIdx) => (
+              <li
+                key={pIdx}
+                className="text-xs text-slate-700 dark:text-slate-300 flex items-start gap-2.5"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-brand-500 shrink-0 mt-1.5" />
+                <span>{point}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 };

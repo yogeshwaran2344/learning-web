@@ -77,7 +77,13 @@ export function cleanSpokenBody(rawText: string): string {
 
   // 1. Remove robotic teacher/student dialogue tags and conversational turns
   cleaned = cleaned.replace(/\b(?:Teacher|Student|Instructor|Learner)\s*:\s*/gi, '');
-  cleaned = cleaned.replace(/\b(?:Good question!|Welcome!\s*Today we are exploring[^.]*\.|That clarifies the idea!\s*How should I remember this for the exam\?|Remember, everything is grounded in[^.]*\.|Keep up the great work!|Let's make this simple and practical\.)\s*/gi, '');
+  cleaned = cleaned.replace(/\bWelcome!\s*Today we are exploring[^.]*\./gi, '');
+  cleaned = cleaned.replace(/\bWhat is the core idea here\?\s*/gi, '');
+  cleaned = cleaned.replace(/\bGood question!\s*/gi, '');
+  cleaned = cleaned.replace(/\bThat clarifies the idea!\s*How should I remember this for the exam\?\s*/gi, '');
+  cleaned = cleaned.replace(/\bRemember, everything is grounded in[^.]*\./gi, '');
+  cleaned = cleaned.replace(/\bKeep up the great work!\s*/gi, '');
+  cleaned = cleaned.replace(/\bLet's make this simple and practical\.\s*/gi, '');
   cleaned = cleaned.replace(/\b(?:Student|Teacher)\s*:[^.?!]*[.?!]\s*/gi, '');
 
   // 2. Remove Part tags and sound markers
@@ -89,7 +95,7 @@ export function cleanSpokenBody(rawText: string): string {
   cleaned = cleaned.replace(/(?:Section|Slide)\s*\d+[:.]?\s*/gi, '');
   cleaned = cleaned.replace(/\b\d{2}[A-Z]{2,6}\d{2,4}\b/gi, '');
   cleaned = cleaned.replace(/(?:Department|Dept\.?|School|College|Faculty)\s+of\s+[^,•\n]+(?:,\s*[A-Z]{2,10})?/gi, '');
-  cleaned = cleaned.replace(/\b(?:NHCE|VTU|AICTE|NBA|NAAC|UGC)\b/gi, '');
+  cleaned = cleaned.replace(/\b(?:NHCE|VTU|AICTE|NBA|NAAC|UGC|CMRIT|BMSIT|MSRIT)\b/gi, '');
   cleaned = cleaned.replace(/[•▪▫]/g, '');
 
   return cleaned.replace(/\s+/g, ' ').trim();

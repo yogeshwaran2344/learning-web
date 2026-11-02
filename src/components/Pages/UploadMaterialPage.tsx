@@ -391,7 +391,7 @@ Condition: Dimensions of x and F must match or be projected via shortcut matrix 
               textToProcess = aMatches.map(m => m.replace(/<[^>]+>/g, '')).join(' ');
             }
           } else if (selectedFile.name.toLowerCase().endsWith('.pdf')) {
-            // PDF: extract text streams
+            // PDF: extract text from TJ / Tj operators
             const streamMatches = rawString.match(/BT[\s\S]*?ET/g);
             if (streamMatches && streamMatches.length > 0) {
               const chunks: string[] = [];
@@ -405,16 +405,27 @@ Condition: Dimensions of x and F must match or be projected via shortcut matrix 
                 textToProcess = chunks.join('\n\n');
               }
             }
-            if (!textToProcess || textToProcess.trim().length < 30) {
-              const readableRuns = rawString.match(/[A-Za-z0-9\s.,!?:;()\-–—•]{15,}/g);
-              if (readableRuns && readableRuns.length > 0) {
-                textToProcess = readableRuns
-                  .filter(r => !/endobj|xref|trailer|startxref|FontDescriptor|ProcSet/i.test(r))
-                  .join('\n\n');
+
+            // PDF text sanitization: Strictly reject and purge internal PDF bytecode, xref tables, and font dictionaries
+            if (textToProcess) {
+              const isPdfBytecodeGarbage = /\b\d+\s+0\s+R\b/i.test(textToProcess) ||
+                /WinAnsiEncoding|FontDescriptor|FlateDecode|\/Type\s*\/|\/MediaBox|\/Resources/i.test(textToProcess);
+              if (isPdfBytecodeGarbage) {
+                textToProcess = textToProcess
+                  .replace(/\b\d+\s+\d+\s+R\b/g, '')
+                  .replace(/\b[A-Za-z0-9+/=]{40,}\b/g, '')
+                  .replace(/\/[\w\-]+/g, '')
+                  .replace(/WinAnsiEncoding|FontDescriptor|FlateDecode/gi, '')
+                  .trim();
               }
             }
+
+            // If text is still empty or looks like raw binary stream, do NOT match random byte slices
+            if (!textToProcess || textToProcess.trim().length < 30 || /\b\d+\s+0\s+R\b/.test(textToProcess)) {
+              textToProcess = '';
+            }
           }
-          if (!textToProcess) {
+          if (!textToProcess && !selectedFile.name.toLowerCase().endsWith('.pdf')) {
             textToProcess = await selectedFile.text();
           }
         }

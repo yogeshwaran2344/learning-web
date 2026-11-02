@@ -1328,14 +1328,9 @@ export const TopicExplorerPage: React.FC<TopicExplorerPageProps> = ({
                   Select Subtopics to Move into New Topic ({selectedSubtopicIdsToSplit.size} selected)
                 </label>
                 <div className="mt-1 max-h-48 overflow-y-auto space-y-1.5 p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
-                  {splitTopicData.topic.subtopics.map(sub => {
+                  {(splitTopicData?.topic?.subtopics || []).map(sub => {
                     const isSelected = selectedSubtopicIdsToSplit.has(sub.id);
-                    const allTopicsList = hierarchy.chapters.flatMap(c => c.topics);
-  const completedTopicsCount = allTopicsList.filter(t => topicProgress[t.id] === 'completed').length;
-  const inProgressTopicsCount = allTopicsList.filter(t => topicProgress[t.id] === 'in_progress').length;
-  const progressPercent = allTopicsList.length > 0 ? Math.round((completedTopicsCount / allTopicsList.length) * 100) : 0;
-
-  return (
+                    return (
                       <label
                         key={sub.id}
                         className="flex items-center gap-2 p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 cursor-pointer text-xs"

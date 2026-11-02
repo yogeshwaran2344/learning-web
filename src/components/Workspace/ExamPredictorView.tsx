@@ -402,13 +402,13 @@ export const ExamPredictorView: React.FC<ExamPredictorViewProps> = ({
                     </div>
 
                     {/* Diagram or Flow Steps (if present) */}
-                    {q.modelAnswer.diagramAsciiOrSteps && q.modelAnswer.diagramAsciiOrSteps.length > 0 && (
+                    {(q.modelAnswer?.diagramAsciiOrSteps || []).length > 0 && (
                       <div className="space-y-1.5">
                         <div className="font-bold text-slate-900 dark:text-white text-xs uppercase tracking-wide text-brand-600 dark:text-brand-400 flex items-center gap-1.5">
                           <span>Architectural Diagram / Flow Schema:</span>
                         </div>
                         <div className="p-4 rounded-xl bg-slate-900 text-emerald-400 font-mono text-xs overflow-x-auto border border-slate-800 leading-snug">
-                          {q.modelAnswer.diagramAsciiOrSteps.map((line, lIdx) => (
+                          {(q.modelAnswer?.diagramAsciiOrSteps || []).map((line, lIdx) => (
                             <div key={lIdx}>{line}</div>
                           ))}
                         </div>

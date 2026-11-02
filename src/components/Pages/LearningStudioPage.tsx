@@ -1090,14 +1090,14 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
                 </div>
 
                 {/* Technical Terms Explained First (Step 1) */}
-                {currentExpl.definedTerms && currentExpl.definedTerms.length > 0 && (
+                {(currentExpl.definedTerms || []).length > 0 && (
                   <div className="p-5 rounded-2xl bg-brand-50/70 dark:bg-brand-950/40 border border-brand-200 dark:border-brand-800 space-y-3">
                     <span className="text-xs font-bold uppercase tracking-wider text-brand-800 dark:text-brand-300 flex items-center gap-1.5">
                       <BookOpen className="w-4 h-4" />
                       Technical Terms Explained First
                     </span>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                      {currentExpl.definedTerms.map((t: any, idx: number) => (
+                      {(currentExpl.definedTerms || []).map((t: any, idx: number) => (
                         <div key={idx} className="p-3 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-brand-200/60 dark:border-brand-900/40 text-xs">
                           <strong className="text-slate-900 dark:text-white block mb-0.5">{t.term}</strong>
                           <span className="text-slate-600 dark:text-slate-300">{t.definition}</span>
@@ -1164,12 +1164,12 @@ export const LearningStudioPage: React.FC<LearningStudioPageProps> = ({
                 </div>
 
                 {/* Section-by-Section Simplified Breakdown */}
-                {currentExpl.sections && currentExpl.sections.length > 0 && (
+                {(currentExpl.sections || []).length > 0 && (
                   <div className="space-y-4">
                     <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                      Topic-by-Topic Intuitive Explanations ({currentExpl.sections.length} Topics Covered)
+                      Topic-by-Topic Intuitive Explanations ({(currentExpl.sections || []).length} Topics Covered)
                     </div>
-                    {currentExpl.sections.map((secItem: any, sIdx: number) => (
+                    {(currentExpl.sections || []).map((secItem: any, sIdx: number) => (
                       <div key={sIdx} className="p-5 rounded-2xl bg-amber-50/40 dark:bg-amber-950/20 border border-amber-200/70 dark:border-amber-900/50 space-y-3">
                         <div className="flex items-center justify-between">
                           <span className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2">

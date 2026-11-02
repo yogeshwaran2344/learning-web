@@ -61,7 +61,7 @@ export const AiGeneratorTestModal: React.FC<AiGeneratorTestModalProps> = ({
             description: 'Ensures generated nodes represent real extracted topics, have explicit relationship edges, and link to source citations.',
             passed: true,
             score: 100,
-            details: `Validated ${document.conceptMap.nodes.length} nodes and ${document.conceptMap.edges.length} DAG edges against source passage quotes.`,
+            details: `Validated ${(document.conceptMap?.nodes || []).length} nodes and ${(document.conceptMap?.edges || []).length} DAG edges against source passage quotes.`,
             targetFormat: 'Concept Map',
             testedLanguages: ['English']
           },

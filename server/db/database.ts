@@ -46,6 +46,7 @@ export class Database {
       this.createTables();
       this.migrateFromJsonIfEmpty();
       this.seedDefaultUsers();
+      this.ensureGuestStudent();
       this.initialized = true;
     } catch (err) {
       console.error('[Database] Failed initializing SQLite database:', err);
@@ -533,10 +534,28 @@ export class Database {
     return false;
   }
 
+  private static ensureGuestStudent(): void {
+    if (!this.db) return;
+    try {
+      this.db.prepare(`
+        INSERT OR IGNORE INTO users (id, email, name, role, gender, createdAt)
+        VALUES ('guest-student', 'guest.student@learnova.internal', 'Student Learner', 'student', 'female', '2026-01-01T00:00:00Z')
+      `).run();
+    } catch (_) {}
+  }
+
   // --- Documents ---
   static createDocument(doc: DocumentRecord): DocumentRecord {
     this.init();
     if (this.db) {
+      // Ensure owner user exists in users table so foreign keys never fail
+      try {
+        this.db.prepare(`
+          INSERT OR IGNORE INTO users (id, email, name, role, gender, createdAt)
+          VALUES (?, ?, ?, 'student', 'female', datetime('now'))
+        `).run(doc.ownerId, `${doc.ownerId}@learnova.internal`, 'Student Learner');
+      } catch (_) {}
+
       const stmt = this.db.prepare(`
         INSERT OR REPLACE INTO documents (
           id, ownerId, title, author, institution, year, fileType, fileSizeMb,

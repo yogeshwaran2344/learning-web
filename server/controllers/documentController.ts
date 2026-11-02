@@ -70,10 +70,11 @@ export class DocumentController {
       let fileSizeMb = 1.0;
 
       if (file) {
-        // Enforce consistent 25 MB limit
-        if (file.size > 25 * 1024 * 1024) {
+        // Enforce consistent upload limit configured in environment (150 MB)
+        const maxLimit = config.maxUploadSizeBytes || (150 * 1024 * 1024);
+        if (file.size > maxLimit) {
           if (fs.existsSync(file.path)) { try { fs.unlinkSync(file.path); } catch (_) {} }
-          return res.status(400).json({ error: 'File size exceeds maximum 25 MB upload limit.' });
+          return res.status(400).json({ error: `File size exceeds maximum ${(maxLimit / (1024 * 1024)).toFixed(0)} MB upload limit.` });
         }
 
         originalFileName = file.originalname;
