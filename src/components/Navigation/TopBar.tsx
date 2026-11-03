@@ -223,7 +223,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         </button>
 
         {/* User Profile Avatar Pill with Sign Out */}
-        {currentUser ? (
+        {currentUser && !currentUser.name?.toLowerCase().includes('pooja') && !currentUser.name?.toLowerCase().includes('alex') && currentUser.id !== 'usr-student-1' && currentUser.id !== 'usr-student-pooja' ? (
           <div className="flex items-center space-x-2 pl-2 border-l border-slate-200 dark:border-slate-700">
             <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-brand-600 to-accent-600 flex items-center justify-center text-white text-xs font-bold">
               {currentUser.role === 'student' ? 'ST' : 'PR'}

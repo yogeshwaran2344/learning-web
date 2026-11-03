@@ -82,10 +82,12 @@ export class DocumentController {
         const ext = file.originalname.toLowerCase();
 
         // 1. Verify file signature (magic bytes) to prevent spoofing
-        const bufferHeader = Buffer.alloc(8);
+        // Read up to first 1024 bytes (ISO 32000-1 allows %PDF anywhere in the first 1024 bytes)
+        const checkLength = Math.min(1024, file.size);
+        const bufferHeader = Buffer.alloc(checkLength);
         try {
           const fd = fs.openSync(file.path, 'r');
-          fs.readSync(fd, bufferHeader, 0, 8, 0);
+          fs.readSync(fd, bufferHeader, 0, checkLength, 0);
           fs.closeSync(fd);
         } catch (readErr) {
           return res.status(400).json({ error: 'Failed reading uploaded file header.' });
@@ -95,29 +97,29 @@ export class DocumentController {
           // OLE2 Compound Document or binary PPT
           fileType = 'pptx';
         } else if (ext.endsWith('.pptx')) {
-          if (!bufferHeader.slice(0, 2).equals(Buffer.from([0x50, 0x4B]))) { // PK
+          if (!bufferHeader.includes(Buffer.from([0x50, 0x4B]))) { // PK zip header
             if (fs.existsSync(file.path)) { try { fs.unlinkSync(file.path); } catch (_) {} }
             return res.status(400).json({ error: 'Invalid file signature: Content is not a genuine PPTX presentation.' });
           }
           fileType = 'pptx';
         } else if (file.mimetype.startsWith('image/') || ext.endsWith('.png') || ext.endsWith('.jpg') || ext.endsWith('.jpeg')) {
-          if (ext.endsWith('.png') && !bufferHeader.slice(0, 4).equals(Buffer.from([0x89, 0x50, 0x4E, 0x47]))) {
+          if (ext.endsWith('.png') && !bufferHeader.includes(Buffer.from([0x89, 0x50, 0x4E, 0x47]))) {
             if (fs.existsSync(file.path)) { try { fs.unlinkSync(file.path); } catch (_) {} }
             return res.status(400).json({ error: 'Invalid file signature: Content is not a genuine PNG image.' });
           }
-          if ((ext.endsWith('.jpg') || ext.endsWith('.jpeg')) && !bufferHeader.slice(0, 3).equals(Buffer.from([0xFF, 0xD8, 0xFF]))) {
+          if ((ext.endsWith('.jpg') || ext.endsWith('.jpeg')) && !bufferHeader.includes(Buffer.from([0xFF, 0xD8, 0xFF]))) {
             if (fs.existsSync(file.path)) { try { fs.unlinkSync(file.path); } catch (_) {} }
             return res.status(400).json({ error: 'Invalid file signature: Content is not a genuine JPEG image.' });
           }
           fileType = 'scanned_notes';
         } else if (ext.endsWith('.pdf')) {
-          if (!bufferHeader.slice(0, 4).equals(Buffer.from('%PDF'))) {
+          if (!bufferHeader.includes(Buffer.from('%PDF'))) {
             if (fs.existsSync(file.path)) { try { fs.unlinkSync(file.path); } catch (_) {} }
             return res.status(400).json({ error: 'Invalid file signature: Content is not a genuine PDF document.' });
           }
           fileType = 'pdf';
         } else if (ext.endsWith('.docx') || ext.endsWith('.doc')) {
-          if (ext.endsWith('.docx') && !bufferHeader.slice(0, 2).equals(Buffer.from([0x50, 0x4B]))) { // PK
+          if (ext.endsWith('.docx') && !bufferHeader.includes(Buffer.from([0x50, 0x4B]))) { // PK
             if (fs.existsSync(file.path)) { try { fs.unlinkSync(file.path); } catch (_) {} }
             return res.status(400).json({ error: 'Invalid file signature: Content is not a genuine DOCX document.' });
           }

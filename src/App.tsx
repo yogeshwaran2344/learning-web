@@ -78,8 +78,35 @@ export function App() {
     async function loadInitialData() {
       // Purge legacy demo student accounts from local browser storage
       const token = ApiClient.getToken();
-      if (token && (token.includes('demo_student') || token.includes('demo_pooja'))) {
+      const rawStoredUser = (typeof localStorage !== 'undefined')
+        ? (localStorage.getItem('learnova_current_user') || localStorage.getItem('learnlens_current_user'))
+        : null;
+
+      let isLegacyDemoUser = false;
+      if (rawStoredUser) {
+        try {
+          const u = JSON.parse(rawStoredUser);
+          if (
+            u?.name?.toLowerCase().includes('pooja') ||
+            u?.name?.toLowerCase().includes('alex') ||
+            u?.email?.toLowerCase().includes('pooja') ||
+            u?.email?.toLowerCase().includes('alex') ||
+            u?.id === 'usr-student-1' ||
+            u?.id === 'usr-student-pooja'
+          ) {
+            isLegacyDemoUser = true;
+          }
+        } catch (_) {}
+      }
+
+      if (isLegacyDemoUser || (token && (token.includes('demo_student') || token.includes('demo_pooja')))) {
         ApiClient.logout();
+        if (typeof localStorage !== 'undefined') {
+          localStorage.removeItem('learnova_current_user');
+          localStorage.removeItem('learnlens_current_user');
+          localStorage.removeItem('learnova_auth_token');
+          localStorage.removeItem('learnlens_auth_token');
+        }
       }
 
       const isBackendLive = await ApiClient.checkHealth();
@@ -88,7 +115,16 @@ export function App() {
       if (isBackendLive && validToken) {
         try {
           const user = await ApiClient.getMe();
-          if (user && user.id !== 'usr-student-1' && user.id !== 'usr-student-pooja') {
+          const isUserBannedDemo = user && (
+            user.id === 'usr-student-1' ||
+            user.id === 'usr-student-pooja' ||
+            user.name?.toLowerCase().includes('pooja') ||
+            user.name?.toLowerCase().includes('alex') ||
+            user.email?.toLowerCase().includes('pooja') ||
+            user.email?.toLowerCase().includes('alex')
+          );
+
+          if (user && !isUserBannedDemo) {
             setCurrentUser(user);
             setIsAuthOpen(false);
             if (user.role && user.role !== preferences.role) {
@@ -109,6 +145,8 @@ export function App() {
             if (backendCourses) setCourses(backendCourses);
             setIsCheckingAuth(false);
             return;
+          } else if (isUserBannedDemo) {
+            ApiClient.logout();
           }
         } catch (e) {
           console.warn('API auth verification failed:', e);

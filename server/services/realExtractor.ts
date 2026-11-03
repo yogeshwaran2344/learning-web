@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import zlib from 'zlib';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const pdfParseModule = require('pdf-parse');
@@ -85,7 +86,21 @@ export class RealExtractor {
       if (err.name === 'PasswordException' || /password|encrypted|protect/i.test(msg)) {
         throw new Error(`The uploaded PDF "${originalFileName}" is password-protected or encrypted. Please provide an unencrypted version.`);
       }
-      throw new Error(`Failed to parse PDF "${originalFileName}": ${msg || 'Corrupted or invalid PDF format.'}`);
+      // Resilient fallback: decompress streams directly with native zlib
+      console.warn(`[RealExtractor] Standard PDF parsing encountered an issue: ${msg}. Attempting native stream extraction fallback...`);
+      rawPages = this.extractPdfStreamsFallback(dataBuffer);
+      if (rawPages.length === 0) {
+        throw new Error(`Failed to parse PDF "${originalFileName}": ${msg || 'Corrupted or invalid PDF format.'}`);
+      }
+    }
+
+    // If parser returned 0 non-empty pages, attempt stream extraction fallback
+    const totalExtractedLength = rawPages.reduce((acc, p) => acc + (p.text || '').trim().length, 0);
+    if (totalExtractedLength === 0) {
+      const fallbackPages = this.extractPdfStreamsFallback(dataBuffer);
+      if (fallbackPages.length > 0 && fallbackPages.some(p => p.text.trim().length > 0)) {
+        rawPages = fallbackPages;
+      }
     }
 
     const sections: ExtractedPageSection[] = [];
@@ -169,6 +184,135 @@ export class RealExtractor {
       hasDiagrams,
       isMultilingual
     };
+  }
+
+  /**
+   * Resilient Fallback: Decompresses raw PDF /FlateDecode streams using native zlib
+   * Extracts TJ, Tj, hex strings, and text directly without failing on font metadata or corrupt xrefs.
+   */
+  static extractPdfStreamsFallback(dataBuffer: Buffer): { pageNum: number; text: string; lines: string[] }[] {
+    const streamKeyword = Buffer.from('stream');
+    const endStreamKeyword = Buffer.from('endstream');
+    const pageTexts: string[] = [];
+
+    let currentStreamTextChunks: string[] = [];
+    let i = 0;
+
+    while (i < dataBuffer.length - 10) {
+      const streamIdx = dataBuffer.indexOf(streamKeyword, i);
+      if (streamIdx === -1) break;
+
+      let streamStart = streamIdx + 6;
+      if (dataBuffer[streamStart] === 13 && dataBuffer[streamStart + 1] === 10) {
+        streamStart += 2;
+      } else if (dataBuffer[streamStart] === 10 || dataBuffer[streamStart] === 13) {
+        streamStart += 1;
+      }
+
+      const dictStart = Math.max(0, streamIdx - 350);
+      const dictStr = dataBuffer.slice(dictStart, streamIdx).toString('latin1');
+      const isFlate = /FlateDecode|\/Fl\b/i.test(dictStr);
+
+      const endStreamIdx = dataBuffer.indexOf(endStreamKeyword, streamStart);
+      if (endStreamIdx === -1) {
+        i = streamIdx + 6;
+        continue;
+      }
+
+      let streamEnd = endStreamIdx;
+      if (streamEnd > streamStart && dataBuffer[streamEnd - 1] === 10) streamEnd--;
+      if (streamEnd > streamStart && dataBuffer[streamEnd - 1] === 13) streamEnd--;
+
+      const streamData = dataBuffer.slice(streamStart, streamEnd);
+      let decompressedStr = '';
+
+      if (isFlate) {
+        try {
+          decompressedStr = zlib.inflateSync(streamData).toString('utf-8');
+        } catch {
+          try {
+            decompressedStr = zlib.inflateRawSync(streamData).toString('utf-8');
+          } catch {
+            decompressedStr = streamData.toString('latin1');
+          }
+        }
+      } else {
+        decompressedStr = streamData.toString('utf-8');
+      }
+
+      if (decompressedStr) {
+        // Extract Tj strings: (text) Tj
+        const tjMatches = decompressedStr.match(/\(([^)]+)\)\s*Tj/g);
+        if (tjMatches) {
+          for (const m of tjMatches) {
+            const clean = m.replace(/^\(|\)\s*Tj$/g, '').trim();
+            if (clean) currentStreamTextChunks.push(clean);
+          }
+        }
+
+        // Extract TJ array strings: [(t1) 10 (t2)] TJ
+        const tjArray = decompressedStr.match(/\[(.*?)\]\s*TJ/g);
+        if (tjArray) {
+          for (const m of tjArray) {
+            const parts = m.match(/\(([^)]+)\)/g);
+            if (parts) {
+              const joined = parts.map(p => p.slice(1, -1)).join('').trim();
+              if (joined) currentStreamTextChunks.push(joined);
+            }
+          }
+        }
+
+        // Extract hex strings: <48656c6c6f> Tj
+        const hexMatches = decompressedStr.match(/<([0-9a-fA-F]+)>\s*Tj/g);
+        if (hexMatches) {
+          for (const m of hexMatches) {
+            const hex = m.replace(/^<|>\s*Tj$/g, '');
+            let decodedHex = '';
+            for (let h = 0; h < hex.length; h += 2) {
+              decodedHex += String.fromCharCode(parseInt(hex.substr(h, 2), 16));
+            }
+            if (decodedHex.trim()) currentStreamTextChunks.push(decodedHex.trim());
+          }
+        }
+
+        // If chunk is substantial, push as a page or section
+        if (currentStreamTextChunks.length >= 20 || /page|section|chapter/i.test(decompressedStr)) {
+          const pageContent = currentStreamTextChunks.join(' ').replace(/\s+/g, ' ').trim();
+          if (pageContent.length > 25) {
+            pageTexts.push(pageContent);
+            currentStreamTextChunks = [];
+          }
+        }
+      }
+
+      i = endStreamIdx + 9;
+    }
+
+    if (currentStreamTextChunks.length > 0) {
+      const remaining = currentStreamTextChunks.join(' ').replace(/\s+/g, ' ').trim();
+      if (remaining.length > 10) {
+        pageTexts.push(remaining);
+      }
+    }
+
+    if (pageTexts.length === 0) {
+      // Fallback: extract any ASCII string sequences of length >= 20 from dataBuffer
+      const rawText = dataBuffer.toString('latin1');
+      const words = rawText.match(/[A-Za-z0-9][A-Za-z0-9\s.,;?!'"\-()=:\/]{20,}/g) || [];
+      const cleanWords = words
+        .filter(w => !/\b\d+\s+\d+\s+R\b/.test(w) && !/FontDescriptor|FlateDecode|\/Type\s*\/|\/MediaBox/.test(w))
+        .map(w => w.trim())
+        .filter(w => w.length > 25);
+      if (cleanWords.length > 0) {
+        pageTexts.push(cleanWords.join('\n\n'));
+      }
+    }
+
+    return pageTexts.map((text, idx) => ({
+      pageNum: idx + 1,
+      text,
+      lines: text.split('\n').map(l => l.trim()).filter(Boolean)
+    }));
   }
 
   /**
