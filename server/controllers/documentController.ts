@@ -58,11 +58,7 @@ export class DocumentController {
     try {
       const file = req.file;
       const { title, author, category, rawText } = req.body;
-      const userId = req.user?.id;
-
-      if (!userId) {
-        return res.status(401).json({ error: 'Authentication required. Please log in.' });
-      }
+      const userId = req.user?.id || 'guest-student';
 
       let textContent = rawText || '';
       let originalFileName = 'pasted_text.txt';

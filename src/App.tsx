@@ -54,7 +54,7 @@ export function App() {
 
   // Authentication State
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [isAuthOpen, setIsAuthOpen] = useState<boolean>(!ApiClient.getToken());
+  const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
 
   // Modals
@@ -153,12 +153,31 @@ export function App() {
         }
       }
 
-      // If no valid auth session, prompt user to log in from the beginning
+      // If no valid auth session, allow guest student to explore and upload immediately without auth barrier
       ApiClient.logout();
       setCurrentUser(null);
-      setIsAuthOpen(true);
-      setDocuments([]);
-      setActiveDocument(null);
+      setIsAuthOpen(false);
+      try {
+        const [backendDocs, backendSaved, backendCourses] = await Promise.all([
+          ApiClient.getDocuments(),
+          ApiClient.getSavedItems(),
+          ApiClient.getCourses()
+        ]);
+        if (backendDocs && backendDocs.length > 0) {
+          setDocuments(backendDocs);
+          setActiveDocument(backendDocs[0]);
+        } else {
+          const localDocs = StorageService.getDocuments();
+          setDocuments(localDocs);
+          setActiveDocument(localDocs[0] || null);
+        }
+        if (backendSaved) setSavedItems(backendSaved);
+        if (backendCourses) setCourses(backendCourses);
+      } catch (_) {
+        const localDocs = StorageService.getDocuments();
+        setDocuments(localDocs);
+        setActiveDocument(localDocs[0] || null);
+      }
       setIsCheckingAuth(false);
     }
 
@@ -675,9 +694,9 @@ export function App() {
 
       {/* Step 40: Authentication & Secure Sign In Modal */}
       <AuthModal
-        isOpen={isAuthOpen || !currentUser}
+        isOpen={isAuthOpen}
         onSuccess={handleLoginSuccess}
-        canDismiss={Boolean(currentUser)}
+        canDismiss={true}
         onClose={() => setIsAuthOpen(false)}
       />
     </div>
