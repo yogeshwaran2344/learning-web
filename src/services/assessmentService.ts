@@ -241,9 +241,13 @@ export class AssessmentService {
     const isPhysicsOrBio = docLower.includes('photosynthesis') || docLower.includes('quantum') || docLower.includes('wave') || docLower.includes('elasticity');
     // Strictly ground topic-specific questions: only use scheduling templates if the active section explicitly discusses scheduling burst times
     const isOsDocument = !isPhysicsOrBio && (
+      (document.title || '').toLowerCase().includes('operating systems') ||
+      (document.title || '').toLowerCase().includes('scheduling') ||
       (scope.title || '').toLowerCase().includes('scheduling') ||
-      (sections[0]?.title || '').toLowerCase().includes('scheduling')
-    ) && docLower.includes('burst');
+      (sections[0]?.title || '').toLowerCase().includes('scheduling') ||
+      docLower.includes('cpu scheduling') ||
+      docLower.includes('burst time')
+    );
 
     // Filter relevant sections/topics based on scope
     let relevantSections = sections;

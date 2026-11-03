@@ -11,6 +11,10 @@ export function authMiddleware(req: AuthenticatedRequest, res: Response, next: N
 
   // Strict token extraction: Bearer token in Authorization header ONLY.
   // Query-string tokens are rejected to prevent leakage in proxy/browser logs and referrer headers.
+  if (req.query?.token) {
+    return res.status(401).json({ error: 'Tokens in query string are rejected. Use Authorization Bearer header.' });
+  }
+
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
     token = authHeader.slice(7).trim();
@@ -24,17 +28,22 @@ export function authMiddleware(req: AuthenticatedRequest, res: Response, next: N
     }
   }
 
-  // Allow seamless guest access for student workflows (upload, learn, generate, verify) so students are never blocked by 401
-  req.user = {
-    id: 'guest-student',
-    name: 'Student Learner',
-    email: 'guest.student@learnova.internal',
-    passwordHash: '',
-    role: 'student',
-    gender: 'female',
-    createdAt: new Date().toISOString()
-  };
-  return next();
+  // If uploading or generating study materials, allow seamless guest access so students are never blocked
+  const url = req.url || '';
+  if (url.includes('/upload') || url.includes('/generate') || url.includes('/explain-this') || url.includes('/ask-question') || url.includes('/materials')) {
+    req.user = {
+      id: 'guest-student',
+      name: 'Student Learner',
+      email: 'guest.student@learnova.internal',
+      passwordHash: '',
+      role: 'student',
+      gender: 'female',
+      createdAt: new Date().toISOString()
+    };
+    return next();
+  }
+
+  return res.status(401).json({ error: 'Authentication required: Missing or invalid token.' });
 }
 
 export function requireLecturerRole(req: AuthenticatedRequest, res: Response, next: NextFunction) {

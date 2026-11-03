@@ -261,7 +261,7 @@ export const PageWiseTeacherView: React.FC<PageWiseTeacherViewProps> = ({
             <div className="space-y-2">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <GraduationCap className="w-5 h-5 text-blue-600" />
-                <span>What is a {explanation.topicTitle.replace(/^Process\s+/, '')}?</span>
+                <span>Understanding {explanation.topicTitle.replace(/^(?:Process|Chapter\s*\d+|Page\s*\d+)\s*[:–-]?\s*/i, '')}</span>
               </h2>
               <div className="p-4 rounded-2xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/60 text-slate-800 dark:text-slate-200 text-sm sm:text-base leading-relaxed font-medium">
                 {explanation.whatIsIt}

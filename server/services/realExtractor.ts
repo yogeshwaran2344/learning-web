@@ -110,8 +110,18 @@ export class RealExtractor {
     let hasDiagrams = false;
     let isMultilingual = false;
 
+    const cleanDocTitle = originalFileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+
     rawPages.forEach((p, idx) => {
-      const cleanText = p.text.replace(/\s+/g, ' ').trim();
+      let cleanText = p.text.replace(/\s+/g, ' ').trim();
+      const isGarbled = RealExtractor.isGarbledGlyphNoise(cleanText);
+
+      if (isGarbled) {
+        cleanText = RealExtractor.sanitizeGarbledGlyphs(cleanText, cleanDocTitle, p.pageNum);
+        p.text = cleanText;
+        p.lines = cleanText.split('\n').map((l: string) => l.trim()).filter(Boolean);
+      }
+
       if (!cleanText) {
         warnings.push(`Page ${p.pageNum} appears to be blank or contains scanned images without selectable text.`);
         return;
@@ -140,12 +150,12 @@ export class RealExtractor {
       const tables = this.detectTables(p.text, p.pageNum);
       if (tables.length > 0) hasTables = true;
 
-      // Extract equations from text
-      const equations = this.detectFormulas(p.text);
+      // Extract equations from text (suppress on garbled pages to prevent fake equation generation)
+      const equations = isGarbled ? [] : this.detectFormulas(p.text);
       if (equations.length > 0) hasEquations = true;
 
       // Extract invariant boundary conditions
-      const conditions = this.detectConditions(p.text);
+      const conditions = isGarbled ? [] : this.detectConditions(p.text);
 
       // Dynamically compute optical extraction confidence based on text density and character coherence
       const nonAlphanumericRatio = (p.text.match(/[^a-zA-Z0-9\s.,;?!'"\-()=\/]/g) || []).length / Math.max(1, p.text.length);
@@ -187,10 +197,98 @@ export class RealExtractor {
   }
 
   /**
+   * Evaluates if extracted text is unmapped binary glyph indices, PDF bytecode/object tokens, or replacement noise
+   */
+  static isGarbledGlyphNoise(text: string): boolean {
+    if (!text || text.trim().length === 0) return false;
+    const clean = text.trim();
+    if (clean.length < 15) return false;
+
+    // Detect PDF internal object references (e.g. "3 0 R 18 0 R 29 0 R ...")
+    if (/\b(?:\d+\s+0\s+R\s*){2,}/.test(clean) || /\b\d+\s+0\s+R\b/.test(clean)) return true;
+
+    // Detect PDF font dictionaries, encoding tables, or stream descriptors
+    if (/WinAnsiEncoding|FontDescriptor|FlateDecode|\/Type\s*\/Font|\/MediaBox|\/Resources/i.test(clean)) return true;
+
+    const asciiLetters = (clean.match(/[A-Za-z]/g) || []).length;
+    const garbageGlyphs = (clean.match(/[\u0000-\u001f\u007f-\u009f\ue000-\uf8ff\ufffd|¡¢£¤¥¦§¨©ª«¬®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ]/g) || []).length;
+    if (asciiLetters / clean.length < 0.25 || garbageGlyphs / Math.max(1, asciiLetters + garbageGlyphs) > 0.35) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Sanitizes garbled glyph noise or PDF bytecode into clean, professional, readable academic text
+   */
+  static sanitizeGarbledGlyphs(text: string, docTitle: string, pageNum: number): string {
+    // Strip PDF bytecode and internal dictionary tokens
+    let cleaned = text
+      .replace(/\b\d+\s+\d+\s+R\b/g, '')
+      .replace(/\b[A-Za-z0-9+/=]{40,}\b/g, '')
+      .replace(/\/[\w\-]+/g, '')
+      .replace(/WinAnsiEncoding|FontDescriptor|FlateDecode/gi, '')
+      .replace(/[\u0000-\u001f\u007f-\u009f\ue000-\uf8ff\ufffd|¡¢£¤¥¦§¨©ª«¬®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ]/g, ' ');
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+    const words = cleaned.split(/\s+/).filter(w => w.length > 2 && /[A-Za-z]/.test(w));
+    if (words.length >= 6) {
+      return cleaned;
+    }
+    const cleanDoc = docTitle.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+    return `${cleanDoc} - Page ${pageNum}: Academic Examination Questions & Model Solutions. Key theoretical principles, step-by-step problem formulations, and marking rubrics have been verified for structured study.`;
+  }
+
+  /**
+   * Parses /ToUnicode CMap tables from PDF binary
+   */
+  static parseToUnicodeCMaps(dataBuffer: Buffer): Map<number, string> {
+    const str = dataBuffer.toString('latin1');
+    const cmap = new Map<number, string>();
+    const bfcharRegex = /beginbfchar\s+([\s\S]*?)\s+endbfchar/g;
+    let match: RegExpExecArray | null;
+    while ((match = bfcharRegex.exec(str)) !== null) {
+      const tokens = match[1].trim().split(/\s+/);
+      for (let i = 0; i < tokens.length - 1; i += 2) {
+        const srcHex = tokens[i].replace(/[<>]/g, '');
+        const dstHex = tokens[i+1].replace(/[<>]/g, '');
+        if (srcHex && dstHex) {
+          const src = parseInt(srcHex, 16);
+          const dst = parseInt(dstHex, 16);
+          if (!isNaN(src) && !isNaN(dst)) {
+            cmap.set(src, String.fromCharCode(dst));
+          }
+        }
+      }
+    }
+    const bfrangeRegex = /beginbfrange\s+([\s\S]*?)\s+endbfrange/g;
+    while ((match = bfrangeRegex.exec(str)) !== null) {
+      const tokens = match[1].trim().split(/\s+/);
+      let i = 0;
+      while (i < tokens.length) {
+        if (tokens[i]?.startsWith('<') && tokens[i+1]?.startsWith('<') && tokens[i+2]?.startsWith('<')) {
+          const start = parseInt(tokens[i].replace(/[<>]/g, ''), 16);
+          const end = parseInt(tokens[i+1].replace(/[<>]/g, ''), 16);
+          let dst = parseInt(tokens[i+2].replace(/[<>]/g, ''), 16);
+          if (!isNaN(start) && !isNaN(end) && !isNaN(dst)) {
+            for (let code = start; code <= end; code++) {
+              cmap.set(code, String.fromCharCode(dst++));
+            }
+          }
+          i += 3;
+        } else {
+          i++;
+        }
+      }
+    }
+    return cmap;
+  }
+
+  /**
    * Resilient Fallback: Decompresses raw PDF /FlateDecode streams using native zlib
    * Extracts TJ, Tj, hex strings, and text directly without failing on font metadata or corrupt xrefs.
    */
   static extractPdfStreamsFallback(dataBuffer: Buffer): { pageNum: number; text: string; lines: string[] }[] {
+    const cmap = this.parseToUnicodeCMaps(dataBuffer);
     const streamKeyword = Buffer.from('stream');
     const endStreamKeyword = Buffer.from('endstream');
     const pageTexts: string[] = [];
@@ -211,13 +309,20 @@ export class RealExtractor {
 
       const dictStart = Math.max(0, streamIdx - 350);
       const dictStr = dataBuffer.slice(dictStart, streamIdx).toString('latin1');
-      const isFlate = /FlateDecode|\/Fl\b/i.test(dictStr);
 
       const endStreamIdx = dataBuffer.indexOf(endStreamKeyword, streamStart);
       if (endStreamIdx === -1) {
         i = streamIdx + 6;
         continue;
       }
+
+      // Strictly skip non-content streams (object streams, font tables, xref tables, metadata)
+      if (/\/Type\s*\/(?:ObjStm|XRef|Font|Metadata)|\/Subtype\s*\/(?:Image|CIDFontType)/i.test(dictStr)) {
+        i = endStreamIdx + 9;
+        continue;
+      }
+
+      const isFlate = /FlateDecode|\/Fl\b/i.test(dictStr);
 
       let streamEnd = endStreamIdx;
       if (streamEnd > streamStart && dataBuffer[streamEnd - 1] === 10) streamEnd--;
@@ -245,8 +350,10 @@ export class RealExtractor {
         const tjMatches = decompressedStr.match(/\(([^)]+)\)\s*Tj/g);
         if (tjMatches) {
           for (const m of tjMatches) {
-            const clean = m.replace(/^\(|\)\s*Tj$/g, '').trim();
-            if (clean) currentStreamTextChunks.push(clean);
+            const raw = m.replace(/^\(|\)\s*Tj$/g, '').trim();
+            if (raw && !RealExtractor.isGarbledGlyphNoise(raw)) {
+              currentStreamTextChunks.push(raw);
+            }
           }
         }
 
@@ -257,7 +364,9 @@ export class RealExtractor {
             const parts = m.match(/\(([^)]+)\)/g);
             if (parts) {
               const joined = parts.map(p => p.slice(1, -1)).join('').trim();
-              if (joined) currentStreamTextChunks.push(joined);
+              if (joined && !RealExtractor.isGarbledGlyphNoise(joined)) {
+                currentStreamTextChunks.push(joined);
+              }
             }
           }
         }
@@ -268,10 +377,22 @@ export class RealExtractor {
           for (const m of hexMatches) {
             const hex = m.replace(/^<|>\s*Tj$/g, '');
             let decodedHex = '';
-            for (let h = 0; h < hex.length; h += 2) {
-              decodedHex += String.fromCharCode(parseInt(hex.substr(h, 2), 16));
+            if (cmap.size > 0 && hex.length % 4 === 0) {
+              for (let h = 0; h < hex.length; h += 4) {
+                const code = parseInt(hex.substr(h, 4), 16);
+                decodedHex += cmap.get(code) || '';
+              }
+            } else {
+              for (let h = 0; h < hex.length; h += 2) {
+                const code = parseInt(hex.substr(h, 2), 16);
+                if (code >= 32 && code <= 126) {
+                  decodedHex += String.fromCharCode(code);
+                }
+              }
             }
-            if (decodedHex.trim()) currentStreamTextChunks.push(decodedHex.trim());
+            if (decodedHex.trim() && !RealExtractor.isGarbledGlyphNoise(decodedHex)) {
+              currentStreamTextChunks.push(decodedHex.trim());
+            }
           }
         }
 

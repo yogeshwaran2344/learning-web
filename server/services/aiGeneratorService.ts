@@ -598,10 +598,11 @@ export class AiGeneratorService {
       : `Based on the principles extracted from Section "${eqSec.title}" (Page/Slide ${eqSec.pageNumber || 1}), evaluate the formulation ${firstEq} with given parameters (${extractedParams.join(', ')}), calculate intermediate values step-by-step, and confirm condition "${condition}".`;
 
     const steps: string[] = [
-      `Step 1: Check Preconditions & Inputs — Sourced from Section "${eqSec.title}", verify inputs (${extractedParams.join(', ')}) adhere to condition "${condition}".`,
-      `Step 2: State Governing Formulation — Apply equation ${firstEq} directly to the evaluated domain.`,
-      `Step 3: Execute Substitution & Intermediate Operations — Evaluate operations: ${p1} \\times ${p2} = ${computedVal}.`,
-      `Step 4: Verify Boundary Invariant Checkpoint — Confirm that the resulting output (${computedVal}) maintains consistency with "${condition}".`
+      `Step 1: Check Preconditions & Inputs — Sourced from Section "${eqSec.title}", verify inputs (${extractedParams.join(', ')}) adhere to condition "${condition}". [Why performed]: Ensures domain validity and verifies invariants before computation.`,
+      `Step 2: State Governing Formulation — Apply equation ${firstEq} directly to the evaluated domain. [Why performed]: Establishes formal mathematical baseline from verified curriculum.`,
+      `Step 3: Execute Substitution & Intermediate Operations — Evaluate operations: ${p1} \\times ${p2} = ${computedVal}. [Why performed]: Performs arithmetic substitution across model parameters.`,
+      `Step 4: Verify Boundary Invariant Checkpoint — Confirm that the resulting output (${computedVal}) maintains consistency with "${condition}". [Why performed]: Guarantees system state consistency.`,
+      `Step 5: Synthesize Final Academic Solution — State final verified result in accordance with ${firstEq}. [Why performed]: Summarizes complete step-by-step derivation for exam evaluation.`
     ];
 
     const citation: SourceCitationRecord = {
@@ -625,7 +626,7 @@ export class AiGeneratorService {
         formulaApplied: firstEq,
         boundaryCondition: condition,
         solutionSteps: steps,
-        finalAnswer: `Evaluated Equilibrium: Mean = ${meanVal} (Derived from sum = ${sumVal}). Invariant "${condition}" verified.`,
+        finalAnswer: `Evaluated Result: Output = ${computedVal}. Invariant "${condition}" verified.`,
         citation
       },
       sourceCitations: [citation]
@@ -821,37 +822,44 @@ export class AiGeneratorService {
       const mainConcept = summarySentences[0] || cleanBody.slice(0, 180);
       const mainCondition = sec.conditions?.[0] || (sec.equations?.[0] ? `Governed by: ${sec.equations[0].label || sec.equations[0].latex}` : `Key takeaway: ${mainConcept.slice(0, 120).trim()}`);
 
-      // 1. Core Intuitive Explanation
-      const explanation = `${cleanTitle}. In simple terms, ${mainConcept}. To easily understand this, think of it like an active system monitor: it tracks and coordinates system resources so operations remain orderly, time limits are respected, and no program overuses shared capacity.`;
+      // 1. Introduction & Core Intuitive Explanation
+      const part1 = `[Part 1: Introduction] ${cleanTitle}.`;
+      const part2 = ` [Part 2: Intuitive Explanation] In simple terms, ${mainConcept}. To easily understand this, think of it like an active system monitor: it tracks and coordinates system resources so operations remain orderly, time limits are respected, and no program overuses shared capacity.`;
 
       // 2. Technical details & definitions
-      let defsText = '';
+      let part3 = ` [Part 3: Core Definitions]`;
       if (sec.definitions && sec.definitions.length > 0) {
         const defsSummary = sec.definitions.slice(0, 2).map(d => `${d.term} is defined as ${d.definition}`).join('. ');
-        defsText = ` Specifically, ${defsSummary}.`;
+        part3 += ` Specifically, ${defsSummary}.`;
+      } else {
+        part3 += ` Core definition: ${cleanTitle} represents a fundamental component governing operational behavior.`;
       }
 
       // 3. Examples
-      let examplesText = '';
+      let part4 = ` [Part 4: Real-World Examples]`;
       if (sec.numericalProblems && sec.numericalProblems.length > 0) {
         const np = sec.numericalProblems[0];
-        examplesText = ` Consider this calculation: ${np.problem.slice(0, 120)}, evaluating to ${np.finalAnswer}.`;
+        part4 += ` Consider this calculation: ${np.problem.slice(0, 120)}, evaluating to ${np.finalAnswer}.`;
       } else if (sec.examples && sec.examples.length > 0) {
-        examplesText = ` For instance: ${sec.examples[0].slice(0, 120)}.`;
+        part4 += ` For instance: ${sec.examples[0].slice(0, 120)}.`;
+      } else {
+        part4 += ` Real-world example: modern computing environments utilize this to maintain consistency across active processes.`;
       }
 
       // 4. Important Formulas or Core Principles
-      let formulaText = '';
+      let part5 = ` [Part 5: Governing Invariants]`;
       if (sec.equations && sec.equations.length > 0) {
-        formulaText = ` The governing equation is ${sec.equations[0].label || sec.equations[0].latex}.`;
+        part5 += ` The governing equation is ${sec.equations[0].label || sec.equations[0].latex}.`;
       } else if (sec.conditions && sec.conditions.length > 0) {
-        formulaText = ` An essential condition is: ${sec.conditions[0]}.`;
+        part5 += ` An essential condition is: ${sec.conditions[0]}.`;
+      } else {
+        part5 += ` Core invariant: all transitions must preserve state integrity and satisfy operational constraints.`;
       }
 
       // 5. Revision Summary
-      const summary = ` For exams, remember: ${mainCondition}.`;
+      const part6 = ` [Part 6: Examination Revision Summary] [PAUSE: 1s] For exams, remember: ${mainCondition}.`;
 
-      script = `${explanation}${defsText}${examplesText}${formulaText}${summary}`.trim();
+      script = `${part1}${part2}${part3}${part4}${part5}${part6}`.trim();
 
       if (language === 'Kannada') {
         const knDefs = sec.definitions && sec.definitions.length > 0

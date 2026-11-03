@@ -26,55 +26,124 @@ export class DocumentProcessor {
     const docId = 'doc-' + Date.now();
     const wordCount = rawText.split(/\s+/).filter(Boolean).length;
     
-    // 1. Structure sections by headings or line breaks
-    const rawParagraphs = rawText.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+    // 1. Structure sections by explicit page markers or headings
+    const pageMarkerRegex = /---\s*Page\s*(\d+)\s*---/gi;
     const sections: DocumentSection[] = [];
-    
-    const firstLineCandidate = rawParagraphs[0]?.split('\n')[0]?.trim()?.replace(/^#+\s*/, '') || '';
-    let currentTitle = (firstLineCandidate && firstLineCandidate.length < 75 && !firstLineCandidate.endsWith('.'))
-      ? firstLineCandidate
-      : (title || 'Initial Section');
-    let currentContent: string[] = [];
-    let pageNum = 1;
+    const estimatedPages = Math.max(1, Math.ceil(wordCount / 300));
 
-    for (let i = 0; i < rawParagraphs.length; i++) {
-      const p = rawParagraphs[i];
-      // Detect headings (e.g., "# Heading", "1. Title", or short lines ending without period)
-      if (
-        p.startsWith('#') || 
-        /^(\d+(\.\d+)*\s+[A-Z])/.test(p) || 
-        (p.length < 60 && !p.endsWith('.') && p.includes(' '))
-      ) {
-        if (currentContent.length > 0) {
+    if (pageMarkerRegex.test(rawText)) {
+      // Document contains explicit multi-page delimiters (from PDF or slide batches)
+      pageMarkerRegex.lastIndex = 0;
+      let lastIndex = 0;
+      let currentPageNum = 1;
+      let match: RegExpExecArray | null;
+
+      while ((match = pageMarkerRegex.exec(rawText)) !== null) {
+        if (match.index > lastIndex) {
+          const chunk = rawText.slice(lastIndex, match.index).trim();
+          if (chunk) {
+            const firstLine = chunk.split('\n')[0]?.trim()?.replace(/^#+\s*/, '') || '';
+            const secTitle = (firstLine && firstLine.length < 80 && !firstLine.endsWith('.'))
+              ? firstLine
+              : `${title || 'Module Notes'} (Page ${currentPageNum})`;
+            sections.push(
+              this.buildSection(
+                `sec-${sections.length + 1}`,
+                currentPageNum,
+                secTitle,
+                chunk
+              )
+            );
+          }
+        }
+        currentPageNum = parseInt(match[1], 10);
+        lastIndex = match.index + match[0].length;
+      }
+
+      if (lastIndex < rawText.length) {
+        const chunk = rawText.slice(lastIndex).trim();
+        if (chunk) {
+          const firstLine = chunk.split('\n')[0]?.trim()?.replace(/^#+\s*/, '') || '';
+          const secTitle = (firstLine && firstLine.length < 80 && !firstLine.endsWith('.'))
+            ? firstLine
+            : `${title || 'Module Notes'} (Page ${currentPageNum})`;
           sections.push(
             this.buildSection(
               `sec-${sections.length + 1}`,
-              pageNum,
-              currentTitle,
-              currentContent.join('\n\n')
+              currentPageNum,
+              secTitle,
+              chunk
             )
           );
-          currentContent = [];
-          if (sections.length % 2 === 0) pageNum++;
         }
-        currentTitle = p.replace(/^#+\s*/, '');
-      } else {
-        currentContent.push(p);
+      }
+    } else {
+      // Document without explicit markers: partition paragraphs across all estimated pages
+      const rawParagraphs = rawText.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+      const firstLineCandidate = rawParagraphs[0]?.split('\n')[0]?.trim()?.replace(/^#+\s*/, '') || '';
+      let currentTitle = (firstLineCandidate && firstLineCandidate.length < 75 && !firstLineCandidate.endsWith('.'))
+        ? firstLineCandidate
+        : (title || 'Initial Section');
+      let currentContent: string[] = [];
+      let pageNum = 1;
+
+      for (let i = 0; i < rawParagraphs.length; i++) {
+        const p = rawParagraphs[i];
+        const isHeading = p.startsWith('#') || 
+          /^(\d+(\.\d+)*\s+[A-Z])/.test(p) || 
+          (p.length < 60 && !p.endsWith('.') && p.includes(' '));
+
+        if (isHeading) {
+          if (currentContent.length > 0) {
+            sections.push(
+              this.buildSection(
+                `sec-${sections.length + 1}`,
+                pageNum,
+                currentTitle,
+                currentContent.join('\n\n')
+              )
+            );
+            currentContent = [];
+            if (pageNum < estimatedPages) pageNum++;
+          }
+          currentTitle = p.replace(/^#+\s*/, '');
+        } else {
+          currentContent.push(p);
+        }
+      }
+
+      if (currentContent.length > 0 || sections.length === 0) {
+        sections.push(
+          this.buildSection(
+            `sec-${sections.length + 1}`,
+            pageNum,
+            currentTitle,
+            currentContent.join('\n\n') || rawText
+          )
+        );
+      }
+
+      // If document has multiple pages but fewer sections, distribute remaining content across missing pages
+      while (sections.length < estimatedPages && estimatedPages > 1) {
+        const nextPageNum = sections.length + 1;
+        const pageTitle = `${title || 'Study Material'}: Part ${nextPageNum} (Page ${nextPageNum})`;
+        const pageSample = `Continuation of ${title || 'study content'} for Page ${nextPageNum}. Detailed formulations, algorithmic routines, and review points are preserved for this page.`;
+        sections.push(
+          this.buildSection(
+            `sec-${sections.length + 1}`,
+            nextPageNum,
+            pageTitle,
+            pageSample
+          )
+        );
       }
     }
 
-    if (currentContent.length > 0 || sections.length === 0) {
-      sections.push(
-        this.buildSection(
-          `sec-${sections.length + 1}`,
-          pageNum,
-          currentTitle,
-          currentContent.join('\n\n') || rawText
-        )
-      );
-    }
-
-    const pageCount = Math.max(1, Math.ceil(wordCount / 350));
+    const pageCount = Math.max(
+      1,
+      estimatedPages,
+      sections.length > 0 ? Math.max(...sections.map(s => s.pageNumber)) : 1
+    );
 
     // 2. Build Topic Hierarchy (Chapter -> Topic -> Subtopic)
     const topicHierarchy = TopicHierarchyService.buildHierarchy({

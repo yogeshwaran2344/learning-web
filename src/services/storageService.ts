@@ -60,9 +60,17 @@ export class StorageService {
   static sanitizeDocument(doc: any): AcademicDocument {
     if (!doc) return SAMPLE_DOCUMENTS[0];
 
-    const hasBytecodeGarbage = /\b\d+\s+0\s+R\b/.test(doc.summary || '') ||
-      /WinAnsiEncoding/i.test(doc.summary || '') ||
-      (Array.isArray(doc.sections) && doc.sections.some((s: any) => /\b\d+\s+0\s+R\b/.test(s.content || '') || /WinAnsiEncoding/i.test(s.content || '')));
+    const isGarbled = (text: string) => {
+      if (!text) return false;
+      if (/\b(?:\d+\s+0\s+R\s*){2,}/.test(text) || /\b\d+\s+0\s+R\b/.test(text)) return true;
+      if (/WinAnsiEncoding|FontDescriptor|FlateDecode|\/Type\s*\/|\/MediaBox|\/Resources/i.test(text)) return true;
+      const letters = (text.match(/[A-Za-z]/g) || []).length;
+      const garbage = (text.match(/[\u0000-\u001f\u007f-\u009f\ue000-\uf8ff\ufffd|¡¢£¤¥¦§¨©ª«¬®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ]/g) || []).length;
+      return (text.length > 20 && (letters / text.length < 0.25 || garbage / Math.max(1, letters + garbage) > 0.35));
+    };
+
+    const hasBytecodeGarbage = isGarbled(doc.summary || '') ||
+      (Array.isArray(doc.sections) && doc.sections.some((s: any) => isGarbled(s.content || '') || isGarbled(s.title || '')));
 
     const cleanTitle = StorageService.cleanTitle(doc.title || 'Academic Study Material');
     const safeSummary = hasBytecodeGarbage
@@ -76,7 +84,7 @@ export class StorageService {
           id: 'sec-1',
           documentId: doc.id || 'doc-1',
           pageNumber: 1,
-          chapterTitle: 'Core Subject Foundations',
+          chapterTitle: `Core Subject Foundations`,
           title: `${cleanTitle}: Core Concepts`,
           content: `${cleanTitle} outlines the fundamental definitions, theoretical frameworks, and governing principles of the subject. Every statement and formula is grounded in the verified academic material without deviation.`,
           equations: [],
@@ -87,7 +95,7 @@ export class StorageService {
           id: 'sec-2',
           documentId: doc.id || 'doc-1',
           pageNumber: 2,
-          chapterTitle: 'Systematic Analysis & Methodologies',
+          chapterTitle: `Systematic Analysis & Methodologies`,
           title: `${cleanTitle}: Detailed Methodologies`,
           content: `Detailed examination of the methodologies, problem-solving techniques, and exam-relevant concepts presented in ${cleanTitle}. Concepts are structured to enable rapid revision and comprehensive understanding.`,
           definitions: [{ term: 'Core Formulation', definition: 'The verified methodology or governing theorem established by the author.' }],
@@ -96,12 +104,13 @@ export class StorageService {
       ];
     } else {
       safeSections = safeSections.map((s: any, idx: number) => {
-        const isCorrupt = /\b\d+\s+0\s+R\b/.test(s.content || '') || /WinAnsiEncoding/i.test(s.content || '');
+        const corrupt = isGarbled(s.content || '') || isGarbled(s.title || '');
+        const cleanSecTitle = StorageService.cleanTitle(s.title || `Topic ${idx + 1}`);
         return {
           ...s,
-          title: StorageService.cleanTitle(s.title || `Topic ${idx + 1}`),
-          content: isCorrupt
-            ? `${StorageService.cleanTitle(s.title || cleanTitle)} coordinates key operations, state management, and parameter evaluation according to governing system invariants.`
+          title: cleanSecTitle,
+          content: corrupt
+            ? `${cleanSecTitle} coordinates key operations, state management, and parameter evaluation according to governing system invariants.`
             : s.content
         };
       });

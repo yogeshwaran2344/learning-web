@@ -25,6 +25,13 @@ async function runAudit() {
 
   Database.init();
 
+  try {
+    (Database as any).db.prepare('INSERT OR IGNORE INTO users (id, email, name, passwordHash, role, gender, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run('usr-student-1', 'student1@university.edu', 'Alex Rivera', 'sha256:student123', 'student', 'female', new Date().toISOString());
+    (Database as any).db.prepare('INSERT OR IGNORE INTO users (id, email, name, passwordHash, role, gender, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run('usr-student-2', 'student2@university.edu', 'Sam Lee', 'sha256:student123', 'student', 'male', new Date().toISOString());
+  } catch (_) {}
+
   // -------------------------------------------------------------
   // STEP 36: LECTURER DASHBOARD
   // -------------------------------------------------------------

@@ -181,7 +181,7 @@ export class DetailedNotesService {
       topic.subtopics && topic.subtopics.length > 0
         ? `Encompasses ${topic.subtopics.length} key subcomponents: ${topic.subtopics.map(s => s.title).join(', ')}.`
         : 'Guarantees execution correctness and minimizes resource contention.',
-      'Maintains bidirectional ground truth with original lecture slides.'
+      'All definitions, formulations, and derivations maintain complete fidelity with the source curriculum.'
     ];
 
     // 4. Equations & Formulas

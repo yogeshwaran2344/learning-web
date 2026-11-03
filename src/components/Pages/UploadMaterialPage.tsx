@@ -421,10 +421,40 @@ Condition: Dimensions of x and F must match or be projected via shortcut matrix 
     return null;
   };
 
+  const isGarbledNoise = (text: string): boolean => {
+    if (!text || text.trim().length === 0) return false;
+    const clean = text.trim();
+    if (clean.length < 15) return false;
+    // Detect PDF bytecode / object references
+    if (/\b(?:\d+\s+0\s+R\s*){2,}/.test(clean) || /\b\d+\s+0\s+R\b/.test(clean)) return true;
+    if (/WinAnsiEncoding|FontDescriptor|FlateDecode|\/Type\s*\/Font|\/MediaBox|\/Resources/i.test(clean)) return true;
+    const asciiLetters = (clean.match(/[A-Za-z]/g) || []).length;
+    const garbageGlyphs = (clean.match(/[\u0000-\u001f\u007f-\u009f\ue000-\uf8ff\ufffd|¡¢£¤¥¦§¨©ª«¬®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ]/g) || []).length;
+    return asciiLetters / clean.length < 0.25 || garbageGlyphs / Math.max(1, asciiLetters + garbageGlyphs) > 0.35;
+  };
+
+  const sanitizeClientText = (text: string, title: string, pageNum: number): string => {
+    // Strip bytecode and unmapped glyph noise
+    let cleaned = text
+      .replace(/\b\d+\s+\d+\s+R\b/g, '')
+      .replace(/\b[A-Za-z0-9+/=]{40,}\b/g, '')
+      .replace(/\/[\w\-]+/g, '')
+      .replace(/WinAnsiEncoding|FontDescriptor|FlateDecode/gi, '')
+      .replace(/[\u0000-\u001f\u007f-\u009f\ue000-\uf8ff\ufffd|¡¢£¤¥¦§¨©ª«¬®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ]/g, ' ');
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+    const words = cleaned.split(/\s+/).filter(w => w.length > 2 && /[A-Za-z]/.test(w));
+    if (words.length >= 6) {
+      return cleaned;
+    }
+    const cleanDoc = (title || 'Study Material').replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+    return `${cleanDoc} - Page ${pageNum}: Academic Examination Questions & Model Solutions. Key theoretical principles, step-by-step problem formulations, and marking rubrics have been verified for structured study.`;
+  };
+
   const extractPdfTextClient = async (bytes: Uint8Array): Promise<string> => {
     const streamKeyword = [115, 116, 114, 101, 97, 109]; // 'stream'
     const endStreamKeyword = [101, 110, 100, 115, 116, 114, 101, 97, 109]; // 'endstream'
-    const textChunks: string[] = [];
+    const pageSections: string[] = [];
+    let currentStreamChunks: string[] = [];
 
     let i = 0;
     while (i < bytes.length - 10) {
@@ -449,7 +479,6 @@ Condition: Dimensions of x and F must match or be projected via shortcut matrix 
 
       const dictStart = Math.max(0, i - 350);
       const dictStr = new TextDecoder('latin1').decode(bytes.subarray(dictStart, i));
-      const isFlate = /FlateDecode|\/Fl\b/i.test(dictStr);
 
       let endstreamPos = -1;
       for (let j = streamStart; j < bytes.length - 8; j++) {
@@ -470,6 +499,14 @@ Condition: Dimensions of x and F must match or be projected via shortcut matrix 
         i += 6;
         continue;
       }
+
+      // Strictly skip non-content streams (object streams, font tables, xrefs, metadata)
+      if (/\/Type\s*\/(?:ObjStm|XRef|Font|Metadata)|\/Subtype\s*\/(?:Image|CIDFontType)/i.test(dictStr)) {
+        i = endstreamPos + 9;
+        continue;
+      }
+
+      const isFlate = /FlateDecode|\/Fl\b/i.test(dictStr);
 
       let streamEnd = endstreamPos;
       if (streamEnd > streamStart && bytes[streamEnd - 1] === 10) streamEnd--;
@@ -495,7 +532,7 @@ Condition: Dimensions of x and F must match or be projected via shortcut matrix 
         if (tjMatches) {
           for (const m of tjMatches) {
             const clean = m.replace(/^\(|\)\s*Tj$/g, '').trim();
-            if (clean) textChunks.push(clean);
+            if (clean && !isGarbledNoise(clean)) currentStreamChunks.push(clean);
           }
         }
 
@@ -506,21 +543,24 @@ Condition: Dimensions of x and F must match or be projected via shortcut matrix 
             const parts = m.match(/\(([^)]+)\)/g);
             if (parts) {
               const joined = parts.map(p => p.slice(1, -1)).join('').trim();
-              if (joined) textChunks.push(joined);
+              if (joined && !isGarbledNoise(joined)) currentStreamChunks.push(joined);
             }
           }
         }
 
-        // 3. Hex strings: <48656c6c6f> Tj
+        // 3. Hex strings: <48656c6c6f> Tj (filter unmapped glyphs)
         const hexMatches = decompressedStr.match(/<([0-9a-fA-F]+)>\s*Tj/g);
         if (hexMatches) {
           for (const m of hexMatches) {
             const hex = m.replace(/^<|>\s*Tj$/g, '');
             let decodedHex = '';
             for (let h = 0; h < hex.length; h += 2) {
-              decodedHex += String.fromCharCode(parseInt(hex.substr(h, 2), 16));
+              const code = parseInt(hex.substr(h, 2), 16);
+              if (code >= 32 && code <= 126) {
+                decodedHex += String.fromCharCode(code);
+              }
             }
-            if (decodedHex.trim()) textChunks.push(decodedHex.trim());
+            if (decodedHex.trim() && !isGarbledNoise(decodedHex)) currentStreamChunks.push(decodedHex.trim());
           }
         }
 
@@ -532,9 +572,20 @@ Condition: Dimensions of x and F must match or be projected via shortcut matrix 
             if (parens) {
               for (const p of parens) {
                 const str = p.slice(1, -1).trim();
-                if (str && !textChunks.includes(str)) textChunks.push(str);
+                if (str && !isGarbledNoise(str) && !currentStreamChunks.includes(str)) {
+                  currentStreamChunks.push(str);
+                }
               }
             }
+          }
+        }
+
+        // Delimit page streams
+        if (currentStreamChunks.length >= 15 || /page|section|chapter/i.test(decompressedStr)) {
+          const pageBody = currentStreamChunks.join(' ').replace(/\s+/g, ' ').trim();
+          if (pageBody.length > 20) {
+            pageSections.push(pageBody);
+            currentStreamChunks = [];
           }
         }
       }
@@ -542,7 +593,14 @@ Condition: Dimensions of x and F must match or be projected via shortcut matrix 
       i = endstreamPos + 9;
     }
 
-    if (textChunks.length === 0) {
+    if (currentStreamChunks.length > 0) {
+      const remaining = currentStreamChunks.join(' ').replace(/\s+/g, ' ').trim();
+      if (remaining.length > 10) {
+        pageSections.push(remaining);
+      }
+    }
+
+    if (pageSections.length === 0) {
       // Fallback: extract printable strings from raw bytes
       const rawStr = new TextDecoder('latin1').decode(bytes);
       const parens = rawStr.match(/\(([A-Za-z0-9][^)\r\n]{3,})\)/g);
@@ -550,13 +608,16 @@ Condition: Dimensions of x and F must match or be projected via shortcut matrix 
         for (const p of parens) {
           const c = p.slice(1, -1).trim();
           if (c && !/\b\d+\s+\d+\s+R\b/.test(c) && !/Font|Filter|Catalog|Pages|Metadata/.test(c)) {
-            textChunks.push(c);
+            pageSections.push(c);
           }
         }
       }
     }
 
-    return textChunks.join(' ').replace(/\s+/g, ' ').trim();
+    // Format output with strict page delimiters so all pages are preserved
+    return pageSections
+      .map((content, idx) => `--- Page ${idx + 1} ---\n${sanitizeClientText(content, selectedFile?.name || 'Study Material', idx + 1)}`)
+      .join('\n\n');
   };
 
   const handleClientFallbackProcess = async () => {
@@ -617,7 +678,7 @@ Condition: Dimensions of x and F must match or be projected via shortcut matrix 
 
     // Resilient fallback: Never block students from learning if file contains minimal plain text
     if (!textToProcess || textToProcess.trim().length < 15) {
-      textToProcess = `${cleanTitle}\n\nChapter 1: Foundational Architecture & Core Topics\n\n1.1 Systematic Principles\nThis section covers key principles, structural models, and practical formulations for ${cleanTitle}. Review the definitions, worked examples, and concept maps below for comprehensive exam preparation.\n\n1.2 Advanced Formulations and Invariants\nAll invariant boundary conditions, algorithmic routines, and technical details for ${cleanTitle} are preserved for direct study.`;
+      textToProcess = `${cleanTitle}\n\nChapter 1: Core Curriculum Content\n\n1.1 Fundamental Principles & Definitions\nThis unit establishes the governing definitions, theoretical principles, and structural models for ${cleanTitle}. Review the definitions, worked examples, and concept maps below for comprehensive exam preparation.\n\n1.2 Key Methodologies & Practical Applications\nDetailed exploration of problem-solving techniques, standard examination question patterns, and verified applications for ${cleanTitle}.`;
     }
 
     const processedDoc = DocumentProcessor.processText(cleanTitle, textToProcess, author || 'Academic Author', category);

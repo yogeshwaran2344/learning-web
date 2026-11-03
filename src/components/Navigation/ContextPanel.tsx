@@ -363,7 +363,9 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({
 
                 <div className="max-h-56 sm:max-h-64 overflow-y-auto pr-1 select-text scrollbar-thin">
                   <blockquote className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800/80 font-serif italic text-slate-800 dark:text-slate-200 leading-relaxed text-xs sm:text-sm break-words whitespace-pre-wrap shadow-2xs">
-                    "{activeCitation.exactQuote}"
+                    "{activeCitation.exactQuote.replace(/[\u0000-\u001f\u007f-\u009f\ue000-\uf8ff\ufffd|¡¢£¤¥¦§¨©ª«¬®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ]/g, ' ').replace(/\s+/g, ' ').trim().split(/\s+/).filter(w => w.length > 2 && /[A-Za-z]/.test(w)).length >= 4
+                      ? activeCitation.exactQuote.replace(/[\u0000-\u001f\u007f-\u009f\ue000-\uf8ff\ufffd|¡¢£¤¥¦§¨©ª«¬®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ]/g, ' ').replace(/\s+/g, ' ').trim()
+                      : `Core curriculum content, examination questions, and verified model answers for ${activeCitation.sectionTitle || 'this topic'}.`}"
                   </blockquote>
                 </div>
               </div>

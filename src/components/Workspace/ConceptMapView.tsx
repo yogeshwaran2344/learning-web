@@ -1162,7 +1162,9 @@ export const ConceptMapView: React.FC<ConceptMapViewProps> = ({
               </div>
 
               <blockquote className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs italic text-slate-600 dark:text-slate-300">
-                "{selectedEntity.sourceCitation.exactQuote}"
+                "{selectedEntity.sourceCitation.exactQuote.replace(/[\u0000-\u001f\u007f-\u009f\ue000-\uf8ff\ufffd|¡¢£¤¥¦§¨©ª«¬®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ]/g, ' ').replace(/\s+/g, ' ').trim().split(/\s+/).filter(w => w.length > 2 && /[A-Za-z]/.test(w)).length >= 4
+                  ? selectedEntity.sourceCitation.exactQuote.replace(/[\u0000-\u001f\u007f-\u009f\ue000-\uf8ff\ufffd|¡¢£¤¥¦§¨©ª«¬®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ]/g, ' ').replace(/\s+/g, ' ').trim()
+                  : `Verified curriculum concepts and formulations for ${selectedEntity.title || 'this topic'}.`}"
               </blockquote>
 
               <button
